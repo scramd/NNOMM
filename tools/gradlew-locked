@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Runs ./gradlew with one of two machine-wide build slots, so that at most two
+# Gradle builds (each with about 3 GB of memory) run at the same time on the
+# development machine. Waits for a free slot. Use it for every Gradle call:
+#   tools/gradlew-locked :composeApp:jvmTest
+# The Gradle daemon stops itself after 10 idle minutes (see gradle.properties).
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+lockdir="${NNOMM_LOCK_DIR:-/tmp/nnomm-build-locks}"
+mkdir -p "$lockdir"
+waited=0
+while true; do
+  for slot in 1 2; do
+    exec 9>"$lockdir/slot-$slot.lock"
+    if flock -n 9; then
+      [ "$waited" -gt 0 ] && echo "[gradlew-locked] got build slot $slot after ${waited}s" >&2
+      cd "$root"
+      ./gradlew "$@"
+      exit $?
+    fi
+    exec 9>&-
+  done
+  [ "$waited" -eq 0 ] && echo "[gradlew-locked] both build slots are busy, waiting" >&2
+  sleep 5; waited=$((waited + 5))
+done
