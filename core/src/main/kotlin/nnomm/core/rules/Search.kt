@@ -17,6 +17,17 @@ fun cleanTags(tags: List<String>, authors: List<String>): List<String> {
     val hidden = (authors + "mod").map { it.trim().lowercase() }.toSet()
     return tags.map(String::trim).filter { it.isNotEmpty() && it.lowercase() !in hidden }.distinctBy { it.lowercase() }
 }
+/** Merge spelling across the full registry and hide all registry author tags. */
+fun cleanCatalogTags(mods: List<CatalogMod>): List<CatalogMod> {
+    val authors=mods.flatMap{it.authors}
+    val canonical=linkedMapOf<String,String>()
+    return mods.map { mod ->
+        val tags=cleanTags(mod.tags,authors).map { tag ->
+            canonical.getOrPut(tag.lowercase()){tag}
+        }
+        mod.copy(tags=tags)
+    }
+}
 data class FuzzyMatch(val score: Int, val indices: List<Int>)
 fun fuzzy(query: String, text: String): FuzzyMatch? {
     val q=query.lowercase(); val t=text.lowercase(); val at=t.indexOf(q)

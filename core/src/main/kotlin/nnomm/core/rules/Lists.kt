@@ -5,7 +5,7 @@ import nnomm.core.model.*
 fun isOn(s: AppState,id: String,p: String=s.profileId)=s.installed[id]?.profiles?.get(p)?.on==true
 fun verOf(s: AppState,id: String,p: String=s.profileId)=s.installed[id]?.let { it.profiles[p]?.version ?: it.defaultVersion }
 fun packManaged(s: AppState,id: String,p: String=s.profileId)=s.profile(p).pack?.mods?.contains(id)==true
-fun hasUpdate(s: AppState,id: String)=s.installed.containsKey(id) && s.mod(id).localFile==null && !packManaged(s,id) && verOf(s,id)!=s.mod(id).newestRelease?.version
+fun hasUpdate(s: AppState,id: String)=s.installed.containsKey(id) && s.mod(id).localFile==null && !packManaged(s,id) && s.mod(id).newestRelease!=null && verOf(s,id)!=s.mod(id).newestRelease?.version
 fun updates(s: AppState)=s.installed.keys.filter{hasUpdate(s,it)}
 fun onCount(s: AppState,p: String=s.profileId)=s.installed.keys.count{isOn(s,it,p)}
 fun usedIn(s: AppState,id: String)=s.profiles.filter{isOn(s,id,it.id)}.map{it.name}
