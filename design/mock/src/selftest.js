@@ -1,0 +1,53 @@
+// Only in the test build (build.ps1 -Test). Runs the mock's actions and reports exceptions and wrong results.
+(function () {
+  const out = [], el = id => ({ dataset: typeof id === 'object' ? id : { id } });
+  const drain = () => { for (let i = 0; i < 400 && S.downloads.some(d => d.pct < 100); i++) tick(); };
+  const step = (name, fn) => { try { const r = fn(); render(); out.push((r === false ? 'FAIL ' : 'ok   ') + name); } catch (e) { out.push('ERROR ' + name + ': ' + e.message); } };
+  const pages = () => ['browse', 'library', 'servers', 'settings'].forEach(p => { S.page = p; render(); });
+  step('all pages render', () => { pages(); });
+  step('install with dependency, then undo removes both', () => { ACT.install(el('carrier-ops')); drain(); return isOn('carrier-ops'); });
+  step('install keeps its profile when the user switches', () => { ACT.install(el('wingman')); ACT.profile(el('hardcore')); drain(); const r = isOn('wingman', 'default') && !isOn('wingman', 'hardcore'); ACT.profile(el('default')); return r; });
+  step('update is per profile', () => { ACT.update(el('harrier-kai')); drain(); return verOf('harrier-kai', 'default') === '1.4.0' && verOf('harrier-kai', 'friday') === '1.3.2'; });
+  step('remove during update does not crash', () => { ACT.update(el('minimap')); removeMods(['minimap']); drain(); return !isInst('minimap'); });
+  step('undo the removal', () => { const t = S.toasts.filter(q => q.action === 'Undo').pop(); t.fn(); return isInst('minimap'); });
+  step('bulk off, switch profile, undo restores the first profile', () => { setOn(['delivery', 'sounds'], false); ACT.profile(el('hardcore')); const t = S.toasts.filter(q => q.action === 'Undo').pop(); t.fn(); ACT.profile(el('default')); return isOn('delivery') && isOn('sounds'); });
+  step('mod panel tabs', () => { ['about', 'new', 'needs'].forEach(tab => { S.panel = { kind: 'mod', id: 'spectator', tab }; render(); }); S.panel = { kind: 'mod', id: 'local-testhud' }; render(); S.panel = null; });
+  step('join a server with missing mods: temporary profile, then game runs', () => { S.page = 'servers'; S.panel = { kind: 'server', id: 's2' }; render(); ACT.join(el('s2')); const temp = profile().temp; drain(); return temp && S.running && isOn('minimap') && isOn('coastal-strike'); });
+  step('game closes: temporary profile is removed', () => { ACT.running(); return S.profile === 'default' && !PROFILES.some(p => p.temp); });
+  step('cancelled download cancels the join', () => { ACT.join(el('s5')); const d = S.downloads.find(q => q.pct < 100); ACT.dlcancel(el(d.id)); drain(); const r = !S.running && !S.pendingJoin; if (profile().temp) { PROFILES.splice(PROFILES.indexOf(profile()), 1); S.profile = 'default'; } return r; });
+  step('server whose mods are only off is not "ready"', () => { INST['minimap'].on.default = false; const st = srvState(SERVERS.find(s => s.id === 's3')); INST['minimap'].on.default = true; return !st.ready && st.off === 1; });
+  step('server with unknown mods', () => { S.panel = { kind: 'server', id: 's4' }; render(); return srvState(SERVERS.find(s => s.id === 's4')).unknown; });
+  step('import as a new profile keeps Default versions', () => { const before = verOf('map-markings', 'default'); ACT.import(); render(); ACT.doimport(); drain(); const p = profile(); const r = p.pack && verOf('map-markings', p.id) === '0.1.5' && verOf('map-markings', 'default') === before; ACT.profile(el('default')); return r; });
+  step('import into Default with a conflict kept', () => { ACT.import(); S.overlay.mode = 'add'; render(); ACT.doimport(); drain(); return verOf('map-markings', 'default') === '0.1.6' && isOn('smoke-trails'); });
+  step('pack update changes only Friday squad', () => { const before = verOf('loadout-presets', 'default'); ACT.profile(el('friday')); ACT.packupdate(); render(); ACT.dopackupdate(); drain(); const r = verOf('loadout-presets', 'friday') === '1.5.0' && verOf('loadout-presets', 'default') === before && !isOn('better-flares', 'friday'); ACT.profile(el('default')); return r; });
+  step('broken-mod test finds the mod and restores the profile', () => {
+    const before = installedIds().filter(id => isOn(id)); ACT.trouble(); render(); ACT.tstart(); render(); ACT.tanswer(el({ v: 'gone' })); render();
+    for (let i = 0; i < 12 && S.trouble.phase === 'test'; i++) {
+      const bad = S.trouble.on.some(id => MOD[id].deps.some(d => before.includes(d) && !S.trouble.on.includes(d)));
+      if (bad) throw new Error('a mod is on without the mod it needs');
+      ACT.tanswer(el({ v: S.trouble.on.includes(S.trouble.culprit) ? 'still' : 'gone' })); render();
+    }
+    const found = S.trouble.found; ACT.tend(el({ v: 'keep' }));
+    return found === 'cockpit-shake' && before.every(id => isOn(id)) && !S.trouble;
+  });
+  step('broken-mod test: problem without mods', () => { ACT.trouble(); ACT.tstart(); ACT.tanswer(el({ v: 'still' })); render(); const r = S.trouble.phase === 'nomod'; ACT.closeoverlay(); return r && !S.trouble; });
+  const endGame = () => { if (S.running) ACT.running(); if (profile().temp) { PROFILES.splice(PROFILES.indexOf(profile()), 1); } S.profile = 'default'; S.running = false; S.srv.mode = null; };
+  step('join choice: temporary profile with only the server mods', () => { S.srv.mode = 'temp'; S.panel = { kind: 'server', id: 's9' }; render(); ACT.join(el('s9')); drain(); const r = profile().temp && S.running && isOn('carrier-ops') && isOn('blueprinter') && !isOn('minimap') && isOn('minimap', 'default'); endGame(); return r; });
+  step('join choice: new profile stays after the game', () => { S.srv.mode = 'new'; ACT.join(el('s9')); drain(); const p = profile(); const r = !p.temp && p.id !== 'default' && S.running && !isOn('minimap'); ACT.running(); const kept = PROFILES.includes(p); S.profile = 'default'; S.srv.mode = null; return r && kept; });
+  step('join choice: add to the current profile', () => { S.srv.mode = 'add'; INST['vortex'].on.default = false; ACT.join(el('s2')); drain(); const r = S.profile === 'default' && isOn('vortex') && isOn('coastal-strike') && S.running; endGame(); return r; });
+  step('join menu and default choice', () => { S.page = 'servers'; S.panel = { kind: 'server', id: 's2' }; render(); const b = document.querySelector('[data-act="joinmenu"]'); ACT.joinmenu(b); render(); S.menu.items[2].fn(); const r = joinMode() === 'temp'; S.menu.items[S.menu.items.length - 1].fn(); S.menu = null; const r2 = VAL.joinMods === JOIN_MODES[1][1]; VAL.joinMods = JOIN_MODES[0][1]; return r && r2 && joinMode() === 'tempplus'; });
+  step('settings of a profile that is not in use', () => { S.page = 'settings'; S.set.scope = 'profile'; S.set.pid = 'friday'; render(); ACT.ovset(el({ key: 'onLaunch' })); setSetting('onLaunch', 'Close NNOMM'); render(); const r = S.profile === 'default' && S.set.ov.friday.onLaunch === 'Close NNOMM' && VAL.onLaunch === 'Keep NNOMM open'; S.set.scope = 'all'; render(); return r; });
+  step('browse filters: click again clears, Clear button', () => { S.page = 'browse'; ACT.bset(el({ k: 'have', v: 'inst' })); render(); ACT.bset(el({ k: 'have', v: 'inst' })); const r = S.browse.have === 'all'; ACT.bset(el({ k: 'type', v: 'addon' })); ACT.btag(el({ tag: 'HUD' })); render(); ACT.bclear(el({ k: 'type' })); ACT.bclear(el({ k: 'tags' })); render(); return r && S.browse.type === 'all' && !S.browse.tags.length; });
+  step('a setting that uses the general value cannot be changed from the view of one profile', () => { S.page = 'settings'; S.set.scope = 'profile'; S.set.pid = 'friday'; delete S.set.ov.friday.onUpdate; setSetting('onUpdate', 'Update by itself'); render(); const r = VAL.onUpdate === 'Tell me' && !!document.querySelector('.srow.inherit select[disabled]'); S.set.scope = 'all'; return r; });
+  step('profile switch while mods download: the join uses its own profile and cleans it up', () => { delete INST['vr-hands']; ACT.join(el('s5')); const tmp = S.profile, pending = !!S.pendingJoin; ACT.profile(el('hardcore')); drain(); const r = pending && S.running && S.profile === tmp; ACT.profile(el('hardcore')); ACT.running(); const r2 = !PROFILES.some(p => p.id === tmp) && S.profile === 'hardcore'; S.profile = 'default'; return r && r2; });
+  step('password is needed and stays when the panel is drawn again', () => { S.page = 'servers'; ACT.opensrv(el('s4')); render(); ACT.join(el('s4')); const blocked = !S.running; setPath('srv.pw', 'abc'); render(); const kept = document.getElementById('srv-pw').value === 'abc'; ACT.join(el('s4')); const r = S.running; ACT.running(); S.panel = null; return blocked && kept && r; });
+  step('a new server profile shows the profiles again when they were hidden', () => { setSetting('showProfiles', false); S.srv.mode = 'new'; ACT.join(el('s11')); drain(); const r = VAL.showProfiles === true && S.running; ACT.running(); S.profile = 'default'; return r; });
+  step('command search', () => { ACT.palette(); ['', 'map', 'upd', 'friday', 'zzzz'].forEach(q => { S.pal.q = q; render(); }); S.pal.q = 'map'; render(); const it = S.pal.items[0]; S.overlay = null; it.fn(); return S.panel && S.panel.kind === 'mod'; });
+  step('dialogs render', () => { ['newprofile', 'share', 'drop'].forEach(k => { ACT[k === 'drop' ? 'mockdrop' : k](); render(); }); S.overlay = null; ACT.newprofile(); S.overlay.name = 'Test'; S.overlay.own = true; ACT.docreate(); const r = S.set.ov[S.profile].ownSettingsP === true; ACT.profile(el('default')); return r; });
+  step('settings: every category, search and profile scope', () => { S.page = 'settings'; CATS.forEach(c => { S.set.cat = c[0]; render(); }); ['update', 'path', 'steam', 'zzz'].forEach(q => { S.set.q = q; render(); }); S.set.q = ''; S.set.scope = 'profile'; render(); ACT.ovset(el({ key: 'onLaunch' })); render(); ACT.ovreset(el({ key: 'onLaunch' })); S.set.scope = 'all'; });
+  step('hiding profiles returns to Default', () => { ACT.profile(el('hardcore')); setSetting('showProfiles', false); const r = S.profile === 'default'; pages(); setSetting('showProfiles', true); return r; });
+  step('hiding servers', () => { S.page = 'servers'; setSetting('showServers', false); const r = S.page !== 'servers'; render(); setSetting('showServers', true); return r; });
+  step('mock states', () => { ['first', 'loading', 'offline', 'empty', 'normal'].forEach(m => { S.mock = m; ['browse', 'library'].forEach(p => { S.page = p; render(); }); }); });
+  step('light theme', () => { ACT.theme(el({ v: 'light' })); render(); ACT.theme(el({ v: 'dark' })); });
+  const d = document.createElement('pre'); d.id = 'selftest'; d.textContent = out.join('\n'); document.body.appendChild(d);
+})();

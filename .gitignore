@@ -19,3 +19,4 @@ captures
 node_modules/
 /.vs
 composeApp/steam_appid.txt
+design/mock/site/
