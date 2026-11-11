@@ -15,7 +15,7 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "5.5.0"
+val appVersion = "0.1.0"
 
 
 java {
@@ -33,7 +33,6 @@ kotlin {
             implementation(compose.desktop.currentOs)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
-            implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
 
@@ -41,7 +40,6 @@ kotlin {
             implementation(libs.nucleus.nucleus.application)
             implementation(libs.nucleus.decorated.window.tao)
             implementation(libs.nucleus.window.tao)
-            implementation(libs.nucleus.window.material3)
             implementation(libs.nucleus.darkmode)
             implementation(libs.nucleus.taskbar)
             implementation(libs.nucleus.updater)
@@ -72,10 +70,7 @@ kotlin {
             implementation(libs.coil.ktor)
             
 
-            implementation(libs.materialKolor)
 
-            implementation(libs.jetbrains.navigation3.ui)
-            implementation(libs.steamworks4j)
 
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
             implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
@@ -89,19 +84,19 @@ kotlin {
 }
 
 buildkonfig {
-    packageName = "com.combat.nomm"
+    packageName = "nnomm.app"
     defaultConfigs {
         buildConfigField(FieldSpec.Type.STRING, "VERSION", appVersion)
     }
 }
 
 nucleus.application {
-    mainClass = "com.combat.nomm.MainKt"
+    mainClass = "nnomm.app.MainKt"
     jvmArgs += listOf(
         "--enable-native-access=ALL-UNNAMED",
     )
 
-    val authorEmail = "787combat787@gmail.com"
+    val authorEmail = "327495124+clankagent@users.noreply.github.com"
     nativeDistributions {
         targetFormats(
             TargetFormat.Portable,
@@ -122,30 +117,30 @@ nucleus.application {
             "jdk.unsupported"
         )
         
-        appName = "Nuclear Option Mod Manager"
-        packageName = "NOMM"
+        appName = "NNOMM"
+        packageName = "NNOMM"
         packageVersion = appVersion
-        vendor = "Combat"
-        description = "A Mod Manager For Nuclear Option"
+        vendor = "clankagent"
+        description = "Mod manager for Nuclear Option"
 
         artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
 
         cleanupNativeLibs = true
         enableAotCache = false
-        homepage = "https://github.com/Combat787/NOMM"
+        homepage = "https://github.com/scramd/NNOMM"
         appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
         compressionLevel = CompressionLevel.Normal
         fileAssociation(
             mimeType = "application/nommpack",
             extension = "nommpack",
-            description = "A Modpack for the Nuclear Option Mod Manager",
+            description = "A Modpack for the NNOMM",
             linuxIconFile = project.file("icons/icon.png"),
             windowsIconFile = project.file("icons/icon.ico"),
             macOSIconFile = project.file("icons/icon.icns"),
         )
         windows {
-            upgradeUuid = "fdac94b6-2774-4802-96c4-67ada2e62a57"
-            menuGroup = "Combat"
+            upgradeUuid = "b0eccd25-0931-477e-8ff4-c6693ee69964"
+            menuGroup = "clankagent"
             shortcut = true
             iconFile.set(project.file("icons/icon.ico"))
             nsis {
@@ -159,22 +154,22 @@ nucleus.application {
 
         linux {
             shortcut = true
-            packageName = "NOMM"
+            packageName = "NNOMM"
             appCategory = "Utility"
-            debMaintainer = "Combat <${authorEmail}>"
+            debMaintainer = "clankagent <${authorEmail}>"
             iconFile.set(project.file("icons/icon.png"))
         }
 
         macOS {
-            bundleID = "com.combat.nomm"
+            bundleID = "io.github.scramd.nnomm"
         }
 
         publish {
             publishMode = PublishMode.Never
             github {
                 enabled = true
-                owner = "Combat787"
-                repo = "NOMM"
+                owner = "scramd"
+                repo = "NNOMM"
                 token = System.getenv("GITHUB_TOKEN")
                 channel = ReleaseChannel.Latest
                 releaseType = ReleaseType.Release
@@ -192,4 +187,18 @@ nucleus.application {
             }
         }
     }
+}
+
+// The renderer runs the same JVM compilation and resources as the desktop app.
+val jvmMainCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
+tasks.register<JavaExec>("renderShots") {
+    group = "verification"
+    description = "Render registered Compose states with CPU Skia, without a window"
+    dependsOn("jvmMainClasses")
+    classpath = files(jvmMainCompilation.output.allOutputs, configurations.getByName("jvmRuntimeClasspath"))
+    mainClass.set("nnomm.ui.shots.RenderShotsKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(25)); vendor.set(JvmVendorSpec.JETBRAINS) })
+    systemProperty("java.awt.headless", "true")
+    environment("SKIKO_RENDER_API", "SOFTWARE")
+    args(layout.buildDirectory.dir("shots").get().asFile.absolutePath)
 }

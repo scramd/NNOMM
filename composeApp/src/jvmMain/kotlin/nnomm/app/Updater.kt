@@ -1,4 +1,4 @@
-package com.combat.nomm
+package nnomm.app
 
 import dev.nucleusframework.core.runtime.ExecutableRuntime
 import dev.nucleusframework.core.runtime.ExecutableType
@@ -7,7 +7,7 @@ import dev.nucleusframework.nativehttp.NativeHttpClient
 import dev.nucleusframework.updater.NucleusUpdater
 import dev.nucleusframework.updater.provider.UpdateProvider
 
-internal const val NOMM_LATEST_RELEASE_URL = "https://github.com/Combat787/NOMM/releases/latest"
+internal const val NNOMM_LATEST_RELEASE_URL = "https://github.com/scramd/NNOMM/releases/latest"
 
 private val manualWindowsUpdateTypes = setOf(
     ExecutableType.PORTABLE,
@@ -25,8 +25,8 @@ internal fun requiresManualWindowsUpdate(): Boolean =
 val updater = NucleusUpdater {
     provider = object : UpdateProvider {
 
-        val owner: String = "Combat787"
-        val repo: String = "NOMM"
+        val owner: String = "scramd"
+        val repo: String = "NNOMM"
         val token: String? = null
 
         override fun getUpdateMetadataUrl(
