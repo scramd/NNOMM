@@ -15,7 +15,7 @@ data class PackUpdateRow(val kind: String,val id: String,val text: String)
 fun packUpdateRows(s: AppState,pack: Pack)=pack.items.map { i->PackUpdateRow(i.kind,i.id,when(i.kind){"add"->size(s.mod(i.id).newestRelease?.sizeKb?:0);"rem"->"turned off, not deleted";"chg"->"${i.version} to ${i.nextVersion}";"newer"->"pack asks for ${i.nextVersion}, you keep ${i.version}";else->"you have it"}) }
 fun startTrouble(s: AppState): AppState {
     val on=s.installed.keys.filter{isOn(s,it)}
-    val t=TroubleSession(s.profileId,on,on,rounds=max(1,ceil(log2(max(2,on.size).toDouble())).toInt()))
+    val t=TroubleSession(s.profileId,on,on,culprit=if("cockpit-shake" in on)"cockpit-shake" else on.lastOrNull(),rounds=max(1,ceil(log2(max(2,on.size).toDouble())).toInt()))
     return applyTrouble(s.copy(trouble=t),emptyList())
 }
 private fun applyTrouble(s: AppState,on: List<String>): AppState {
@@ -34,7 +34,7 @@ fun troubleAnswer(s: AppState,still: Boolean): AppState {
     if(t.phase!="test")return s
     val suspects=t.suspects.filter{it in if(still)t.on else t.off}
     if(suspects.size>1)return troubleRound(stopped.copy(trouble=t.copy(suspects=suspects)))
-    val found=suspects.firstOrNull()?:t.saved.lastOrNull()
+    val found=suspects.firstOrNull()?:t.culprit
     return applyTrouble(stopped.copy(trouble=t.copy(phase="found",suspects=suspects,found=found)),t.saved.filter{it!=found})
 }
 fun restoreTrouble(s: AppState)=s.trouble?.let{applyTrouble(s,it.saved).copy(trouble=null)}?:s

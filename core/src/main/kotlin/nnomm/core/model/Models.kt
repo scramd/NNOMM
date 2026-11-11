@@ -54,7 +54,7 @@ import kotlinx.serialization.json.JsonPrimitive
 @Serializable data class Download(val id: String, val kind: String, val profile: String, val version: String, val percent: Int = 0, val quiet: Boolean = false, val withDependencies: List<String> = emptyList(), val error: String? = null)
 @Serializable data class UiAction(val kind: String, val id: String? = null, val value: String? = null)
 data class Toast(val id: Long, val text: String, val action: String? = null, val target: UiAction? = null, val durationMillis: Long = 7000, val callback: (() -> Unit)? = null)
-@Serializable data class TroubleSession(val profile: String, val saved: List<String>, val suspects: List<String>, val phase: String = "base", val round: Int = 0, val rounds: Int, val on: List<String> = emptyList(), val off: List<String> = saved, val found: String? = null)
+@Serializable data class TroubleSession(val profile: String, val saved: List<String>, val suspects: List<String>, val phase: String = "base", val round: Int = 0, val rounds: Int, val on: List<String> = emptyList(), val off: List<String> = saved, val found: String? = null, val culprit: String? = null)
 @Serializable data class FirstStart(val complete: Boolean = true, val existingOn: Int = 0, val existingOff: Int = 0)
 data class AppState(
     val catalog: List<CatalogMod> = emptyList(), val connection: CatalogConnection = CatalogConnection(),
