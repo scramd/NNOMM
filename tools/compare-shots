@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+shots="$root/composeApp/build/shots"
+mkdir -p "$shots/compare"
+shopt -s nullglob
+for shot in "$shots"/*.png; do
+  name="$(basename "$shot")"
+  mock="$root/design/mock/shots/$name"
+  if [[ -f "$mock" ]]; then
+    # Mock screenshots include the page margin and the controls under the app.
+    width=$(identify -format '%w' "$mock")
+    if ((width <= 760)); then geometry=728x720+16+14; else geometry=1328x792+16+14; fi
+    convert \( "$mock" -crop "$geometry" +repage \) "$shot" +append "$shots/compare/$name"
+    echo "$shots/compare/$name"
+  fi
+done

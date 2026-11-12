@@ -9,10 +9,7 @@ import dev.nucleusframework.updater.provider.UpdateProvider
 
 internal const val NNOMM_LATEST_RELEASE_URL = "https://github.com/scramd/NNOMM/releases/latest"
 
-private val manualWindowsUpdateTypes = setOf(
-    ExecutableType.PORTABLE,
-    ExecutableType.ZIP,
-)
+private val manualWindowsUpdateTypes = setOf(ExecutableType.PORTABLE, ExecutableType.ZIP)
 
 internal fun requiresManualWindowsUpdate(
     platform: Platform,
@@ -23,43 +20,37 @@ internal fun requiresManualWindowsUpdate(): Boolean =
     requiresManualWindowsUpdate(Platform.Current, ExecutableRuntime.type())
 
 val updater = NucleusUpdater {
-    provider = object : UpdateProvider {
+    provider =
+        object : UpdateProvider {
 
-        val owner: String = "scramd"
-        val repo: String = "NNOMM"
-        val token: String? = null
+            val owner: String = "scramd"
+            val repo: String = "NNOMM"
+            val token: String? = null
 
-        override fun getUpdateMetadataUrl(
-            channel: String,
-            platform: Platform,
-        ): String {
-            val suffix = platformSuffix(platform)
-            val fileName = if (suffix.isEmpty()) "$channel.yml" else "$channel-$suffix.yml"
-            return "https://github.com/$owner/$repo/releases/latest/download/$fileName"
+            override fun getUpdateMetadataUrl(channel: String, platform: Platform): String {
+                val suffix = platformSuffix(platform)
+                val fileName = if (suffix.isEmpty()) "$channel.yml" else "$channel-$suffix.yml"
+                return "https://github.com/$owner/$repo/releases/latest/download/$fileName"
+            }
+
+            override fun getDownloadUrl(fileName: String, version: String): String =
+                "https://github.com/$owner/$repo/releases/download/$version/$fileName"
+
+            override fun authHeaders(): Map<String, String> =
+                if (token != null) {
+                    mapOf("Authorization" to "token $token")
+                } else {
+                    emptyMap()
+                }
+
+            private fun platformSuffix(platform: Platform): String =
+                when (platform) {
+                    Platform.Windows -> ""
+                    Platform.MacOS -> "mac"
+                    Platform.Linux -> "linux"
+                    Platform.Unknown -> ""
+                }
         }
-
-        override fun getDownloadUrl(
-            fileName: String,
-            version: String,
-        ): String = "https://github.com/$owner/$repo/releases/download/$version/$fileName"
-
-        override fun authHeaders(): Map<String, String> =
-            if (token != null) {
-                mapOf("Authorization" to "token $token")
-            } else {
-                emptyMap()
-            }
-
-        private fun platformSuffix(platform: Platform): String =
-            when (platform) {
-                Platform.Windows -> ""
-                Platform.MacOS -> "mac"
-                Platform.Linux -> "linux"
-                Platform.Unknown -> ""
-            }
-
-
-    }
 
     httpClient = NativeHttpClient.create()
     channel = "latest"

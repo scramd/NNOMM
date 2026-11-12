@@ -133,22 +133,22 @@ nucleus.application {
         fileAssociation(
             mimeType = "application/nommpack",
             extension = "nommpack",
-            description = "A Modpack for the NNOMM",
+            description = "NNOMM modpack",
             linuxIconFile = project.file("icons/icon.png"),
             windowsIconFile = project.file("icons/icon.ico"),
             macOSIconFile = project.file("icons/icon.icns"),
         )
         windows {
             upgradeUuid = "b0eccd25-0931-477e-8ff4-c6693ee69964"
-            menuGroup = "clankagent"
+            menuGroup = "NNOMM"
             shortcut = true
             iconFile.set(project.file("icons/icon.ico"))
             nsis {
                 runAfterFinish = true
                 deleteAppDataOnUninstall = false
-                installerIcon.set(project.file("packaging/installer.ico"))
-                uninstallerIcon.set(project.file("packaging/uninstaller.ico"))
-                license.set(project.file("LICENSE"))
+                installerIcon.set(project.file("icons/icon.ico"))
+                uninstallerIcon.set(project.file("icons/icon.ico"))
+                license.set(rootProject.file("LICENSE"))
             }
         }
 
@@ -198,6 +198,7 @@ tasks.register<JavaExec>("renderShots") {
     classpath = files(jvmMainCompilation.output.allOutputs, configurations.getByName("jvmRuntimeClasspath"))
     mainClass.set("nnomm.ui.shots.RenderShotsKt")
     javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(25)); vendor.set(JvmVendorSpec.JETBRAINS) })
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
     systemProperty("java.awt.headless", "true")
     environment("SKIKO_RENDER_API", "SOFTWARE")
     args(layout.buildDirectory.dir("shots").get().asFile.absolutePath)

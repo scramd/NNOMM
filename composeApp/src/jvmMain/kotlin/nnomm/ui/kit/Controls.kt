@@ -189,7 +189,7 @@ fun Button(
                 .border(1.dp, border, RoundedCornerShape(6.dp))
                 .padding(horizontal = pad.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, color = ink)
             Label(
@@ -241,7 +241,7 @@ fun Switch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    description: String = "Turn on",
+    description: String = if (checked) "Turn off" else "Turn on",
 ) {
     val t = LocalNnTheme.current
     val c = t.colors
@@ -500,7 +500,12 @@ enum class BadgeKind {
 }
 
 @Composable
-fun Badge(text: String, kind: BadgeKind = BadgeKind.Normal, icon: ImageVector? = null) {
+fun Badge(
+    text: String,
+    kind: BadgeKind = BadgeKind.Normal,
+    icon: ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+) {
     val c = LocalNnTheme.current.colors
     val bg =
         when (kind) {
@@ -516,20 +521,27 @@ fun Badge(text: String, kind: BadgeKind = BadgeKind.Normal, icon: ImageVector? =
             BadgeKind.Ok -> c.on
             else -> c.text2
         }
-    Row(
-        Modifier.height(19.dp)
-            .background(bg, RoundedCornerShape(4.dp))
-            .then(
-                if (kind == BadgeKind.Ok) Modifier.border(1.dp, c.onFill, RoundedCornerShape(4.dp))
-                else Modifier
-            )
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (icon != null) Icon(icon, Modifier.size(12.dp), ink)
-        Label(text, color = ink, size = 11.5f, weight = 600)
+    @Composable
+    fun surface(modifier: Modifier, hovered: Boolean = false) {
+        Row(
+            modifier
+                .height(19.dp)
+                .background(if (hovered) bg.brighten(1.15f) else bg, RoundedCornerShape(4.dp))
+                .then(
+                    if (kind == BadgeKind.Ok)
+                        Modifier.border(1.dp, c.onFill, RoundedCornerShape(4.dp))
+                    else Modifier
+                )
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (icon != null) Icon(icon, Modifier.size(12.dp), ink)
+            Label(text, color = ink, size = 11.5f, weight = 600)
+        }
     }
+    if (onClick == null) surface(Modifier)
+    else control(Modifier, onClick = onClick) { m, h, _ -> surface(m, h) }
 }
 
 @Composable
