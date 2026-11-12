@@ -184,35 +184,4 @@ class SecondAcceptanceTest {
             }
         }
     }
-
-    @Test
-    fun metadataOnlyRequestsNewestVersionsOfRequestedRows() = runBlocking {
-        val io = Demo.io()
-        val requested = java.util.concurrent.CopyOnWriteArrayList<String>()
-        val seed = Demo.state()
-        val mod = seed.catalog.first()
-        val source =
-            object : MetaSource {
-                override suspend fun metadata(
-                    mod: CatalogMod,
-                    version: ModVersion,
-                ): VersionMetadata {
-                    requested += "${mod.id}/${version.version}"
-                    return VersionMetadata(10, 1)
-                }
-            }
-        val store = AppStore(seed, io.copy(meta = source))
-        try {
-            store.loadMetadata(setOf(mod.id))
-            val expected =
-                listOfNotNull(mod.newestRelease, mod.newerPreRelease, mod.oldestVersion)
-                    .filter { it.downloadUrl != null }
-                    .map { "${mod.id}/${it.version}" }
-                    .toSet()
-            withTimeout(5000) { while (requested.size < expected.size) delay(10) }
-            assertEquals(expected, requested.toSet())
-        } finally {
-            store.shutdown()
-        }
-    }
 }

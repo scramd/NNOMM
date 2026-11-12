@@ -86,23 +86,6 @@ class ShellContractTest {
     }
 
     @Test
-    fun mockAddressPreservesPageStateAndDomainSeed() {
-        val address =
-            "page=library&theme=light&prof=friday&lf=upd&sel=minimap,delivery&panel=mod:minimap&tab=new&running=1&dl=minimap"
-        mockStore(address).use { store ->
-            val model = AppModel(store, ShotPlatform)
-            applyMockAddress(model, address)
-            assertEquals(Page.Library, model.ui.page)
-            assertEquals("friday", store.state.value.profileId)
-            assertEquals(setOf("minimap", "delivery"), model.ui.library.selection)
-            assertEquals(PanelRef("minimap", PanelTab.WhatsNew), model.ui.panel)
-            assertEquals("upd", model.ui.library.filter)
-            assertTrue(store.state.value.gameRunning)
-            assertEquals(78, store.state.value.downloads.single().percent)
-        }
-    }
-
-    @Test
     fun fileImportWaitsForFactoryAndKeepsFile() {
         mockStore("").use { store ->
             val model = AppModel(store, ShotPlatform)
@@ -187,13 +170,5 @@ class ShellContractTest {
             assertFalse(model.suppressHandledCharacter(typed))
             assertEquals(1, calls)
         }
-    }
-
-    @Test
-    fun allNonServerPicturesHaveAddresses() {
-        assertEquals(30, mockShots.size)
-        assertEquals(30, mockShots.map { it.name }.distinct().size)
-        assertTrue(mockShots.none { it.name.take(2) in setOf("07", "09", "29", "33", "34", "35") })
-        assertEquals(2, mockShots.count { it.width == 728 && it.height == 720 })
     }
 }

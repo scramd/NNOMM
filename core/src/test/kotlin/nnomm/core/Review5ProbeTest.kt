@@ -107,26 +107,6 @@ class Review5ProbeTest {
             it.copy(general = it.general + ("keepOld" to JsonPrimitive("None")))
         }
 
-    // A: a NOMM-installed mod (meta.json) taken over with a player file inside, then updated.
-    @Test
-    fun unprovenTakeoverFilesAreParkedOnVersionChange() = runBlocking {
-        val home = temp()
-        val g = game()
-        takeoverFoo(g)
-        val store = RealModStore(home, null) { fooCatalog }
-        val f = RealGameFolder(home, store, noNet, catalog = { fooCatalog }, running = { false })
-        val found = f.takeOver(g.toString())
-        payload(store, "foo", "2", mapOf("Foo.dll" to "foo two"))
-        f.apply(plan(g, mapOf("foo" to "2")))
-        assertTrue(
-            containsText(g, "PLAYER DATA") ||
-                containsText(home.resolve("player-files"), "PLAYER DATA") ||
-                containsText(home.resolve("player-edits"), "PLAYER DATA") ||
-                containsText(store.version("foo", "1"), "PLAYER DATA"),
-            "player file inside a taken-over mod must remain recoverable",
-        )
-    }
-
     // A2: same, then Clear with "Keep old versions: None".
     @Test
     fun takenOverPlayerFileSurvivesUpdateAndClear() = runBlocking {

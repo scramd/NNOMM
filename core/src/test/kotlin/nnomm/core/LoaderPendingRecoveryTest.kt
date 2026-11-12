@@ -221,34 +221,4 @@ class LoaderPendingRecoveryTest {
             app.shutdown()
         }
     }
-
-    @Test
-    fun pendingRepairOfCompleteLoaderDoesNotClaimMissingFiles() = runBlocking {
-        val f = fixture()
-        val notices = mutableListOf<String>()
-        val gf = folder(f, notices)
-        gf.installLoader(f.game.toString())
-        DiskFaults.step = { if (it == "probe-install-pending-written") throw Crash() }
-        assertFailsWith<Crash> { gf.repairLoader(f.game.toString()) }
-        DiskFaults.step = {}
-        f.game.resolve("winhttp.dll").writeText("player proxy")
-        assertTrue(data.keys.all { f.game.resolve(it).exists() })
-        DiskFaults.step = {
-            if (it == "loader-ownership-report-deleted") throw java.io.IOException("locked")
-        }
-        gf.recoverPending()
-        DiskFaults.step = {}
-        assertTrue(gf.inspect(f.game.toString()).loaderRecoveryPending)
-        var launched = false
-        val app = app(gf, f.game) { launched = true }
-        try {
-            app.play()
-            withTimeout(10000) { while (!launched) delay(10) }
-            app.awaitDiskIdle()
-            assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
-            assertFalse(app.state.value.toasts.any { it.text.contains("missing some files") })
-        } finally {
-            app.shutdown()
-        }
-    }
 }

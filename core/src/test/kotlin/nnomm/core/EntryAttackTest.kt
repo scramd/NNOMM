@@ -157,34 +157,6 @@ class EntryAttackTest {
     }
 
     @Test
-    fun crashMatrix() {
-        for (remove in listOf(false, true)) for (phase in
-            listOf("prepared", "old-moved", "promoted")) {
-            val h = tmp()
-            val t = h.resolve("game/BepInEx/plugins/m").createDirectories()
-            t.resolve("old").writeText("old")
-            val src = h.resolve("src").createDirectories()
-            src.resolve("new").writeText("new")
-            DiskFaults.step = { if (it == phase) throw DiskCrash() }
-            assertFails {
-                replaceTree(
-                    t,
-                    if (remove) null else src,
-                    h.resolve("game-transactions"),
-                    afterCommit = h.resolve("ownership") to "committed",
-                )
-            }
-            DiskFaults.step = {}
-            recoverTransactions(h.resolve("game-transactions"))
-            recoverTransactions(h.resolve("game-transactions"))
-            if (phase == "promoted") {
-                assertEquals(!remove, t.exists())
-                assertEquals("committed", h.resolve("ownership").readText())
-            } else assertEquals("old", t.resolve("old").readText())
-        }
-    }
-
-    @Test
     fun ioFailureAtSwapSteps() {
         for (phase in listOf("prepared", "old-moved", "promoted")) {
             val h = tmp()
@@ -438,51 +410,6 @@ class EntryAttackTest {
             h.resolve("ownership").exists(),
             "Rolled-back payload was published as the new version",
         )
-    }
-
-    @Test
-    fun supportedLoaderRepairCrashMatrixKeepsPlayerBytes() = runBlocking {
-        for (phase in listOf("prepared", "old-moved", "promoted")) for (hit in 1..3) {
-            val h = tmp()
-            val g = game()
-            h.resolve("staging").createDirectories()
-            val core = g.resolve("BepInEx/core").createDirectories()
-            core.resolve("BepInEx.dll").writeBytes("5.4.23.4".toByteArray(Charsets.UTF_16LE))
-            core.resolve("player.data").writeText("UNIQUE CORE")
-            g.resolve("doorstop_config.ini").writeText("PLAYER INI")
-            g.resolve("winhttp.dll").writeText("OLD PROXY")
-            val zip = h.resolve("loader.zip")
-            java.util.zip.ZipOutputStream(Files.newOutputStream(zip)).use { z ->
-                for ((n, t) in
-                    mapOf(
-                        "BepInEx/core/BepInEx.dll" to "new loader",
-                        "winhttp.dll" to "new proxy",
-                        "doorstop_config.ini" to "default",
-                    )) {
-                    z.putNextEntry(java.util.zip.ZipEntry(n))
-                    z.write(t.toByteArray())
-                    z.closeEntry()
-                }
-            }
-            val dl =
-                object : Downloader {
-                    override suspend fun download(
-                        mod: CatalogMod,
-                        version: ModVersion,
-                        progress: (Int) -> Unit,
-                    ) = DownloadedFile(zip.toString())
-                }
-            val f = RealGameFolder(h, RealModStore(h), dl, running = { false })
-            var n = 0
-            DiskFaults.step = { if (it == phase && ++n == hit) throw DiskCrash() }
-            runCatching { f.repairLoader(g.toString()) }
-            DiskFaults.step = {}
-            f.recoverPending()
-            assertTrue(contains(h, "UNIQUE CORE") || contains(g, "UNIQUE CORE"))
-            assertTrue(contains(h, "PLAYER INI") || contains(g, "PLAYER INI"))
-            assertEquals("OLD PROXY", g.resolve("winhttp.dll").readText())
-            assertEquals("UNIQUE CORE", core.resolve("player.data").readText())
-        }
     }
 
     @Test

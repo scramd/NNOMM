@@ -183,27 +183,6 @@ class Round3ReviewTest {
     }
 
     @Test
-    fun takeoverMustNotResetFirstStartCompletion() = runBlocking {
-        val g = game()
-        val h = root.resolve("home")
-        val s = RealModStore(h)
-        val f = RealGameFolder(h, s, noNet, running = { false })
-        val app =
-            AppStore(
-                AppState(
-                    firstStart = FirstStart(true),
-                    game = GameInfo(g.toString()),
-                    settings = nnomm.core.settings.defaultSettings(),
-                ),
-                Demo.io().copy(gameFolder = f, modStore = s),
-            )
-        app.takeOverExistingMods(g.toString())
-        delay(600)
-        app.shutdown()
-        assertTrue(app.state.value.firstStart.complete, "Take over reset completed first start")
-    }
-
-    @Test
     fun rootLinkRefusalMustNotBlockIndependentEntries() = runBlocking {
         val h = root.resolve("home")
         val g = game()

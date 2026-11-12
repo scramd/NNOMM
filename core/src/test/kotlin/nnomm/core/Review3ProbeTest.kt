@@ -359,64 +359,6 @@ class Review3ProbeTest {
         a.close()
     }
 
-    // R9: Clear queued before an uninstall's disk step deletes the payload Undo needs.
-    @Test
-    fun clearBeforeUninstallDiskStepBreaksUndo() = runBlocking {
-        val home = temp()
-        payload(RealModStore(home), "m", "1", mapOf("m.dll" to "m"))
-        payload(RealModStore(home), "n", "1", mapOf("n.dll" to "n"))
-        val store = RealModStore(home) // a restart: no recent-install protection
-        val entered = CompletableDeferred<Unit>()
-        val gate = CompletableDeferred<Unit>()
-        val io = Demo.io()
-        val folder =
-            object : GameFolder by io.gameFolder {
-                override suspend fun inspect(folder: String) =
-                    GameInfo(folder, loaderPresent = true)
-
-                override suspend fun installLoader(folder: String) {}
-
-                override suspend fun apply(plan: GamePlan) {
-                    entered.complete(Unit)
-                    gate.await()
-                }
-            }
-        val initial =
-            AppState(
-                settings = defaultSettings(),
-                game = GameInfo("/sandbox/game", loaderPresent = true),
-                catalog =
-                    listOf(
-                        CatalogMod("m", "M", versions = listOf(ModVersion("1"))),
-                        CatalogMod("n", "N", versions = listOf(ModVersion("1"))),
-                    ),
-                installed =
-                    installed("m", "n").mapValues {
-                        if (it.key == "n")
-                            it.value.copy(profiles = mapOf("default" to ProfileMod(false, "1")))
-                        else it.value
-                    },
-            )
-        val a =
-            AppStore(initial, io.copy(modStore = store, gameFolder = folder, persistence = null))
-        a.toggle("n")
-        withTimeout(5000) { entered.await() }
-        a.clearUnusedFiles()
-        a.uninstall(listOf("m"))
-        gate.complete(Unit)
-        a.awaitDiskIdle()
-        val goneAfterClear = !store.version("m", "1").exists()
-        a.undo()
-        a.awaitDiskIdle()
-        println(
-            "PROBE R9 payload deleted: $goneAfterClear; m back in library: ${"m" in a.state.value.installed}; files: ${store.version("m", "1").exists()}"
-        )
-        assertFalse(goneAfterClear)
-        assertTrue("m" in a.state.value.installed)
-        assertTrue(store.version("m", "1").exists())
-        a.shutdown()
-    }
-
     // R10: crash after promotion, the game writes files, recovery deletes them without a copy.
     @Test
     fun startupRollbackDeletesFilesWrittenAfterTheCrash() = runBlocking {

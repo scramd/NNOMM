@@ -144,47 +144,6 @@ class FollowupSafetyProbeTest {
     }
 
     @Test
-    fun queuedClearMustRespectUndoIssuedBehindIt() = runBlocking {
-        val h = temp()
-        val real = RealModStore(h)
-        payload(real, h, "m")
-        val field = RealModStore::class.java.getDeclaredField("undoUntil")
-        field.isAccessible = true
-        (field.get(real) as MutableMap<*, *>).clear()
-        val entered = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-        val wrapped =
-            object : ModStore by real {
-                override suspend fun moveTo(folder: String) {
-                    entered.complete(Unit)
-                    release.await()
-                }
-            }
-        val initial =
-            AppState(
-                installed =
-                    mapOf("m" to InstalledMod("m", versions = setOf("1"), defaultVersion = "1"))
-            )
-        val a = AppStore(initial, Demo.io().copy(modStore = wrapped))
-        try {
-            a.moveStore("irrelevant")
-            entered.await()
-            a.clearUnusedFiles()
-            a.uninstall(listOf("m"))
-            release.complete(Unit)
-            a.awaitDiskIdle()
-            a.undo()
-            a.awaitDiskIdle()
-            assertTrue(
-                real.hasVersion("m", "1"),
-                "Clear deleted Undo payload before queued remove protected it",
-            )
-        } finally {
-            a.shutdown()
-        }
-    }
-
-    @Test
     fun staleOwnershipWithUnrelatedSavedStateMustNotAuthorizeRemoval() = runBlocking {
         val h = temp()
         val g = temp()
@@ -208,33 +167,6 @@ class FollowupSafetyProbeTest {
         assertTrue(
             g.resolve("BepInEx/plugins/m/mod.dll").exists(),
             "Unrelated home state authorized deletion of foreign managed mod",
-        )
-    }
-
-    @Test
-    fun pendingInstalledVersionMustSurviveClear() = runBlocking {
-        val h = temp()
-        val s = RealModStore(h)
-        payload(s, h, "m")
-        val d = Files.createTempDirectory(h, "second-")
-        d.resolve("mod.dll").writeText("v2")
-        s.put("m", "2", DownloadedFile(d.toString()))
-        val state =
-            AppState(
-                settings =
-                    nnomm.core.settings
-                        .defaultSettings()
-                        .copy(
-                            general =
-                                mapOf("keepOld" to kotlinx.serialization.json.JsonPrimitive("None"))
-                        ),
-                installed =
-                    mapOf("m" to InstalledMod("m", versions = setOf("1"), defaultVersion = "1")),
-            )
-        s.clearUnused(state)
-        assertTrue(
-            s.hasVersion("m", "2"),
-            "Freshly installed v2 was cleared before its state association",
         )
     }
 

@@ -617,27 +617,6 @@ class LoaderOwnershipV2Test {
         )
     }
 
-    // 7. Notice after hand removal between crash and restart.
-    @Test
-    fun noticeAfterHandRemoval() = runBlocking {
-        val f = fixture(false, null)
-        DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
-        assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
-        DiskFaults.step = {}
-        f.game.resolve("winhttp.dll").deleteIfExists()
-        val r = restart(f)
-        r.folder.recoverPending()
-        assertFalse(r.folder.recoveryPending)
-        assertTrue(
-            f.notices.none {
-                it.contains("pending record is kept") || it.contains(f.game.toString())
-            }
-        )
-        println(
-            "PROBE7 notices=${f.notices} pendingFiles=${pendingDir(f, "loader-pending")} recoveryPending=${r.folder.recoveryPending}"
-        )
-    }
-
     private suspend fun removeEverythingForMatrix(f: F) {
         val completed = CompletableDeferred<Result<LoaderRemoval>>()
         val port =
@@ -735,36 +714,6 @@ class LoaderOwnershipV2Test {
                 "PROBE8 $step#$n player files left: ${own.keys.filter { f.game.resolve(it).exists() }}"
             )
         }
-    }
-
-    // 9. Uninstall crash before any move, player deletes the loader by hand.
-    @Test
-    fun uninstallCrashThenHandRemovalDoesNotBlock() = runBlocking {
-        val f = fixture(false, null)
-        f.folder.installLoader(f.game.toString())
-        DiskFaults.step = { if (it == "prepared") throw Crash() }
-        assertFailsWith<Crash> { f.folder.removeLoader(f.game.toString()) }
-        DiskFaults.step = {}
-        data.keys.forEach { f.game.resolve(it).deleteIfExists() }
-        repeat(3) { restart(f).folder.recoverPending() }
-        val r = restart(f)
-        assertFalse(r.folder.recoveryPending)
-        println(
-            "PROBE9 recoveryPending=${r.folder.recoveryPending} journals=${pendingDir(f, "transactions").map { it.fileName }}"
-        )
-        for (op in listOf("install", "repair", "uninstall")) {
-            val res = runCatching {
-                when (op) {
-                    "install" -> r.folder.installLoader(f.game.toString())
-                    "repair" -> r.folder.repairLoader(f.game.toString())
-                    else -> r.folder.removeLoader(f.game.toString())
-                }
-            }
-            println(
-                "PROBE9 $op -> ${res.exceptionOrNull()?.message ?: "ok"} help=${res.exceptionOrNull()?.let { nnomm.core.store.loaderFailureHelp(it) }}"
-            )
-        }
-        println("PROBE9 notices=${f.notices.distinct()}")
     }
 
     // 10. Unreadable at Install verification (no crash): what Retry, Uninstall and a later

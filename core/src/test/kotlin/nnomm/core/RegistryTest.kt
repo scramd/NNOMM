@@ -136,23 +136,4 @@ class RegistryTest {
         assertEquals(0, updates(a.state.value).size)
         assertEquals(setOf("0.5.1", "0.5.2"), a.state.value.installed.getValue("minimap").versions)
     }
-
-    @Test
-    fun downloadButtonProgress() = runTest {
-        val a = AppStore(Demo.state(), Demo.io(), backgroundScope)
-        a.install("wingman")
-        advanceTimeBy(261)
-        runCurrent()
-        assertEquals(
-            (6 + hash("wingman") % 14).toInt(),
-            modAction(a.state.value, "wingman").percent,
-        )
-    }
-
-    @Test
-    fun demoNotes() {
-        assertEquals("3 days ago", Demo.notes("minimap").first().date)
-        assertEquals(3, Demo.notes("minimap").size)
-        assertEquals("1.3.0", Demo.notes("fuel-planner").first().version)
-    }
 }

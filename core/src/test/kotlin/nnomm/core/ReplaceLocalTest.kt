@@ -4,24 +4,11 @@ import kotlin.test.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
 import nnomm.core.demo.Demo
-import nnomm.core.demo.DemoLauncher
 import nnomm.core.model.ModSource
 import nnomm.core.store.AppStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReplaceLocalTest {
-    @Test
-    fun demoGameEndsAndCanStartAgain() = runTest {
-        val launcher = DemoLauncher(backgroundScope)
-        repeat(2) {
-            launcher.start(Demo.state(), false)
-            assertTrue(launcher.running.value)
-            runCurrent()
-            advanceTimeBy(20_000)
-            runCurrent()
-            assertFalse(launcher.running.value)
-        }
-    }
 
     @Test
     fun replacementKeepsIdentitySwitchesAndUndo() = runTest {

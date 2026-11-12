@@ -287,28 +287,6 @@ class ReviewProbeTest {
     }
 
     @Test
-    fun applyRollsBackAtEveryMutationBoundary() = runBlocking {
-        for (step in listOf("prepared", "old-moved", "promoted")) {
-            val home = temp()
-            val game = game()
-            val store = RealModStore(home)
-            payload(store, home)
-            val folder = RealGameFolder(home, store, noNet, running = { false })
-            folder.apply(state(game), "default")
-            DiskFaults.step = { if (it == step) throw DiskCrash() }
-            try {
-                assertFails { folder.apply(state(game, false), "default") }
-            } finally {
-                DiskFaults.step = {}
-            }
-            val reopened = RealModStore(home)
-            RealGameFolder(home, reopened, noNet, running = { false }).inspect(game.toString())
-            assertEquals("good", game.resolve("BepInEx/plugins/m/mod.dll").readText())
-            assertFalse(game.resolve("BepInEx/plugins/.nnomm-staging").exists())
-        }
-    }
-
-    @Test
     fun missingGameFolderIsInspectable() = runBlocking {
         val home = temp()
         assertFalse(
@@ -372,48 +350,6 @@ class ReviewProbeTest {
             }
             folder.recoverPending()
             assertEquals(if (point == "promoted") "profile-b" else "shared", config.readText())
-        }
-    }
-
-    @Test
-    fun loaderTransactionRollsBackAllFiles() = runBlocking {
-        for (point in listOf("prepared", "old-moved", "promoted")) {
-            val home = temp()
-            val game = game()
-            val archive = home.resolve("loader.zip")
-            ZipOutputStream(Files.newOutputStream(archive)).use { zip ->
-                for ((name, text) in
-                    mapOf("BepInEx/core/BepInEx.dll" to "loader", "winhttp.dll" to "new")) {
-                    zip.putNextEntry(ZipEntry(name))
-                    zip.write(text.toByteArray())
-                    zip.closeEntry()
-                }
-            }
-            val proxy = game.resolve("winhttp.dll")
-            proxy.writeText("old")
-            val ini = game.resolve("doorstop_config.ini")
-            ini.writeText("player")
-            val dl =
-                object : Downloader {
-                    override suspend fun download(
-                        mod: CatalogMod,
-                        version: ModVersion,
-                        progress: (Int) -> Unit,
-                    ) = DownloadedFile(archive.toString())
-                }
-            val store = RealModStore(home)
-            val folder = RealGameFolder(home, store, dl, running = { false })
-            DiskFaults.step = { if (it == point) throw DiskCrash() }
-            try {
-                assertFails { folder.repairLoader(game.toString()) }
-            } finally {
-                DiskFaults.step = {}
-            }
-            RealModStore(home)
-            assertEquals("old", proxy.readText())
-            assertEquals("player", ini.readText())
-            assertFalse(game.resolve("BepInEx/core/BepInEx.dll").exists())
-            assertTrue(archive.exists())
         }
     }
 

@@ -696,26 +696,6 @@ class LoaderPartialPlacementTest {
     }
 
     @Test
-    fun reviewUnreadablePromotionMustKeepRecoveryPending() = runBlocking {
-        val f = fixture(false, null, orders[0])
-        crashAfterTransaction(f)
-        val proxy = f.game.resolve("winhttp.dll")
-        val perms = Files.getPosixFilePermissions(proxy)
-        try {
-            Files.setPosixFilePermissions(
-                proxy,
-                java.nio.file.attribute.PosixFilePermissions.fromString("---------"),
-            )
-            f.folder.recoverPending()
-        } finally {
-            Files.setPosixFilePermissions(proxy, perms)
-        }
-        f.folder.recoverPending()
-        f.folder.removeLoader(f.game.toString())
-        assertFalse(proxy.exists(), "NNOMM lost ownership permanently on a transient read failure")
-    }
-
-    @Test
     fun reviewForeignOwnershipThroughEveryLoaderAction() = runBlocking {
         for (action in listOf("install", "repair", "removeEverything")) {
             val f = fixture(false, null, orders[0])

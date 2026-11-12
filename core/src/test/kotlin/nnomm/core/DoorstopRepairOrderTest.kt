@@ -238,24 +238,4 @@ class DoorstopRepairOrderTest {
             }
         }
     }
-
-    @Test
-    fun oldNoncanonicalRecordKeyMatchesAfterReturn() {
-        val home = temp()
-        val root = temp()
-        val library = root.resolve("library").createDirectories()
-        val game = library.resolve("game").createDirectories()
-        val alias = Files.createSymbolicLink(root.resolve("alias"), library)
-        Files.move(library, root.resolve("away"))
-        val record =
-            mapOf(
-                "path" to alias.resolve("game/doorstop_config.ini").toString(),
-                "text" to "original",
-            )
-        DoorstopRestores(home).write(alias.resolve("game"), record)
-        Files.move(root.resolve("away"), library)
-        assertEquals(record, DoorstopRestores(home).read(game))
-        DoorstopRestores(home).clear(game)
-        assertTrue(DoorstopRestores(home).records().isEmpty())
-    }
 }

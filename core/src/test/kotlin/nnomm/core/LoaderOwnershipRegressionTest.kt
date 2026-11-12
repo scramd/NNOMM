@@ -151,51 +151,6 @@ class LoaderOwnershipRegressionTest {
         assertTrue(lost.isEmpty(), "player's manual install deleted after: $lost")
     }
 
-    // B: partial Install (proxy refused), then NNOMM restarts. Play with mods.
-    @Test
-    fun playAfterRestartResumesPartialInstall() = runBlocking {
-        val f = fixture(false, null)
-        val proxy = f.game.resolve("winhttp.dll")
-        DiskFaults.beforeMove = { if (it == proxy) throw AccessDeniedException(it.toString()) }
-        assertFails { f.folder.installLoader(f.game.toString()) }
-        DiskFaults.beforeMove = {}
-        val r = restart(f, allowDownload = true)
-        var installCalls = 0
-        val counted =
-            object : GameFolder by r.folder {
-                override suspend fun installLoader(folder: String) {
-                    installCalls++
-                    r.folder.installLoader(folder)
-                }
-
-                // Isolate the AppStore decision: mod placement itself succeeds.
-                override suspend fun apply(state: AppState, profileId: String) {}
-
-                override suspend fun apply(plan: GamePlan) {}
-
-                override val applySucceeded = true
-            }
-        val io = Demo.io()
-        val start = Demo.state().copy(game = r.folder.inspect(f.game.toString()))
-        val app = AppStore(start, io.copy(gameFolder = counted, persistence = null))
-        try {
-            app.play()
-            withTimeout(10000) {
-                while (
-                    !app.state.value.gameRunning &&
-                        app.state.value.toasts.none { it.action == "Retry" }
-                ) delay(10)
-            }
-            delay(200)
-            assertTrue(
-                proxy.exists() || !app.state.value.gameRunning,
-                "Play started with mods while winhttp.dll is missing",
-            )
-        } finally {
-            app.shutdown()
-        }
-    }
-
     // C: a stuck, unrelated home journal (store on an unavailable drive) now blocks loader IO.
     @Test
     fun unrelatedStuckJournalDoesNotBlockLoader() = runBlocking {

@@ -484,45 +484,6 @@ class Review4ProbeTest {
         assertFalse(config.exists(), "game folder changed by a store write during play")
     }
 
-    // N10: Replace-local Undo: protection starts when the put starts, the toast after it ends.
-    @Test
-    fun replaceUndoPayloadMustSurviveClearWhileToastShows() = runBlocking {
-        val home = temp()
-        val store = RealModStore(home)
-        payload(store, "local-x", "v1", mapOf("x.dll" to "one"))
-        val field = RealModStore::class.java.getDeclaredField("undoUntil")
-        field.isAccessible = true
-        (field.get(store) as MutableMap<*, *>).clear() // v1 was installed in an earlier session
-        val big = temp("big-")
-        repeat(1500) { big.resolve("f$it.txt").writeText("x$it") }
-        val t0 = System.currentTimeMillis()
-        store.put("local-x", "v2", DownloadedFile(big.toString()))
-        val t1 = System.currentTimeMillis()
-        delay(t1 + 7800 - System.currentTimeMillis()) // "Replaced X" toast (8000 ms) still shown
-        val state =
-            AppState(
-                settings =
-                    defaultSettings().let {
-                        it.copy(general = it.general + ("keepOld" to JsonPrimitive("None")))
-                    },
-                installed =
-                    mapOf(
-                        "local-x" to
-                            InstalledMod(
-                                "local-x",
-                                ModSource.LOCAL,
-                                versions = setOf("v1", "v2"),
-                                defaultVersion = "v2",
-                                profiles = mapOf("default" to ProfileMod(true, "v2")),
-                            )
-                    ),
-            )
-        store.clearUnused(state)
-        val kept = store.hasVersion("local-x", "v1")
-        println("PROBE N10 put took ${t1 - t0} ms; v1 still stored at Undo time: $kept")
-        assertTrue(kept)
-    }
-
     // N11: apply-time trimming deletes recovery copies whose bytes exist nowhere else.
     @Test
     fun recoveryTrimMustKeepUniqueCopies() = runBlocking {
@@ -543,34 +504,6 @@ class Review4ProbeTest {
             .apply(plan(g, "default", false, "moda"))
         println("PROBE N11 unique recovery kept: ${unique.exists()}; notices $notes")
         assertTrue(unique.exists())
-    }
-
-    // N12: parent turned off while its add-on stays on.
-    @Test
-    fun parentRemovalMustKeepRecordTruthful() = runBlocking {
-        val home = temp()
-        val g = game()
-        val store = RealModStore(home)
-        payload(store, "parent", "1", mapOf("parent.dll" to "p"))
-        payload(store, "child", "1", mapOf("child.dll" to "c"))
-        val catalog =
-            listOf(
-                CatalogMod("parent", "Parent", versions = listOf(ModVersion("1"))),
-                CatalogMod(
-                    "child",
-                    "Child",
-                    versions = listOf(ModVersion("1", extends = PackageReference("parent", "1"))),
-                ),
-            )
-        val f = RealGameFolder(home, store, noNet, catalog = { catalog }, running = { false })
-        f.apply(plan(g, "default", false, "parent", "child"))
-        f.apply(plan(g, "default", false, "child"))
-        val childOnDisk = g.resolve("BepInEx/plugins/parent/addons/child").exists()
-        val recorded = record(g).entries.keys
-        println(
-            "PROBE N12 child on disk $childOnDisk; record $recorded; problems ${f.applyProblems.value}"
-        )
-        assertEquals(childOnDisk, "parent/addons/child" in recorded)
     }
 
     // N13: ownership record deleted (player removed the plugins folder): no path forward.

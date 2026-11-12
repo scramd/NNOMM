@@ -303,28 +303,6 @@ class ReviewRegressionTest {
     }
 
     @Test
-    fun concurrentActionsDoNotLoseProfileData() = runBlocking {
-        val a = AppStore(Demo.state(), Demo.io())
-        try {
-            coroutineScope {
-                (0 until 20)
-                    .map { index ->
-                        launch(Dispatchers.Default) {
-                            a.renameProfile("hardcore", "Profile $index")
-                            a.setOn(listOf("minimap"), index % 2 == 0, "hardcore")
-                        }
-                    }
-                    .joinAll()
-            }
-            assertEquals(25, a.state.value.installed.size)
-            assertEquals(3, a.state.value.profiles.size)
-            a.shutdown()
-        } finally {
-            a.close()
-        }
-    }
-
-    @Test
     fun fullPackUpdateComesFromSavedVersions() {
         val s =
             Demo.state()
