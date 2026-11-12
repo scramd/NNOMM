@@ -110,3 +110,9 @@ canonical-parent/entry comparison for junctions reported as directories; native 
 
 - Beta discovery uses `releases.atom`, including `-beta.1` tags, then the same metadata asset download paths as stable (`beta.yml` on Windows). Verify published beta metadata and installation from a packaged build; no release API token is needed.
 - Manual “Look now” bypasses the automatic-check “Never” preference for one check, returns unsupported-build feedback with a releases-page button, and never starts automatic installation. Startup unsupported/failure/current checks stay quiet.
+
+Final acceptance retention: Remove everything now leaves local, taken-over and
+unknown-origin stored mods in the Library, off in every profile, with their stored
+copies retained. Verify this on Windows with locked files and after restart. The
+Library footline now counts installed stored versions only; Settings continues to
+count all store/recovery use. Linux choosers use Swing; Windows still uses FileKit.

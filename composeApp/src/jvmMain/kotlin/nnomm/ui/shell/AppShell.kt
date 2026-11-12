@@ -631,7 +631,8 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                             s.downloads
                                 .count { it.percent < 100 }
                                 .let {
-                                    if (it == 0) "Downloads finished"
+                                    if (s.downloads.isEmpty()) "No downloads"
+                                    else if (it == 0) "Downloads finished"
                                     else "$it download${if (it == 1) "" else "s"}"
                                 },
                             size = 12f,

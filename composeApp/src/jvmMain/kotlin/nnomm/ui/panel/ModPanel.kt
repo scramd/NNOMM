@@ -475,7 +475,7 @@ fun ModPanel(ref: PanelRef) {
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Label(note.version, Modifier.heightIn(min = 18.2.dp), weight = 600)
-                                            Label(note.date, color = c.text3)
+                                            Label(runCatching { age(state, java.time.LocalDate.parse(note.date).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()) }.getOrDefault(note.date), color = c.text3)
                                             if (installed != null && version == note.version)
                                                 Badge(
                                                     if (multi) "in ${profile.name}"

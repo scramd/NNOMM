@@ -233,7 +233,7 @@ class AppModel(
 
     fun openPath(path: File?) {
         if (store.io.modStore !is nnomm.core.io.real.RealModStore) {
-            notify("This does nothing in the mock.")
+            notify("This does nothing in demo mode.")
             return
         }
         scope.launch {
@@ -254,7 +254,7 @@ class AppModel(
     fun openModSettings(id: String) {
         val disk = store.io.modStore as? nnomm.core.io.real.RealModStore
         if (disk == null) {
-            notify("This does nothing in the mock.")
+            notify("This does nothing in demo mode.")
             return
         }
         val state = store.state.value

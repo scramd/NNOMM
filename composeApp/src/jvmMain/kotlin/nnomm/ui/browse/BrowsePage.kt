@@ -177,17 +177,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
     val have = remember(s, filter) { browseList(s, filter, "have") }
     val kinds = remember(s, filter) { browseList(s, filter, "type") }
     val counts = remember(s, filter) { tagCounts(s, filter) }
-    // Keep the registry's tag frequency order when counts change with another facet.
-    val tags =
-        remember(s.catalog) {
-            s.catalog
-                .flatMap { it.tags }
-                .groupingBy { it }
-                .eachCount()
-                .entries
-                .sortedByDescending { it.value }
-                .map { it.key }
-        }
+    val tags = counts.keys.toList()
     Column(
         modifier
             .verticalScroll(rememberScrollState())

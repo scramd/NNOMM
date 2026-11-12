@@ -60,6 +60,7 @@ suspend fun createStore(args: Array<String>): AppSession =
                     kotlinx.coroutines.channels.Channel.UNLIMITED
                 )
             val home = settingsDirectory().toPath()
+            // Development-only: inert unless explicitly enabled with an isolated sandbox home.
             val fakeLauncher =
                 System.getenv("NNOMM_SANDBOX_LAUNCHER")?.let { command ->
                     val sandbox =
