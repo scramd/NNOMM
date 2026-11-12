@@ -21,7 +21,7 @@ class RealGameFolder(private val home: Path,private val store: RealModStore,priv
         // Only accept an explicitly named bundleVersion; guessing arbitrary numeric strings confuses Unity's engine version with the game version.
         val asset=safe(game,"NuclearOption_Data/globalgamemanagers")
         val version=if(asset.isRegularFile())runCatching{Regex("bundleVersion[\\x00\\s:=]+(\\d+\\.\\d+(?:\\.\\d+){0,2})").find(String(asset.readBytes(),Charsets.ISO_8859_1))?.groupValues?.get(1)}.getOrNull() else null
-        GameInfo(game.toString(),version,present,loaderVersion)
+        GameInfo(game.toString(),version?:"unknown",present,loaderVersion)
     }
     override suspend fun takeOver(folder: String): List<Pair<CatalogMod,InstalledMod>> = withContext(Dispatchers.IO){mutex.withLock{
         require(!running()){"Close Nuclear Option before taking over mods."};val game=root(folder);val record=record(game)

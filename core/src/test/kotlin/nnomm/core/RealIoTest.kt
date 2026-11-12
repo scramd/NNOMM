@@ -1,0 +1,132 @@
+package nnomm.core
+
+import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.*
+import nnomm.core.io.*
+import nnomm.core.io.real.*
+import nnomm.core.model.*
+import java.net.InetSocketAddress
+import java.nio.file.*
+import java.util.zip.*
+import kotlin.io.path.*
+import kotlin.test.*
+
+class RealIoTest {
+    private fun temp()=Files.createTempDirectory("nnomm-test-")
+    @Test fun pathsArePrivate(){
+        assertEquals(Path.of("/test/NNOMM"),settingsHome(mapOf("XDG_CONFIG_HOME" to "/test"),"Linux","/user"))
+        assertEquals(Path.of("/override"),settingsHome(mapOf("NNOMM_HOME" to "/override","APPDATA" to "/wrong"),"Windows 11","/user"))
+    }
+    @Test fun persistenceRecoversBackupAndKeepsBadPrimary()=runBlocking {
+        val home=temp();val warnings=mutableListOf<String>();val disk=RealPersistence(home){warnings+=it}
+        val a=AppState(profiles=listOf(Profile("default","Default"),Profile("p1","Flying")),profileId="p1")
+        disk.save(a);disk.save(a.copy(profileId="default"));home.resolve("state.json").writeText("broken")
+        assertEquals("p1",disk.load()!!.profileId);assertEquals("broken",home.resolve("state.json").readText());assertTrue(warnings.isNotEmpty())
+        disk.save(a);assertTrue(Files.list(home).use{it.anyMatch{p->p.name.contains(".broken-")}})
+    }
+    @Test fun localServerRegistryRedirectHeadDownloadAndOffline()=runBlocking {
+        val home=temp();val bytes="fake dll payload".toByteArray();var heads=0
+        val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
+        server.createContext("/file.dll"){exchange->
+            exchange.responseHeaders.add("Last-Modified","Wed, 11 Nov 2026 12:00:00 GMT")
+            exchange.responseHeaders.add("Content-Length",bytes.size.toString())
+            if(exchange.requestMethod=="HEAD"){heads++;exchange.sendResponseHeaders(200,-1)}else{exchange.sendResponseHeaders(200,bytes.size.toLong());exchange.responseBody.use{it.write(bytes)}};exchange.close()
+        }
+        server.createContext("/redirect"){it.responseHeaders.add("Location","/file.dll");it.sendResponseHeaders(302,-1);it.close()}
+        server.createContext("/registry"){exchange->val body="""[{"id":"test","artifacts":[{"version":"1","downloadUrl":"http://127.0.0.1:${server.address.port}/redirect"}],"isAiAssisted":"True","isClientOrServer":"Both"}]""".toByteArray();exchange.sendResponseHeaders(200,body.size.toLong());exchange.responseBody.use{it.write(body)};exchange.close()}
+        server.start();val client=networkClient("test")
+        try {
+            val registry=RealRegistry(client,home,{listOf("http://127.0.0.1:${server.address.port}/registry")})
+            val mods=registry.read();assertEquals(Side.BOTH,mods.single().side);registry.save(mods,123)
+            val meta=RealMetaSource(client,home);val m=mods.single();val v=m.versions.single()
+            assertEquals(1,meta.metadata(m,v).sizeKb);assertNotNull(meta.metadata(m,v).dateMillis);assertEquals(1,heads)
+            // Redirect target controls transfer metadata, not its source response.
+            val downloader=RealDownloader(client,home)
+            val payload=downloader.download(m,v.copy(downloadUrl="http://127.0.0.1:${server.address.port}/file.dll")){}
+            assertContentEquals(bytes,Path.of(payload.path).readBytes())
+            assertFailsWith<IllegalArgumentException>{downloader.download(m,v.copy(hash="0".repeat(64))){} }
+            server.stop(0);assertEquals(123,registry.saved()!!.second)
+        } finally{server.stop(0);client.close()}
+    }
+    @Test fun archiveTraversalCannotEscapeStore()=runBlocking {
+        val home=temp();val file=home.resolve("evil.zip")
+        ZipOutputStream(Files.newOutputStream(file)).use{zip->zip.putNextEntry(ZipEntry("../../escape.dll"));zip.write(byteArrayOf(1));zip.closeEntry()}
+        assertFailsWith<IllegalArgumentException>{RealModStore(home).put("test","1",DownloadedFile(file.toString()))}
+        assertFalse(home.resolve("escape.dll").exists())
+    }
+    @Test fun takeoverApplyUndoAndUnmanagedFiles()=runBlocking {
+        val home=temp();val game=temp();game.resolve("NuclearOption.exe").writeText("")
+        val on=game.resolve("BepInEx/plugins/Existing");on.createDirectories();on.resolve("mod.dll").writeText("original")
+        val off=game.resolve("BepInEx/disabledPlugins/Off");off.createDirectories();off.resolve("mod.dll").writeText("off")
+        val mods=RealModStore(home);val downloader=object:Downloader{override suspend fun download(mod: CatalogMod,version: ModVersion,progress: (Int)->Unit): DownloadedFile=error("No network")}
+        var running=false;val folder=RealGameFolder(home,mods,downloader,running={running})
+        val found=folder.takeOver(game.toString());assertEquals(2,found.size);assertEquals("original",on.resolve("mod.dll").readText());assertEquals("off",off.resolve("mod.dll").readText())
+        val state=AppState(game=GameInfo(game.toString()),catalog=found.map{it.first},installed=found.associate{it.second.id to it.second})
+        val unknown=game.resolve("BepInEx/plugins/unknown.dll");unknown.writeText("private")
+        running=true;folder.apply(state.copy(installed=emptyMap()),"default");assertTrue(on.exists())
+        running=false;folder.apply(state.copy(installed=emptyMap()),"default");assertFalse(on.exists());assertTrue(unknown.exists());assertTrue(off.exists())
+        folder.apply(state,"default");val id=found.first{it.second.profiles["default"]!!.on}.first.id
+        assertEquals("original",game.resolve("BepInEx/plugins/$id/mod.dll").readText())
+        mods.remove(listOf(id));mods.restore(listOf(id));assertTrue(mods.version(id,found.first{it.first.id==id}.second.defaultVersion).exists())
+    }
+    @Test fun cancellationDiscardsPartialDownload()=runBlocking {
+        val home=temp();val started=CompletableDeferred<Unit>()
+        val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
+        server.createContext("/slow.dll"){exchange->
+            try {exchange.sendResponseHeaders(200,1024L*1024);exchange.responseBody.use{out->repeat(1024){out.write(ByteArray(1024));out.flush();Thread.sleep(5)}}}catch(_: Exception){}finally{exchange.close()}
+        }
+        server.start();val client=networkClient("test")
+        try {
+            val job=launch(Dispatchers.IO){RealDownloader(client,home).download(CatalogMod("test","Test"),ModVersion("1",downloadUrl="http://127.0.0.1:${server.address.port}/slow.dll")){started.complete(Unit)}}
+            withTimeout(5000){started.await()};job.cancelAndJoin()
+            assertEquals(0,Files.list(home.resolve("staging")).use{it.count()})
+        } finally{server.stop(0);client.close()}
+    }
+    @Test fun localHashRecognitionAndRetentionRespectPinnedProfiles()=runBlocking {
+        val home=temp();val file=home.resolve("known.dll");file.writeText("known mod")
+        val hash=java.security.MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString(""){"%02x".format(it)}
+        val mod=CatalogMod("known","Known",versions=listOf(ModVersion("1",hash="sha256:$hash")))
+        val store=RealModStore(home){listOf(mod)}
+        val imported=store.addLocal(file.toString());assertEquals(ModSource.REGISTRY,imported.second.source);assertEquals("known",imported.first.id)
+        store.put("known","2",DownloadedFile(file.toString()));store.put("known","3",DownloadedFile(file.toString()))
+        val state=AppState(installed=mapOf("known" to InstalledMod("known",versions=setOf("1","2","3"),defaultVersion="3",profiles=mapOf("default" to ProfileMod(false,"1")))),settings=SettingsValues(mapOf("keepOld" to JsonPrimitive("None"))))
+        assertEquals(listOf("2"),store.unused(state).map{it.name});store.clearUnused(state)
+        assertTrue(store.version("known","1").exists());assertFalse(store.version("known","2").exists());assertTrue(store.version("known","3").exists())
+    }
+    @Test fun sevenZipExtractsAndKeepsImportFile()=runBlocking {
+        val home=temp();val input=home.resolve("input.dll");input.writeText("7z mod")
+        val archive=home.resolve("input.7z")
+        org.apache.commons.compress.archivers.sevenz.SevenZOutputFile(archive.toFile()).use { out ->
+            val entry=out.createArchiveEntry(input.toFile(),"nested/mod.dll");out.putArchiveEntry(entry);out.write(input.readBytes());out.closeArchiveEntry()
+        }
+        val store=RealModStore(home);store.put("seven","1",DownloadedFile(archive.toString()))
+        assertEquals("7z mod",store.version("seven","1").resolve("nested/mod.dll").readText());assertTrue(archive.exists())
+    }
+    @Test fun fakeGameRestoresVanillaIni()=runBlocking {
+        val home=temp();val game=temp();game.resolve("NuclearOption.exe").writeText("")
+        val ini=game.resolve("doorstop_config.ini");val original="[General]\nenabled = true\n";ini.writeText(original)
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+        try {
+            val launcher=RealGameLauncher(home,scope,listOf("sh","-c","sleep 1"),detect={false})
+            launcher.start(AppState(game=GameInfo(game.toString())),true)
+            assertTrue(ini.readText().contains("false"))
+            withTimeout(5000){launcher.running.first{!it}}
+            assertEquals(original,ini.readText())
+        } finally{scope.cancel()}
+    }
+    @Test fun atomMapsFullReleaseTagAndEscapedHtml(){
+        val mod=CatalogMod("test","Test",versions=listOf(ModVersion("1.2",downloadUrl="https://github.com/o/r/releases/download/Prefix-v1.2/mod.dll")))
+        val notes=parseAtom("""<feed><entry><link href="https://github.com/o/r/releases/tag/Prefix-v1.2"/><updated>2026-11-11T00:00:00Z</updated><content type="html">&lt;ul&gt;&lt;li&gt;Fixed &amp;amp; improved&lt;/li&gt;&lt;/ul&gt;</content></entry></feed>""",mod)
+        assertEquals("1.2",notes.single().version);assertTrue(notes.single().lines.contains("Fixed & improved"))
+    }
+    @Test fun packRoundTripAndLegacyPreview()=runBlocking {
+        val home=temp();val client=networkClient("test")
+        try {
+            val packs=RealPacks(home,RealModStore(home),client);val pack=Pack("Friends","A","1",listOf(PackItem("ver","test","1")))
+            val path=home.resolve("friends.nommpack");packs.write(path,pack,AppState());packs.read(path).use{assertEquals(pack,it.pack)}
+            val legacy=home.resolve("old.nomm.json");legacy.writeText("""[{"id":"test","version":"1"}]""");packs.read(legacy).use{assertEquals("test",it.pack.items.single().id)}
+        }finally{client.close()}
+    }
+}

@@ -18,7 +18,7 @@ data class PackPreview(val pack: Pack,val localFiles: Map<String,String>,val set
     override fun close(){stagingFolder?.let(::deleteTree)}
 }
 /** Reading is a preview only: bundled local mods are never enabled or copied into the game. */
-class RealPacks(private val home: Path,private val mods: RealModStore,private val client: HttpClient) {
+class RealPacks(private val home: Path,private val mods: RealModStore,private val client: HttpClient): nnomm.core.io.PackSource {
     suspend fun read(path: Path): PackPreview=withContext(Dispatchers.IO){
         if(path.name.endsWith(".nomm.json",true))return@withContext legacy(path.readText(),path.name,null)
         Files.createDirectories(home.resolve("staging"));val staging=Files.createTempDirectory(home.resolve("staging"),"pack-")
@@ -68,7 +68,7 @@ class RealPacks(private val home: Path,private val mods: RealModStore,private va
             CatalogMod(localId,source.name,versions=listOf(ModVersion(v)),localFile=source.name) to InstalledMod(localId,ModSource.LOCAL,source.name,setOf(v),v)
         }
     }
-    suspend fun following(info: PackInfo): Pack?=withContext(Dispatchers.IO){
+    override suspend fun following(info: PackInfo): Pack?=withContext(Dispatchers.IO){
         val url=info.followAddress?:return@withContext null
         val body=client.get(url).bodyAsText()
         val document=json.decodeFromString<PackDocument>(body);require(document.format=="NNOMM/1")
