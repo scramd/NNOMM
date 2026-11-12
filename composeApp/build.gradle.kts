@@ -113,7 +113,6 @@ nucleus.application {
             "java.base", "java.desktop", "java.logging",
             "jdk.security.auth",
             "java.management",
-            "java.desktop",
             "java.naming",
             "jdk.unsupported"
         )
@@ -121,7 +120,7 @@ nucleus.application {
         appName = "NNOMM"
         packageName = "NNOMM"
         packageVersion = appVersion
-        vendor = "clankagent"
+        vendor = "NNOMM"
         description = "Mod manager for Nuclear Option"
 
         artifactName = $$"${name}-${version}-${os}-${arch}.${ext}"
@@ -129,7 +128,6 @@ nucleus.application {
         cleanupNativeLibs = true
         enableAotCache = false
         homepage = "https://github.com/scramd/NNOMM"
-        appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
         compressionLevel = CompressionLevel.Normal
         fileAssociation(
             mimeType = "application/nommpack",
@@ -155,7 +153,7 @@ nucleus.application {
 
         linux {
             shortcut = true
-            packageName = "NNOMM"
+            packageName = "nnomm"
             appCategory = "Utility"
             debMaintainer = "clankagent <${authorEmail}>"
             iconFile.set(project.file("icons/icon.png"))
@@ -182,7 +180,7 @@ nucleus.application {
             proguard {
                 version = "7.9.1"
                 isEnabled = false
-                optimize = true
+                optimize = false
                 obfuscate.set(false)
                 joinOutputJars.set(true)
             }
