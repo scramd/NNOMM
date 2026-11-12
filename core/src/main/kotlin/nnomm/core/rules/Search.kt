@@ -17,15 +17,47 @@ fun cleanCatalogTags(mods: List<CatalogMod>): List<CatalogMod> {
             "weapon" -> "weapons"
             else -> k
         }
+    val authors =
+        mods.flatMap { it.authors + listOfNotNull(it.githubOwner) }.map { key(it.trim()) }.toSet()
+    val common =
+        mods
+            .flatMap { mod ->
+                mod.tags
+                    .map { key(it.trim()) }
+                    .distinct()
+                    .map { it to mod.authors.map(String::lowercase).sorted() }
+            }
+            .groupBy({ it.first }, { it.second })
+            .filterValues { it.distinct().size > 1 }
+            .keys
+    val realTags = common + setOf("vr", "combat", "solar")
     val canonical =
         mods
             .flatMap { it.tags }
+            .map(String::trim)
+            .filter(String::isNotEmpty)
             .groupBy(::key)
-            .mapValues { (_, tags) -> tags.groupingBy { it }.eachCount().maxBy { it.value }.key }
+            .mapValues { (_, tags) ->
+                tags
+                    .groupingBy { it }
+                    .eachCount()
+                    .entries
+                    .sortedWith(
+                        compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }
+                    )
+                    .first()
+                    .key
+            }
     return mods.map { mod ->
         mod.copy(
             tags =
-                cleanTags(mod.tags, mod.authors + listOfNotNull(mod.githubOwner))
+                mod.tags
+                    .map(String::trim)
+                    .filter {
+                        it.isNotEmpty() &&
+                            key(it) != "mod" &&
+                            (key(it) !in authors || key(it) in realTags)
+                    }
                     .map { canonical.getValue(key(it)) }
                     .distinct()
         )

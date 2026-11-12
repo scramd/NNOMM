@@ -732,7 +732,7 @@ fun DownloadPill(progress: Float, text: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        ProgressBar(progress, Modifier.width(54.dp))
+        ProgressBar(progress, Modifier.width(54.dp), neutral = true)
         Label(text, size = 12f, color = LocalNnTheme.current.colors.text2)
     }
 }

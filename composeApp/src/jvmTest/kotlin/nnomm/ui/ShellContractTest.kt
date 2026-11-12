@@ -9,6 +9,43 @@ import nnomm.ui.shots.*
 
 class ShellContractTest {
     @Test
+    fun paletteConsumesNavigationAndClosesBeforeClearingText() {
+        mockStore("").use { store ->
+            val model = AppModel(store, ShotPlatform)
+            model.overlayFactories["palette"] = { object : Overlay {
+                @androidx.compose.runtime.Composable override fun Content() {}
+            } }
+            fun press(key: Key, ctrl: Boolean = false) =
+                model.shortcut(KeyEvent(key, KeyEventType.KeyDown, isCtrlPressed = ctrl))
+            press(Key.K, true)
+            val page = model.ui.page
+            var arrow = 0
+            var alternate = false
+            model.registerOverlayKeys("palette") {
+                if (it.key == Key.DirectionUp) arrow--
+                if (it.key == Key.DirectionDown) arrow++
+                if (it.key == Key.Enter) alternate = it.isCtrlPressed
+                true
+            }
+            press(Key.DirectionDown)
+            press(Key.DirectionUp)
+            press(Key.Enter, true)
+            assertEquals(0, arrow)
+            assertTrue(alternate)
+            press(Key.Two, true)
+            assertEquals(page, model.ui.page)
+            var cleared = false
+            model.ui.focusedField = FocusedField({ "typed query" }, { cleared = true })
+            press(Key.Escape)
+            assertNull(model.ui.overlay)
+            assertFalse(cleared)
+            press(Key.K, true)
+            press(Key.K, true)
+            assertNull(model.ui.overlay)
+        }
+    }
+
+    @Test
     fun shortcutsRespectLayersAndTyping() {
         mockStore("").use { store ->
             val model = AppModel(store, ShotPlatform)

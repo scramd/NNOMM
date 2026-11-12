@@ -8,13 +8,12 @@ import kotlinx.coroutines.withContext
 
 /** Optional updater work never blocks startup or mod management. */
 class AppUpdates {
-    suspend fun check(mode: String, testVersions: Boolean = false, status: (String) -> Unit) =
+    suspend fun check(mode: String, testVersions: Boolean = false, status: (String) -> Unit, beforeInstall: suspend () -> Unit = {}) =
         withContext(Dispatchers.IO) {
             if (mode == "Never") return@withContext
             val updater = createUpdater(testVersions)
             runCatching {
                     if (!updater.isUpdateSupported()) {
-                        status("Updates are available from the NNOMM releases page.")
                         return@runCatching
                     }
                     when (val result = updater.checkForUpdates()) {
@@ -28,7 +27,7 @@ class AppUpdates {
                                 updater.downloadUpdate(result.info).collect { progress ->
                                     file = progress.file ?: file
                                 }
-                                file?.let(updater::installAndRestart)
+                                file?.let { beforeInstall(); updater.installAndRestart(it) }
                             }
                         }
                         is UpdateResult.NotAvailable ->

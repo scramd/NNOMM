@@ -25,8 +25,8 @@ class RegistryTest {
                     ),
                 )
             )
-        assertEquals(listOf("HUD", "Bob"), mods[0].tags)
-        assertEquals(listOf("HUD", "Alice"), mods[1].tags)
+        assertEquals(listOf("HUD"), mods[0].tags)
+        assertEquals(listOf("HUD"), mods[1].tags)
     }
 
     @Test
@@ -41,7 +41,7 @@ class RegistryTest {
             "extends":{"id":"base"},"dependencies":[{"id":"base","version":"1.0"}],
             "incompatibilities":[{"id":"other"}]}]}"""
             )
-        val mod = entry.toCatalogMod()
+        val mod = cleanCatalogTags(listOf(entry.toCatalogMod())).single()
         assertEquals(listOf("HUD"), mod.tags)
         assertEquals(Side.BOTH, mod.side)
         assertEquals("owner", mod.githubOwner)

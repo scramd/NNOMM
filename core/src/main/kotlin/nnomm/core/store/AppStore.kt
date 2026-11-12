@@ -860,7 +860,6 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private var gamePathRevision = 0L
 
     fun setSetting(key: String, value: JsonPrimitive, profile: String? = null) {
-        val active = state.value.profileId
         if (key == "gamePath") {
             val revision =
                 synchronized(lock) {
@@ -880,18 +879,6 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         } else {
             change { nnomm.core.settings.setSetting(it, key, value, profile) }
             saveSettings()
-            if (active != state.value.profileId) applyAndSave()
-            if (key == "console" && (profile == null || profile == state.value.profileId)) {
-                disk {
-                    val current = state.value
-                    current.game.folder?.let {
-                        io.gameFolder.setConsole(
-                            it,
-                            current.settings.bool("console", current.profileId),
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -933,7 +920,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     }
                     io.launcher.start(current, withoutMods)
                 }
-                delay(30000)
+                delay(60000)
+                if (state.value.gameStarting && !state.value.gameRunning)
+                    toast("Nuclear Option did not start. Try Play again.")
                 change { it.copy(gameStarting = false) }
             } catch (e: Exception) {
                 change { it.copy(gameStarting = false) }
@@ -1389,66 +1378,73 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         snapshot.catalog
             .filter { it.id in ids }
             .forEach { mod ->
-                mod.versions.forEach { version ->
-                    if (
-                        version.downloadUrl != null &&
-                            requestMetadata("${mod.id}/${version.version}")
-                    )
-                        background {
-                            metadataSlots.withPermit {
-                                val key = "${mod.id}/${version.version}"
-                                change {
-                                    it.copy(
-                                        metadataStatus =
-                                            it.metadataStatus + (key to LoadStatus.LOADING)
-                                    )
-                                }
-                                val meta =
-                                    try {
-                                        io.meta.metadata(mod, version)
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        io.logger.error("metadata", e)
-                                        change {
-                                            it.copy(
-                                                metadataStatus =
-                                                    it.metadataStatus + (key to LoadStatus.FAILED)
-                                            )
-                                        }
-                                        return@withPermit
+                listOfNotNull(mod.newestRelease, mod.newerPreRelease)
+                    .distinctBy { it.version }
+                    .forEach { version ->
+                        if (
+                            version.downloadUrl != null &&
+                                requestMetadata("${mod.id}/${version.version}")
+                        )
+                            background {
+                                metadataSlots.withPermit {
+                                    val key = "${mod.id}/${version.version}"
+                                    change {
+                                        it.copy(
+                                            metadataStatus =
+                                                it.metadataStatus + (key to LoadStatus.LOADING)
+                                        )
                                     }
-                                if (meta.sizeKb != null || meta.dateMillis != null)
-                                    metadataRequested[key] = Long.MAX_VALUE
-                                change {
-                                    it.copy(
-                                        metadataStatus =
-                                            it.metadataStatus + (key to LoadStatus.READY)
-                                    )
-                                }
-                                change { s ->
-                                    s.copy(
-                                        catalog =
-                                            s.catalog.map { m ->
-                                                if (m.id != mod.id) m
-                                                else
-                                                    m.copy(
-                                                        versions =
-                                                            m.versions.map { v ->
-                                                                if (v.version != version.version) v
-                                                                else
-                                                                    v.copy(
-                                                                        sizeKb = meta.sizeKb,
-                                                                        dateMillis = meta.dateMillis,
-                                                                    )
-                                                            }
-                                                    )
+                                    val meta =
+                                        try {
+                                            io.meta.metadata(mod, version)
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            io.logger.error("metadata", e)
+                                            change {
+                                                it.copy(
+                                                    metadataStatus =
+                                                        it.metadataStatus +
+                                                            (key to LoadStatus.FAILED)
+                                                )
                                             }
-                                    )
+                                            return@withPermit
+                                        }
+                                    if (meta.sizeKb != null || meta.dateMillis != null)
+                                        metadataRequested[key] = Long.MAX_VALUE
+                                    change {
+                                        it.copy(
+                                            metadataStatus =
+                                                it.metadataStatus + (key to LoadStatus.READY)
+                                        )
+                                    }
+                                    change { s ->
+                                        s.copy(
+                                            catalog =
+                                                s.catalog.map { m ->
+                                                    if (m.id != mod.id) m
+                                                    else
+                                                        m.copy(
+                                                            versions =
+                                                                m.versions.map { v ->
+                                                                    if (
+                                                                        v.version != version.version
+                                                                    )
+                                                                        v
+                                                                    else
+                                                                        v.copy(
+                                                                            sizeKb = meta.sizeKb,
+                                                                            dateMillis =
+                                                                                meta.dateMillis,
+                                                                        )
+                                                                }
+                                                        )
+                                                }
+                                        )
+                                    }
                                 }
                             }
-                        }
-                }
+                    }
             }
     }
 
@@ -1496,7 +1492,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         )
             )
         }
-        applyAndSave()
+        saveSettings()
     }
 
     /**
@@ -1507,7 +1503,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             toast("Close Nuclear Option before removing mods and the mod loader.")
             return
         }
-        uninstall(state.value.installed.keys.toList())
+        uninstallSilently(state.value.installed.keys.toList())
+        toast("Removed all mods.")
         val folder = state.value.game.folder ?: return
         disk {
             io.gameFolder.removeLoader(folder)
@@ -1528,7 +1525,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             val bytes = io.modStore.usedBytes()
             val unused = io.modStore.unusedBytes(state.value)
             change {
-                it.copy(storeUsedMb = bytes / 1024 / 1024, storeUnusedMb = unused / 1024 / 1024)
+                it.copy(
+                    storeUsedMb = bytes / 1024 / 1024,
+                    storeUsedKb = (bytes + 1023) / 1024,
+                    storeUnusedMb = unused / 1024 / 1024,
+                )
             }
         }
     }
@@ -1616,7 +1617,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     nowMillis = now,
                 )
             }
-            loadMetadata()
+            checkPackUpdates()
             if (announce) toast("${updates(state.value).size} mods have an update")
             if (state.value.setting("onUpdate")?.content == "Update by itself") updateAll()
             try {
@@ -1651,6 +1652,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             }
         return (enriched + s.catalog.filter { it.id in s.installed || it.localFile != null })
             .distinctBy { it.id }
+            .let(::cleanCatalogTags)
     }
 
     private suspend fun drainAndClose() {

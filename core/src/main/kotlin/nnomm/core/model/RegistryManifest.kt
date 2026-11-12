@@ -37,7 +37,7 @@ data class RegistryEntry(
             displayName,
             authors,
             description,
-            cleanTagValues(tags, authors),
+            tags,
             downloadCount ?: 0,
             imageUrl,
             githubOwner = githubOwner ?: github?.groupValues?.get(1),

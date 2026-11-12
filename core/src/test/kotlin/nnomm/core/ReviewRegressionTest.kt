@@ -292,10 +292,13 @@ class ReviewRegressionTest {
         val a = AppStore(Demo.state(), io.copy(launcher = launcher), backgroundScope)
         runCurrent()
         a.play()
-        advanceTimeBy(30001)
+        advanceTimeBy(60001)
         runCurrent()
         assertFalse(a.state.value.gameRunning)
         assertFalse(a.state.value.gameStarting)
+        assertTrue(
+            a.state.value.toasts.any { it.text == "Nuclear Option did not start. Try Play again." }
+        )
         a.close()
     }
 

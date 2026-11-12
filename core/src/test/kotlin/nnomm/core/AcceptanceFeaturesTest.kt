@@ -168,9 +168,8 @@ class AcceptanceFeaturesTest {
             try {
                 store.setSetting("console", JsonPrimitive(true))
                 store.awaitDiskIdle()
-                assertTrue(config.readText().contains("[Logging.Console]\nEnabled = true"))
-                assertTrue(config.readText().contains("[Other]\nEnabled = true"))
-                assertTrue(Files.list(home.resolve("console-backups")).use { it.count() } > 0)
+                assertTrue(config.readText().contains("[Logging.Console]\nEnabled = false"))
+                assertFalse(home.resolve("console-backups").exists())
                 store.setSetting("console", JsonPrimitive(false))
                 store.awaitDiskIdle()
                 assertTrue(config.readText().contains("[Logging.Console]\nEnabled = false"))

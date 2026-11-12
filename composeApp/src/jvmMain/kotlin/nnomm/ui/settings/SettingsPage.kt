@@ -211,7 +211,7 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                     Mark(d.label, query)
                 }
                 var help = settingHelp(d, state)
-                if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}."
+                if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}. Get updates from the releases page."
                 if (d.key == "loader" && model.isDemo) help = d.help
                 if (d.key == "cache") help = "${state.storeUnusedMb ?: 0} MB. Old versions that no profile uses."
                 if (help.isNotEmpty()) Box(Modifier.padding(top = 2.dp)) { Mark(help, query, true) }

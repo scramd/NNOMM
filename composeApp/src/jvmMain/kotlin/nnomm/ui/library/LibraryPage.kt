@@ -29,6 +29,7 @@ import nnomm.ui.theme.LocalNnTheme
 @Composable
 fun LibraryPage() {
     val model = LocalApp.current
+    LaunchedEffect(model) { if (!model.isDemo) model.store.refreshStoreUsage() }
     val view = model.ui.library
     // Toast and download ticks must not invalidate the library's rules or every row.
     val stateFlow =
@@ -384,8 +385,8 @@ fun LibraryPage() {
                                 ) {
                                     listOf(
                                             "Mod loader BepInEx ${s.game.loaderVersion ?: "5.4.23.4"}",
-                                            "Game ${s.game.version ?: "—"}",
-                                            if (s.installed.keys.any { s.mod(it).newestRelease?.sizeKb == null }) "Mod size unknown" else "${size(s.installed.keys.sumOf { s.mod(it).newestRelease?.sizeKb ?: 0 })} of mods",
+                                            if (model.isDemo) "Game ${s.game.version ?: "—"}" else s.game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it" } ?: "Nuclear Option, version unknown",
+                                            if (!model.isDemo) s.storeUsedKb?.let { "${size(it)} of mods" } ?: "Mod size unknown" else if (s.installed.keys.any { s.mod(it).newestRelease?.sizeKb == null }) "Mod size unknown" else "${size(s.installed.keys.sumOf { s.mod(it).newestRelease?.sizeKb ?: 0 })} of mods",
                                         )
                                         .forEach { Label(it, color = c.text3, size = 12f) }
                                 }
@@ -547,7 +548,7 @@ private fun LibraryVersion(s: AppState, id: String) {
                     it.id == id && it.percent < 100 && it.error == null
                 }
             )
-    val version = verOf(s, id).orEmpty()
+    val version = verOf(s, id).orEmpty().let { if (it == "takeover") "From game folder" else it }
     val c = LocalNnTheme.current.colors
     when {
         downloads != null -> DownloadPill(downloads!!.percent / 100f, "${downloads!!.percent}%")

@@ -499,7 +499,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
                 )
             }
             if (s.gameRunning || s.gameStarting)
-                Tooltip(if (s.gameRunning) "Game is running" else "Starting Nuclear Option…") {
+                Tooltip(if (s.gameRunning) "Nuclear Option is running" else "Starting Nuclear Option…") {
                     Row(
                         Modifier.fillMaxWidth()
                             .height(34.dp)
@@ -638,7 +638,7 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                 }
                 val active = s.downloads.filter { it.percent < 100 }
                 if (active.isNotEmpty())
-                    ProgressBar(active.map { it.percent }.average().toFloat() / 100)
+                    ProgressBar(active.map { it.percent }.average().toFloat() / 100, neutral = true)
             }
             AnchoredPopover(
                 ui.downloadsOpen,
@@ -682,7 +682,7 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                                 small = true,
                             )
                     }
-                    if (d.percent < 100) ProgressBar(d.percent / 100f)
+                    if (d.percent < 100) ProgressBar(d.percent / 100f, neutral = true)
                 }
             }
         }
@@ -787,6 +787,7 @@ fun DropLayer() {
             Icon(NnIcons.download, Modifier.size(34.dp), color = c.accent)
             Spacer(Modifier.height(8.dp))
             Label("Drop to install", size = 24f, weight = 650, width = 114f)
+            Spacer(Modifier.height(10.dp))
             Label(
                 "Mod files (.dll, .zip) go into your Library. If the file is a mod from the registry, NNOMM recognises it and can update it later. A modpack (.nommpack) opens a preview first.",
                 Modifier.padding(horizontal = 16.dp),

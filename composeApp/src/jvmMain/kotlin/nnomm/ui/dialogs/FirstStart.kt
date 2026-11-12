@@ -97,7 +97,8 @@ class FirstStart(private val model: AppModel) : Overlay {
                     width = 114f,
                 )
                 Label(
-                    "Check these three things. You can change all of them later in Settings.",
+                    if (game.folder == null || game.folderMissing) "Choose the game folder. You can change it later in Settings."
+                    else "Check these three things. You can change all of them later in Settings.",
                     color = c.text2,
                 )
                 Column(Modifier.border(1.dp, c.line2, RoundedCornerShape(9.dp)).fillMaxWidth()) {
@@ -109,7 +110,7 @@ class FirstStart(private val model: AppModel) : Overlay {
                         else game.folder ?: "Choose the folder containing NuclearOption.exe.",
                     ) {
                         Button(
-                            "Choose another folder",
+                            if (game.folder == null || game.folderMissing) "Choose folder" else "Choose another folder",
                             {
                                 scope.launch {
                                     model.platform
@@ -121,19 +122,21 @@ class FirstStart(private val model: AppModel) : Overlay {
                             enabled = !busy,
                         )
                     }
-                    CheckRow(
-                        NnIcons.library,
-                        "${on + off} mods are already in the game folder",
-                        "They go into your Library as they are: ${on} on, ${off} off.",
-                    )
-                    CheckRow(
-                        NnIcons.check,
-                        if (game.loaderPresent)
-                            "The mod loader BepInEx ${game.loaderVersion.orEmpty()} is installed"
-                        else "The mod loader BepInEx is not installed",
-                        if (game.loaderPresent) "NNOMM does not change it."
-                        else "NNOMM installs it when a mod needs it.",
-                    )
+                    if (game.folder != null && !game.folderMissing) {
+                        CheckRow(
+                            NnIcons.library,
+                            "${on + off} mods are already in the game folder",
+                            "They go into your Library as they are: ${on} on, ${off} off.",
+                        )
+                        CheckRow(
+                            NnIcons.check,
+                            if (game.loaderPresent)
+                                "The mod loader BepInEx ${game.loaderVersion.orEmpty()} is installed"
+                            else "The mod loader BepInEx is not installed",
+                            if (game.loaderPresent) "NNOMM does not change it."
+                            else "NNOMM installs it when a mod needs it.",
+                        )
+                    }
                 }
                 Label(
                     "NNOMM does not sign in to Steam. It changes nothing in the game folder until you install, uninstall or switch a mod.",

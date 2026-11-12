@@ -43,19 +43,6 @@ class AppModel(
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    init {
-        scope.launch {
-            store.state
-                .map { state ->
-                    state.catalog.map { mod ->
-                        mod.id to mod.versions.map { it.version to it.downloadUrl }
-                    }
-                }
-                .distinctUntilChanged()
-                .collect { entries -> store.loadMetadata(entries.map { it.first }.toSet()) }
-        }
-    }
-
     override fun close() {
         scope.cancel()
         store.close()
@@ -174,6 +161,14 @@ class AppModel(
                 event.key in listOf(Key.DirectionDown, Key.DirectionUp, Key.Enter)
         ) {
             if (overlayKeys["palette"]?.invoke(event) == true) return true
+        }
+        if (ui.overlayKind == "palette") {
+            when {
+                event.key == Key.Escape || (ctrl && event.key == Key.K) -> closeOverlay()
+                ctrl && event.key in listOf(Key.One, Key.Two, Key.Three, Key.Comma, Key.Enter) -> Unit
+                else -> return false
+            }
+            return true
         }
         when {
             ctrl && event.key == Key.K -> {

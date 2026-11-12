@@ -43,7 +43,7 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 - Core notices now show as toasts; verify restoration/recovery notices after restart.
 - Settings directory selection uses core settingsHome (APPDATA/NNOMM on Windows),
   with NNOMM_HOME override. Verify NOMM's settings remain untouched.
-- The launcher, installer and Nucleus updater implementations are unchanged.
+- Installer packaging remains inherited; launcher discovery, launch monitoring and updater shutdown have changed as listed below.
 
 ## Remaining polish
 
@@ -71,5 +71,17 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 ## Acceptance settings behaviour
 
 - An observed game start now applies the profile's Keep/Minimise/Close NNOMM choice; verify native window minimisation and graceful close on Windows.
-- Play and explicit console-setting changes write only `[Logging.Console] Enabled` in BepInEx.cfg through the game-folder port, preserving a private backup; verify Windows file locking and profile config transitions.
+- Play writes only `[Logging.Console] Enabled` in BepInEx.cfg through the game-folder port, preserving a private backup; verify Windows file locking and profile config transitions.
 - The updater selects `latest` or `beta`; beta metadata resolves the newest published `-beta` prerelease rather than GitHub's stable-only latest endpoint. Verify with packaged Windows builds once a beta release exists.
+
+
+## Second acceptance check
+
+| Changed behaviour | Windows check |
+| --- | --- |
+| Steam URI is the only game-start path; old executable fallbacks remain removed | Steam open/closed, default/secondary libraries, launch options and URI association; failure must leave Play usable. |
+| Game-start detection is bounded to 60 seconds | Delayed start and no start: Play returns with a plain notice; later external starts still update the running state. A failed vanilla start restores Doorstop. |
+| Steam registry query has a five-second process limit | Hung/missing reg query, access denied and non-ASCII Steam path do not hang folder discovery. |
+| Automatic “By itself” update waits for the same placement-save/runtime-drain path as window close | Start an update during a queued mod write: install/restart begins only after safe shutdown; save failure prevents installation. |
+| Hiding profiles and reset save preferences without placing files | Hide profiles outside Default, verify Default is selected and files wait until the next mod action or Play; reset must not change game files. |
+| Per-profile console value applies at Play | Different overrides on two profiles, reset/clear override, Windows config locking and private config transitions. |

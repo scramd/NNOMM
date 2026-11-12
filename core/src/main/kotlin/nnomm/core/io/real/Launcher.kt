@@ -41,8 +41,11 @@ suspend fun findGameFolder(settings: SettingsValues): String? =
         val process =
             ProcessBuilder("reg", "query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath")
                 .start()
+        if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return@withContext null
+        }
         val text = process.inputStream.bufferedReader().use { it.readText() }
-        process.waitFor()
         val steam =
             Regex("SteamPath\\s+REG_SZ\\s+(.*)").find(text)?.groupValues?.get(1)?.trim()?.let {
                 Path.of(it)
@@ -159,9 +162,10 @@ class RealGameLauncher(
                     pending = true
                     scope.launch {
                         var exited = false
+                        var seen = fakeCommand != null
                         try {
-                            var seen = fakeCommand != null
-                            while (!seen) {
+                            val deadline = System.nanoTime() + 60_000_000_000L
+                            while (!seen && System.nanoTime() < deadline) {
                                 seen = detect()
                                 if (!seen) delay(500)
                             }
@@ -175,7 +179,7 @@ class RealGameLauncher(
                             withContext(NonCancellable + Dispatchers.IO) {
                                 if (
                                     withoutMods &&
-                                        exited &&
+                                        (exited || !seen) &&
                                         !detect() &&
                                         (fakeCommand == null || launched?.isAlive != true)
                                 )

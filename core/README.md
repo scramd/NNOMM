@@ -27,7 +27,7 @@ rows expose `DownloadStatus.FAILED`, `retryDownload(id)` and `cancelDownload(id)
 `clearFinished()` clears both failed and completed rows.
 
 Only the launcher supplies `gameRunning`. `gameStarting` covers the launch request
-and expires after 30 seconds if no process is observed. Deferred changes apply on
+and expires after 60 seconds if no process is observed. Deferred changes apply on
 observed game exit and before launch. Loader preparation uses the same disk queue.
 Preference changes save settings without applying game files.
 
@@ -61,7 +61,7 @@ Unknown dates format as a dash (`ago(Int.MAX_VALUE)`); unknown sizes remain null
 `updOf` uses the installed artifact's actual date. `effectiveGameVersion` falls back
 to the highest registry game version. Versions without a game version get no
 “Made for null” warning. Tags merge case and known variants, retain the most
-frequent spelling, and hide only each mod's own authors/owner and “mod”.
+frequent spelling, and hide registry author/owner names unless shared as a real tag, and drop “mod”.
 
 ## IO and settings
 
@@ -183,7 +183,7 @@ not the ids supplied by a pack author.
 
 
 Acceptance settings additions: `GameFolder.setConsole(folder, enabled)` is a default
-port. Real IO writes it only on an explicit console change or Play. `importPack`
+port. Real IO writes it at Play. `importPack`
 accepts an optional destination id and permitted settings, so the UI can prepare a
 private config snapshot before profile selection. `RealPacks.importSettings` never
 writes into the game. `problemReport` builds the read-only report on an IO dispatcher.

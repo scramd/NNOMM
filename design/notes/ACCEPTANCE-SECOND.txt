@@ -1,0 +1,31 @@
+Second acceptance implementation handoff
+
+A. Fixed: toasts use content width within the centered 92% shell limit; desktop Ctrl Enter alternative showed a compact toast clear of Play and Settings.
+B. Fixed: the window preview handler routes palette keys before the text field; Up/Down wrap, Enter runs, Ctrl Enter runs the alternative, Escape closes a typed query, Ctrl K closes, and page shortcuts are consumed. Checked in the running demo and ShellContractTest.
+C. Fixed: real startup checks followed packs; each successful registry refresh checks them again. Existing loopback pack-follow/import/update regression passes.
+D. Fixed: unsupported automatic updaters produce no startup claim; About says “Get updates from the releases page”.
+E. Fixed: Library shows “Nuclear Option, version unknown”, “From game folder”, and measured stored-file size; missing-folder first start hides mod/loader rows and asks for the folder; removed the developer-only Proton verification sentence. Checked in real sandbox mode.
+F. Fixed: preferences and reset save without applying game files; hiding profiles selects Default and defers game placement until a mod action or Play; Remove everything uses silent uninstall and offers no Undo. Console also waits until Play. Tests and a real-mode file-hash comparison passed; decisions are in STATUS.
+G. Excluded: no edits to GameFolder.kt, Disk.kt, Storage.kt or AppStore recovery/takeover paths.
+H. Fixed: catalog-wide most-frequent display spelling, case/known-variant merging, no “mod”, and registry author-name filtering with shared real tags retained, including vr/Combat/Solar. Preserves raw tags until catalog normalization, including cached/offline startup. Real manifest fixture and synthetic mixed-spelling/author regressions pass.
+I. Fixed: content-width toasts, palette Escape, drop heading spacing, running tooltip wording and neutral download bars. The previous round's compact right-aligned version selector was checked in pictures. Remaining deviations each have a reason in STATUS.
+J. Fixed: 60-second launcher detection bound and Play timeout notice, five-second reg query limit, and automatic updater installation waits for the window-close placement-save/runtime-shutdown path. Added Windows checklist rows and corrected the “unchanged” claim. Timeout regression passes; native Windows behavior remains unverified.
+K. Fixed: no eager whole-catalog HEAD pass at startup/refresh; composed Browse/Library rows and opened panels request newest release/prerelease metadata only. The memory cache batches writes on a one-second interval and flushes at shutdown. Request selection, cache reuse across instances, failed-request retry and shutdown persistence regressions pass.
+L. Verified: every profile-specific setting resolves for the selected profile; effect regression checks launchArgs, onLaunch, console, onUpdate and ownSettingsP through launch snapshots, console dispatch, automatic downloads and resolved game plans. Existing UI tests cover Keep/Minimise/Close effects. Actual Windows config swapping is still a platform check.
+
+Validation:
+- tools/gradlew-locked :core:test :composeApp:jvmTest :composeApp:jvmJar passed on the final source.
+- tools/gradlew-locked :core:spotlessApply :core:test :composeApp:jvmTest :composeApp:createDistributable :composeApp:renderShots passed; unrelated formatter-only edits were restored.
+- tools/compare-shots refreshed comparisons. Inspected affected 06, 08, 10, 12, 16, 17, 18, 19, 20, 21 and 26 sheets under composeApp/build/shots/compare/, including dark/light and narrow cases. Existing render-only FocusRequester warnings remain.
+- Desktop checks used an isolated 1600 x 1000 virtual display numbered 67, software rendering, demo and real modes. Real mode used only a disposable copy of the provided sandbox game. Checked palette wrapping/actions/closing, compact toast, 760-pixel layout, first start, Library wording/size and settings. A console preference change preserved every game file byte-for-byte. All opened apps and the task's display were closed.
+- No TODO(core) workaround was added. No push, release, tag, issue, PR or external submission.
+
+Decisions and remaining work:
+- Hide profiles switches the selected profile immediately and defers game placement.
+- Console changes also defer game writes until Play, consistent with the owner's settings safety requirement.
+- The start deadline is 60 seconds; later external game starts remain observable.
+- STATUS lists native font wrapping/baselines, the four-pixel Browse strip difference, the mock-only drop simulation controls, and the agreed Servers/opt-in pack settings differences.
+- Required independent Opus/Sol review belongs to the lead; no reviewers were started because this implementation task explicitly required working alone.
+- Work remains on the supplied isolated branch rather than switching the worktree to master; the lead can integrate these local commits.
+
+Implementation commits: 08470a6 (core/settings/metadata), 99486ef (UI/keys/updater).
