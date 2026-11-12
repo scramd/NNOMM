@@ -9,10 +9,19 @@ import nnomm.ui.palette.PaletteView
 import nnomm.ui.settings.SettingsView
 
 /** The pages of the sidebar. Servers shows only "Coming later" in the first version. */
-enum class Page { Browse, Library, Servers, Settings }
+enum class Page {
+    Browse,
+    Library,
+    Servers,
+    Settings,
+}
 
 /** Tabs of the mod detail panel (`pMod` in the mock's views.js). */
-enum class PanelTab { About, WhatsNew, Needs }
+enum class PanelTab {
+    About,
+    WhatsNew,
+    Needs,
+}
 
 /** The open detail panel. */
 data class PanelRef(val modId: String, val tab: PanelTab = PanelTab.About)
@@ -33,10 +42,19 @@ interface Overlay {
  * recomposes on change. Each page owns its own view class in its package.
  */
 class UiState {
+    var updateStatus by mutableStateOf<String?>(null)
     var page by mutableStateOf(Page.Browse)
     var panel by mutableStateOf<PanelRef?>(null)
     var overlay by mutableStateOf<Overlay?>(null)
     /** The sidebar's download list popover. */
+    var overlayKind by mutableStateOf<String?>(null)
+    var overlayProfileId by mutableStateOf<String?>(null)
+    var importFile by mutableStateOf<java.io.File?>(null)
+    var importMode by mutableStateOf("new")
+    var mock by mutableStateOf("normal")
+    var dragging by mutableStateOf(false)
+    var dismissMenu: (() -> Unit)? = null
+    var focusedField: FocusedField? by mutableStateOf(null)
     var downloadsOpen by mutableStateOf(false)
 
     val browse = BrowseView()
@@ -53,3 +71,6 @@ class UiState {
         panel = PanelRef(id, tab)
     }
 }
+
+/** Register from a focused editable field; clear it when focus leaves. */
+data class FocusedField(val value: () -> String, val clear: () -> Unit)

@@ -1,4 +1,9 @@
 package nnomm.ui.palette
 
-/** Command search view state: query and highlighted row. Owned by the palette page; fields are Compose snapshot state. */
-class PaletteView
+import androidx.compose.runtime.*
+
+/** Snapshot view state, shared by mock addresses and the page. */
+class PaletteView {
+    var query by mutableStateOf("")
+    var index by mutableStateOf(0)
+}

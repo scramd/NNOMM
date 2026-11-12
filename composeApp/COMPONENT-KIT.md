@@ -33,13 +33,12 @@ and TileSize (Small 22, Normal 28, Medium 40, Large 56).
 Place a Menu inside the same Box as its anchor. Its popup position provider flips left/up at the
 window edge and clamps within the window. MenuEntry supports Item (hint, icon, danger, enabled,
 action), Heading and Separator. Escape and outside click dismiss; arrows move focus, Enter/Space activate.
-Select is a menu-backed dropdown. Dialog is a focusable full-window popup with a scrim; place it last
+Select is a menu-backed dropdown. Dialog is an in-window layer with a scrim; place it last
 inside the app's full-size Box. DialogSurface and MenuSurface support static galleries.
 
 `WindowShell` supplies the title bar and body slot. Pass command, minimize, maximize, close
-callbacks and a drag modifier from the native window layer. The live window uses Nucleus WindowScaffold to register the title height with native code; shots use the equivalent WindowShell layout. Command clicks and Ctrl K both call
-`LaunchRequests.onCommand`; file launches queue in `LaunchRequests.pendingFiles` until the import
-screen is connected. No domain work starts in this shell.
+callbacks and a drag modifier from the native window layer. The live window uses Nucleus WindowScaffold to register the title height with native code; shots use the equivalent WindowShell layout. Command clicks and Ctrl K use `AppModel.openOverlay("palette")`; file launches feed `AppModel.acceptFiles`.
+See `design/SHELL-INTEGRATION.md` for page keys, fields and overlay factories.
 
 ## Render states
 
@@ -53,7 +52,7 @@ margins before appending a matching mock and render. The initial kit/window name
 mock files, so the comparison tool correctly skips them.
 
 For desktop inspection run the app with `--kit` for the interactive gallery and `--light` to force
-light mode; the normal shell is intentionally empty. `NNOMM_HOME` overrides its private settings root.
+light mode; normal mode renders the integrated shell around page entry points. `NNOMM_HOME` overrides its private settings root.
 
 ## Validation and remaining checks
 

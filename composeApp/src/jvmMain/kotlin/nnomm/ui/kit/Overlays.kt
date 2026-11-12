@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
 
 package nnomm.ui.kit
 
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
@@ -18,6 +22,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import nnomm.ui.theme.*
+
+val LocalDialogAutofocus = staticCompositionLocalOf<FocusRequester?> { null }
+
+val LocalShortcutHandler = staticCompositionLocalOf<(KeyEvent) -> Boolean> { { false } }
 
 @Composable
 fun Tooltip(text: String, content: @Composable () -> Unit) {
@@ -58,11 +66,18 @@ fun Menu(
     onDismiss: () -> Unit,
     entries: List<MenuEntry>,
     modifier: Modifier = Modifier,
+    pointerOffset: DpOffset? = null,
+    initialIndex: Int = -1,
 ) {
     if (!expanded) return
     val gap = with(LocalDensity.current) { 4.dp.roundToPx() }
+    val inset = with(LocalDensity.current) { 24.dp.roundToPx() }
+    val pointer =
+        pointerOffset?.let {
+            with(LocalDensity.current) { IntOffset(it.x.roundToPx(), it.y.roundToPx()) }
+        }
     val position =
-        remember(gap) {
+        remember(gap, pointer, inset) {
             object : PopupPositionProvider {
                 override fun calculatePosition(
                     anchorBounds: IntRect,
@@ -70,28 +85,37 @@ fun Menu(
                     layoutDirection: LayoutDirection,
                     popupContentSize: IntSize,
                 ): IntOffset {
+                    val surfaceWidth = popupContentSize.width - inset * 2
+                    val surfaceHeight = popupContentSize.height - inset * 2
                     val x =
-                        if (anchorBounds.left + popupContentSize.width <= windowSize.width)
-                            anchorBounds.left
-                        else anchorBounds.right - popupContentSize.width
+                        if (anchorBounds.left + surfaceWidth <= windowSize.width) anchorBounds.left
+                        else anchorBounds.right - surfaceWidth
                     val y =
-                        if (
-                            anchorBounds.bottom + gap + popupContentSize.height <= windowSize.height
-                        )
+                        if (anchorBounds.bottom + gap + surfaceHeight <= windowSize.height)
                             anchorBounds.bottom + gap
-                        else anchorBounds.top - popupContentSize.height - gap
+                        else anchorBounds.top - surfaceHeight - gap
                     return IntOffset(
-                        x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
-                        y.coerceIn(
+                        (pointer?.let { anchorBounds.left + it.x } ?: x).coerceIn(
                             0,
-                            (windowSize.height - popupContentSize.height).coerceAtLeast(0),
-                        ),
+                            (windowSize.width - surfaceWidth).coerceAtLeast(0),
+                        ) - inset,
+                        (pointer?.let { anchorBounds.top + it.y } ?: y).coerceIn(
+                            0,
+                            (windowSize.height - surfaceHeight).coerceAtLeast(0),
+                        ) - inset,
                     )
                 }
             }
         }
+    val shortcut = LocalShortcutHandler.current
     Popup(position, onDismiss, properties = PopupProperties(focusable = true)) {
-        MenuSurface(entries, onDismiss, modifier)
+        Box(
+            Modifier.padding(24.dp).onPreviewKeyEvent {
+                if (it.key == Key.Escape) false else shortcut(it)
+            }
+        ) {
+            MenuSurface(entries, onDismiss, modifier, initialIndex = initialIndex)
+        }
     }
 }
 
@@ -102,6 +126,7 @@ fun MenuSurface(
     onDismiss: () -> Unit = {},
     modifier: Modifier = Modifier,
     requestFocus: Boolean = true,
+    initialIndex: Int = -1,
 ) {
     val c = LocalNnTheme.current.colors
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
@@ -155,7 +180,9 @@ fun MenuSurface(
                     )
                 is MenuEntry.Item ->
                     control(
-                        Modifier.fillMaxWidth().focusRequester(requesters[i]),
+                        Modifier.fillMaxWidth()
+                            .alpha(if (entry.enabled) 1f else .55f)
+                            .focusRequester(requesters[i]),
                         enabled = entry.enabled,
                         onClick = {
                             onDismiss()
@@ -180,7 +207,14 @@ fun MenuSurface(
                                 Modifier.weight(1f),
                                 color = if (entry.danger) c.danger else c.text,
                             )
-                            entry.hint?.let { Label(it, color = c.text3, size = 12f) }
+                            entry.hint?.let {
+                                Label(
+                                    it,
+                                    Modifier.padding(start = 14.dp),
+                                    color = c.text3,
+                                    size = 13f,
+                                )
+                            }
                         }
                     }
             }
@@ -188,8 +222,9 @@ fun MenuSurface(
     }
     LaunchedEffect(requestFocus) {
         if (requestFocus)
-            entries
-                .indexOfFirst { it is MenuEntry.Item && it.enabled }
+            (initialIndex.takeIf {
+                    it in entries.indices && (entries[it] as? MenuEntry.Item)?.enabled == true
+                } ?: entries.indexOfFirst { it is MenuEntry.Item && it.enabled })
                 .takeIf { it >= 0 }
                 ?.let { requesters[it].requestFocus() }
     }
@@ -202,27 +237,58 @@ fun Select(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    height: Dp = 28.dp,
 ) {
     var open by remember { mutableStateOf(false) }
     val c = LocalNnTheme.current.colors
-    Box(modifier) {
-        control(Modifier, enabled, onClick = { open = !open }) { m, _, _ ->
+    Box(modifier.alpha(if (enabled) 1f else .55f), propagateMinConstraints = true) {
+        control(
+            Modifier.onPreviewKeyEvent {
+                if (
+                    it.type == KeyEventType.KeyDown &&
+                        it.key in listOf(Key.DirectionDown, Key.DirectionUp)
+                ) {
+                    onSelect(
+                        (selected + if (it.key == Key.DirectionDown) 1 else -1).coerceIn(
+                            0,
+                            (options.size - 1).coerceAtLeast(0),
+                        )
+                    )
+                    true
+                } else false
+            },
+            enabled,
+            onClick = { open = !open },
+        ) { m, _, _ ->
             Row(
-                m.height(28.dp)
+                m.height(height)
                     .background(c.raise, RoundedCornerShape(6.dp))
                     .border(1.dp, c.line, RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Label(options.getOrElse(selected) { "" })
+                androidx.compose.foundation.text.BasicText(
+                    options.getOrElse(selected) { "" },
+                    Modifier.weight(1f, fill = false),
+                    style = LocalNnTheme.current.text(),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
                 Icon(NnIcons.chevd)
             }
         }
         Menu(
             open,
             { open = false },
-            options.mapIndexed { i, s -> MenuEntry.Item(s, action = { onSelect(i) }) },
+            options.mapIndexed { i, s ->
+                MenuEntry.Item(
+                    s,
+                    icon = if (i == selected) NnIcons.check else null,
+                    action = { onSelect(i) },
+                )
+            },
+            initialIndex = selected,
         )
     }
 }
@@ -232,12 +298,13 @@ fun DialogSurface(
     title: String,
     wide: Boolean = false,
     footer: @Composable RowScope.() -> Unit,
+    leftFooter: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = LocalNnTheme.current.colors
     BoxWithConstraints(Modifier.widthIn(max = if (wide) 680.dp else 560.dp).fillMaxWidth()) {
         val bodyHeight =
-            if (maxHeight == Dp.Infinity) 500.dp else (maxHeight - 110.dp).coerceIn(0.dp, 500.dp)
+            if (maxHeight == Dp.Infinity) 500.dp else (maxHeight - 110.dp).coerceAtLeast(0.dp)
         Column(
             Modifier.fillMaxWidth()
                 .dropShadow(
@@ -259,14 +326,22 @@ fun DialogSurface(
                     .verticalScroll(rememberScrollState())
                     .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                content = content,
-            )
+            ) {
+                val theme = LocalNnTheme.current
+                CompositionLocalProvider(
+                    LocalNnTheme provides theme.copy(colors = c.copy(text = c.text2))
+                ) {
+                    content()
+                }
+            }
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                content = footer,
-            )
+            ) {
+                Row(Modifier.weight(1f), content = leftFooter)
+                footer()
+            }
         }
     }
 }
@@ -281,40 +356,63 @@ fun Dialog(
     onDismiss: () -> Unit,
     wide: Boolean = false,
     footer: @Composable RowScope.() -> Unit,
+    initialFocus: FocusRequester? = null,
+    leftFooter: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!open) return
     val c = LocalNnTheme.current.colors
-    Popup(
-        alignment = Alignment.Center,
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true),
+    val focus = remember { FocusRequester() }
+    val manager = androidx.compose.ui.platform.LocalFocusManager.current
+    Box(
+        Modifier.fillMaxSize()
+            .background(c.scrim)
+            .pointerInput(onDismiss) { detectTapGestures { onDismiss() } }
+            .padding(start = 16.dp, end = 16.dp, top = 52.dp, bottom = 16.dp),
+        contentAlignment = Alignment.TopCenter,
     ) {
         Box(
-            Modifier.fillMaxSize()
-                .background(c.scrim)
-                .pointerInput(onDismiss) { detectTapGestures { onDismiss() } }
-                .padding(24.dp)
+            Modifier.focusRequester(focus)
+                .focusProperties { exit = { FocusRequester.Cancel } }
+                .focusGroup()
                 .onPreviewKeyEvent {
-                    if (it.key == Key.Escape && it.type == KeyEventType.KeyDown) {
-                        onDismiss()
-                        true
-                    } else false
-                },
-            contentAlignment = Alignment.Center,
+                    when {
+                        it.type != KeyEventType.KeyDown -> false
+                        it.key == Key.Escape -> {
+                            onDismiss()
+                            true
+                        }
+                        it.key == Key.Tab -> {
+                            manager.moveFocus(
+                                if (it.isShiftPressed) FocusDirection.Previous
+                                else FocusDirection.Next
+                            )
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .pointerInput(Unit) { detectTapGestures {} }
         ) {
-            Box(Modifier.pointerInput(Unit) { detectTapGestures {} }) {
-                DialogSurface(title, wide, footer, content)
+            CompositionLocalProvider(LocalDialogAutofocus provides initialFocus) {
+                DialogSurface(title, wide, footer, leftFooter, content)
             }
         }
     }
+    LaunchedEffect(Unit) { (initialFocus ?: focus).requestFocus() }
 }
 
 @Composable
-fun Toast(text: String, action: String, onAction: () -> Unit, modifier: Modifier = Modifier) {
+fun Toast(
+    text: String,
+    action: String? = null,
+    onAction: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val c = LocalNnTheme.current.colors
     Row(
         modifier
+            .widthIn(max = 1200.dp)
             .dropShadow(
                 RoundedCornerShape(9.dp),
                 Shadow(radius = 50.dp, color = c.shadow, offset = DpOffset(0.dp, 18.dp)),
@@ -324,19 +422,66 @@ fun Toast(text: String, action: String, onAction: () -> Unit, modifier: Modifier
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Label(text, color = c.strongInk, weight = 500)
-        control(Modifier, onClick = onAction) { m, _, _ ->
-            androidx.compose.foundation.text.BasicText(
-                action,
-                m.padding(horizontal = 8.dp, vertical = 3.dp),
-                style =
-                    LocalNnTheme.current
-                        .text(weight = 700)
-                        .copy(
-                            color = c.strongInk,
-                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                        ),
-            )
-        }
+        Label(text, Modifier.weight(1f, fill = false), color = c.strongInk, weight = 500)
+        if (action != null)
+            control(Modifier, onClick = onAction) { m, _, _ ->
+                androidx.compose.foundation.text.BasicText(
+                    action,
+                    m.padding(horizontal = 8.dp, vertical = 3.dp),
+                    style =
+                        LocalNnTheme.current
+                            .text(weight = 700)
+                            .copy(
+                                color = c.strongInk,
+                                textDecoration =
+                                    androidx.compose.ui.text.style.TextDecoration.Underline,
+                            ),
+                )
+            }
+    }
+}
+
+/** Generic focusable anchored surface for the queue and other rich popovers. */
+@Composable
+fun AnchoredPopover(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    offset: DpOffset = DpOffset.Zero,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (!expanded) return
+    val shortcut = LocalShortcutHandler.current
+    val c = LocalNnTheme.current.colors
+    Popup(
+        alignment = Alignment.BottomStart,
+        offset =
+            with(LocalDensity.current) {
+                IntOffset(
+                    offset.x.roundToPx() - 24.dp.roundToPx(),
+                    offset.y.roundToPx() + 24.dp.roundToPx(),
+                )
+            },
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Column(
+            Modifier.padding(24.dp)
+                .width(300.dp)
+                .onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
+                        onDismiss()
+                        true
+                    } else shortcut(it)
+                }
+                .dropShadow(
+                    RoundedCornerShape(9.dp),
+                    Shadow(50.dp, c.shadow, offset = DpOffset(0.dp, 18.dp)),
+                )
+                .background(c.raise, RoundedCornerShape(9.dp))
+                .border(1.dp, c.line2, RoundedCornerShape(9.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
     }
 }
