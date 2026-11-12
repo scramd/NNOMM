@@ -69,6 +69,9 @@ interface GameFolder {
     val applyProblems: StateFlow<Map<String, String>>?
         get() = null
 
+    val recoveryPending: Boolean
+        get() = false
+
     suspend fun recoverPending() {}
 
     suspend fun find(settings: SettingsValues): String? = null
@@ -78,6 +81,10 @@ interface GameFolder {
     suspend fun apply(state: AppState, profileId: String)
 
     suspend fun apply(plan: GamePlan) = apply(plan.asState(), plan.profileId)
+
+    /** False means deferred or partial; the requested plan must be retried before Play. */
+    val applySucceeded: Boolean
+        get() = true
 
     suspend fun removeLoader(folder: String) {}
 
