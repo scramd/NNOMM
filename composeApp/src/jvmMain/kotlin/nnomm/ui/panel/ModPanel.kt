@@ -270,13 +270,13 @@ fun ModPanel(ref: PanelRef) {
                             Column(Modifier.weight(1f)) {
                                 Label(
                                     label,
-                                    Modifier.heightIn(min = 16.2.dp),
+                                    Modifier.heightIn(min = 16.8.dp),
                                     size = 12f,
                                     color = c.text3,
                                 )
                                 Label(
                                     value,
-                                    Modifier.heightIn(min = 16.2.dp),
+                                    Modifier.heightIn(min = 16.8.dp),
                                     size = 12f,
                                     color =
                                         if (
@@ -472,7 +472,7 @@ fun ModPanel(ref: PanelRef) {
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Label(note.version, weight = 600)
+                                            Label(note.version, Modifier.heightIn(min = 18.2.dp), weight = 600)
                                             Label(note.date, color = c.text3)
                                             if (installed != null && version == note.version)
                                                 Badge(
@@ -487,9 +487,9 @@ fun ModPanel(ref: PanelRef) {
                                                 c.text3,
                                             )
                                         else
-                                            Column(Modifier.padding(start = 2.dp)) {
+                                            Column(Modifier.padding(start = 2.dp, end = 6.dp)) {
                                                 note.lines.forEach { line ->
-                                                    Row {
+                                                    Row(Modifier.heightIn(min = 18.2.dp)) {
                                                         Label(
                                                             "•",
                                                             Modifier.width(14.dp),
@@ -499,7 +499,7 @@ fun ModPanel(ref: PanelRef) {
                                                             line,
                                                             Modifier.weight(1f),
                                                             color = c.text2,
-                                                            lineHeight = 19.5.sp,
+                                                            lineHeight = 18.2.sp,
                                                         )
                                                     }
                                                 }
@@ -697,7 +697,7 @@ private fun ActionLink(
 private fun age(state: AppState, date: Long?) =
     if (date == null) "Unknown" else ago(daysAgo(state, date))
 
-/** Match the mock's inherited 1.35 line height, including the two-line metadata cells. */
+/** Match the mock's inherited 1.4 line height, including the two-line metadata cells. */
 @Composable
 private fun Label(
     text: String,
@@ -706,7 +706,7 @@ private fun Label(
     size: Float = 13f,
     weight: Int = 400,
     width: Float = 100f,
-    lineHeight: TextUnit = (size * 1.35f).sp,
+    lineHeight: TextUnit = (size * 1.4f).sp,
 ) = KitLabel(text, modifier, color, size, weight, width, lineHeight = lineHeight)
 
 @Composable
