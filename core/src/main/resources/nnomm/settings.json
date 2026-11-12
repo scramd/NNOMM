@@ -287,7 +287,7 @@
       "cat": "app",
       "key": "logs",
       "label": "Problem report",
-      "help": "A text file with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.",
+      "help": "A text with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.",
       "type": "actions",
       "actions": [
         "Copy report",

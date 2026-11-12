@@ -76,6 +76,11 @@ interface ModStore {
 
     suspend fun usedBytes(): Long = 0
 
+    suspend fun installedBytes(state: AppState): Long = usedBytes()
+
+    /** Unknown provenance is retained: its only copy may be in this store. */
+    suspend fun keepInLibrary(id: String, versions: Set<String>): Boolean = true
+
     suspend fun moveTo(folder: String) {
         error("Moving the store is unavailable")
     }

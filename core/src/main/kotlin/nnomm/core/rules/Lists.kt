@@ -203,6 +203,9 @@ fun tagCounts(s: AppState, b: BrowseFilter = BrowseFilter()): Map<String, Int> {
             .map { it.mod }
             .filter { b.tagMode != "all" || b.tags.all { t -> t in it.tags } }
     return all.associateWith { t -> base.count { t in it.tags } }
+        .entries
+        .sortedByDescending { it.value }
+        .associate { it.key to it.value }
 }
 
 data class BrowseSection(val title: String, val subtitle: String, val mods: List<CatalogMod>)

@@ -369,6 +369,25 @@ class RealModStore(
                 )
         }
 
+    override suspend fun keepInLibrary(id: String, versions: Set<String>): Boolean =
+        withContext(Dispatchers.IO) {
+            versions.any { provenance(id, it).read()?.origin != PayloadOrigin.REGISTRY_DOWNLOAD }
+        }
+
+    override suspend fun installedBytes(state: AppState): Long =
+        withContext(Dispatchers.IO) {
+            state.installed.values.sumOf { mod ->
+                mod.versions.sumOf { v ->
+                    val root = version(mod.id, v)
+                    if (!root.exists()) 0L
+                    else
+                        Files.walk(root).use { files ->
+                            files.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+                        }
+                }
+            }
+        }
+
     override suspend fun usedBytes(): Long =
         withContext(Dispatchers.IO) {
             (listOf(storeRoot, home.resolve("player-files"), home.resolve("player-edits")) +

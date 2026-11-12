@@ -150,6 +150,7 @@ private constructor(
                         else emptyList()
                     val loaded =
                         initial.copy(
+                            downloads = emptyList(),
                             catalog =
                                 (saved?.first.orEmpty() +
                                         initial.catalog +

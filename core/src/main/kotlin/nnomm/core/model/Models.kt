@@ -91,7 +91,10 @@ data class CatalogMod(
         get() = versions.mapNotNull { it.dateMillis }.maxOrNull()
 
     val added
-        get() = firstReleaseMillis ?: versions.mapNotNull { it.dateMillis }.minOrNull()
+        get() = firstReleaseMillis ?: oldestVersion?.dateMillis
+
+    val oldestVersion
+        get() = versions.minWithOrNull { a, b -> compareVersionValues(a.version, b.version) }
 }
 
 @Serializable

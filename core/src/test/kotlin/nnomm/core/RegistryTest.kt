@@ -70,7 +70,7 @@ class RegistryTest {
             "Nuclear Option 9.8.7 found here.",
             settingHelp(SETTINGS.first { it.key == "gamePath" }, s),
         )
-        assertTrue(settingHelp(SETTINGS.first { it.key == "store" }, s).contains("123 MB"))
+        assertTrue(settingHelp(SETTINGS.first { it.key == "store" }, s).contains("123\u00a0MB"))
         assertTrue(settingHelp(SETTINGS.first { it.key == "appUpdate" }, s).contains("2.0"))
     }
 

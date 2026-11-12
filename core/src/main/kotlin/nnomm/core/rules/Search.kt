@@ -58,7 +58,7 @@ fun cleanCatalogTags(mods: List<CatalogMod>): List<CatalogMod> {
                             key(it) != "mod" &&
                             (key(it) !in authors || key(it) in realTags)
                     }
-                    .map { canonical.getValue(key(it)) }
+                    .map { displayTag(canonical.getValue(key(it))) }
                     .distinct()
         )
     }
@@ -144,7 +144,7 @@ fun ago(d: Int): String =
         d < 14 -> "$d days ago"
         d < 60 -> "${floor(d/7.0+0.5).toInt()} weeks ago"
         d < 365 -> "${floor(d/30.0+0.5).toInt()} months ago"
-        else -> "${floor(d/365.0+0.5).toInt()} years ago"
+        else -> floor(d / 365.0 + 0.5).toInt().let { "$it ${if (it == 1) "year" else "years"} ago" }
     }
 
 fun size(kb: Long): String =
@@ -165,4 +165,13 @@ fun hash(s: String): Long {
     var h = 0L
     s.forEach { h = (h * 31 + it.code) and 0xffffffffL }
     return h
+}
+
+fun displayTag(tag: String): String {
+    val acronyms =
+        listOf("HUD", "UI", "QoL", "VR", "AI", "PvP", "PvE", "FPS", "ATC", "AWACS").associateBy {
+            it.lowercase()
+        }
+    val sentence = tag.lowercase().replaceFirstChar { it.titlecase() }
+    return Regex("[A-Za-z]+").replace(sentence) { acronyms[it.value.lowercase()] ?: it.value }
 }
