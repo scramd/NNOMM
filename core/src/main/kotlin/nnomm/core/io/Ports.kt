@@ -7,10 +7,14 @@ import nnomm.core.model.*
 interface Registry {
     suspend fun read(): List<CatalogMod>
 
+    suspend fun readSnapshot(): RegistrySnapshot = RegistrySnapshot(read())
+
     suspend fun saved(): Pair<List<CatalogMod>, Long>?
 
     suspend fun save(mods: List<CatalogMod>, readAtMillis: Long)
 }
+
+data class RegistrySnapshot(val mods: List<CatalogMod>, val savedAtMillis: Long? = null)
 
 /** HEAD-derived metadata, cached by download URL and version. */
 interface MetaSource {
@@ -33,7 +37,20 @@ interface Downloader {
     ): DownloadedFile
 }
 
-data class DownloadedFile(val path: String, val cleanup: () -> Unit = {}) : AutoCloseable {
+enum class PayloadOrigin {
+    UNKNOWN,
+    REGISTRY_DOWNLOAD,
+    TAKEOVER,
+    LOCAL_FILE,
+    PACK,
+}
+
+data class DownloadedFile(
+    val path: String,
+    val origin: PayloadOrigin = PayloadOrigin.UNKNOWN,
+    val verifiedHash: String? = null,
+    val cleanup: () -> Unit = {},
+) : AutoCloseable {
     override fun close() = cleanup()
 }
 

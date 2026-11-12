@@ -90,7 +90,10 @@ class AcceptanceSafetyTest {
         Thread.sleep(9500)
         store.clearUnused(AppState())
         val mods = home.resolve("mods")
-        assertFalse(mods.resolve("reg/1").exists(), "a registry version can be cleared")
+        assertTrue(
+            mods.resolve("reg/1").exists(),
+            "a registry identity without verified provenance must stay",
+        )
         assertTrue(mods.resolve("local-file-abc/abc").exists(), "a local file is the only copy")
         assertTrue(mods.resolve("taken/takeover").exists(), "a taken-over copy is the only copy")
     }

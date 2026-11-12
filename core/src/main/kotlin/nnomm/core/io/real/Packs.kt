@@ -278,7 +278,14 @@ class RealPacks(
                 val localId = "local-" + hash
                 val v = hash.take(12)
                 if (!mods.hasVersion(localId, v))
-                    mods.put(localId, v, nnomm.core.io.DownloadedFile(source.toString()))
+                    mods.put(
+                        localId,
+                        v,
+                        nnomm.core.io.DownloadedFile(
+                            source.toString(),
+                            nnomm.core.io.PayloadOrigin.PACK,
+                        ),
+                    )
                 CatalogMod(
                     localId,
                     source.name,

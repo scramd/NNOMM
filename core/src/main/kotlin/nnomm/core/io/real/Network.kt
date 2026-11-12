@@ -74,16 +74,21 @@ class RealRegistry(
     private val official =
         JsonFile(home.resolve("official-registry.json"), SavedRegistry.serializer(), notice)
 
-    override suspend fun read(): List<CatalogMod> =
+    override suspend fun read(): List<CatalogMod> = readSnapshot().mods
+
+    override suspend fun readSnapshot(): RegistrySnapshot =
         withContext(Dispatchers.IO) {
             val urls = addresses()
             require(urls.isNotEmpty()) { "No registry addresses are configured." }
+            var liveSources = 0
+            var savedTime: Long? = null
             val loaded =
                 urls
                     .sortedBy { if (it == DEFAULT_REGISTRY) 0 else 1 }
                     .mapNotNull { url ->
                         try {
                             decodeRegistry(client.get(checkedUrl(url)).boundedText()).also {
+                                liveSources++
                                 if (url == DEFAULT_REGISTRY)
                                     official.write(SavedRegistry(it, System.currentTimeMillis()))
                             }
@@ -91,11 +96,19 @@ class RealRegistry(
                             throw e
                         } catch (e: Exception) {
                             notice("Could not load registry $url; other sources remain available.")
-                            if (url == DEFAULT_REGISTRY) official.read()?.mods else null
+                            if (url == DEFAULT_REGISTRY)
+                                official.read()?.let {
+                                    savedTime = it.readAtMillis
+                                    it.mods
+                                }
+                            else null
                         }
                     }
             require(loaded.isNotEmpty()) { "No registry source could be loaded" }
-            loaded.flatten().distinctBy { it.id }
+            RegistrySnapshot(
+                loaded.flatten().distinctBy { it.id },
+                savedTime.takeIf { liveSources == 0 },
+            )
         }
 
     override suspend fun saved() =
@@ -368,7 +381,13 @@ class RealDownloader(private val client: HttpClient, private val home: Path) : D
                 }
                 ensureActive()
                 progress(100)
-                DownloadedFile(path.toString()) { deleteTree(dir) }
+                DownloadedFile(
+                    path.toString(),
+                    PayloadOrigin.REGISTRY_DOWNLOAD,
+                    normalizedHash(version.hash),
+                ) {
+                    deleteTree(dir)
+                }
             } catch (e: Exception) {
                 deleteTree(dir)
                 throw e
