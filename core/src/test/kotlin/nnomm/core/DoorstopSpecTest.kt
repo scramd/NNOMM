@@ -365,7 +365,7 @@ class DoorstopSpecTest {
                 value,
             )
         }
-        for (value in listOf("", " \t", "\"\"", "''")) {
+        for (value in listOf("", " \t", "\"\"", "''", "\u001a", "\u000b", "\u000c")) {
             val original = bytes("[General]\nenabled=true\ntarget_assembly=$value\n")
             val f = fixture(original)
             f.folder.repairLoader(f.game.toString())
@@ -439,6 +439,77 @@ class DoorstopSpecTest {
                     scope.cancel()
                 }
             }
+        }
+    }
+
+    @Test
+    fun bareEnabledBeforeDuplicateIsTheEffectiveKey() {
+        for (duplicate in listOf("", "enabled=true\n")) {
+            val input = bytes("[General]\nenabled\n" + duplicate + "target_assembly=x\n")
+            assertFalse(DoorstopIni.read(input).explicitlyDisabled)
+            val disabled = DoorstopIni.read(input).setEnabled(false, true)
+            assertContentEquals(
+                bytes("[General]\nenabled = false\n" + duplicate + "target_assembly=x\n"),
+                disabled,
+            )
+            assertTrue(DoorstopIni.read(disabled).explicitlyDisabled)
+        }
+    }
+
+    @Test
+    fun profileWhitespaceMatchesWine() {
+        for (space in listOf('\t', '\u000b', '\u000c', '\u001a', ' ')) {
+            val text =
+                "$space[$space" +
+                    "General$space]$space\n" +
+                    "$space" +
+                    "enabled$space=$space" +
+                    "true$space\n" +
+                    "$space" +
+                    "target_assembly$space=$space" +
+                    "x$space\n"
+            val doc = DoorstopIni.read(bytes(text))
+            assertTrue(doc.healthy)
+            assertFalse(doc.explicitlyDisabled)
+            assertFalse(DoorstopIni.read(bytes("[General]\ntarget_assembly=$space\n")).healthy)
+        }
+    }
+
+    @Test
+    fun repairReplacesPendingUnhealthyRestoreWithRepairedBytes() = runBlocking {
+        for (legacy in listOf(false, true)) {
+            val original = bytes("[General]\nenabled=false\ntarget_assembly=\n")
+            val f = fixture(original)
+            val ini = f.game.resolve("doorstop_config.ini")
+            val saved =
+                JsonFile(
+                    f.home.resolve("doorstop-restore.json"),
+                    MapSerializer(String.serializer(), String.serializer()),
+                )
+            saved.write(
+                mapOf("path" to ini.toString()) +
+                    if (legacy) mapOf("text" to String(original, DoorstopIni.charset))
+                    else mapOf("bytes" to Base64.getEncoder().encodeToString(original))
+            )
+            f.folder.repairLoader(f.game.toString())
+            assertContentEquals(shipped, ini.readBytes())
+            assertContentEquals(
+                shipped,
+                Base64.getDecoder().decode(saved.read()!!.getValue("bytes")),
+            )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                RealGameLauncher(f.home, scope, detect = { false })
+                assertContentEquals(shipped, ini.readBytes())
+                assertTrue(saved.read().isNullOrEmpty())
+            } finally {
+                scope.coroutineContext[Job]!!.cancelAndJoin()
+            }
+            assertTrue(
+                Files.walk(f.game.resolve(".nnomm/recovery")).use { paths ->
+                    paths.anyMatch { it.isRegularFile() && it.readBytes().contentEquals(original) }
+                }
+            )
         }
     }
 

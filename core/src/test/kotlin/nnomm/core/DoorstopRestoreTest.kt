@@ -78,6 +78,8 @@ class DoorstopRestoreTest {
             assertFalse(ini.readBytes().contentEquals(original))
             assertFalse(record(home).read().isNullOrEmpty())
             assertEquals(1, notices.size)
+            delay(6500) // Multiple automatic failures still produce one notice.
+            assertEquals(1, notices.size)
             val failure =
                 assertFailsWith<DoorstopSettingsFailure> {
                     launcher.start(AppState(game = GameInfo(game.toString())), false)
@@ -88,11 +90,13 @@ class DoorstopRestoreTest {
             blocked.set(false)
             awaitCondition { record(home).read().isNullOrEmpty() }
             assertContentEquals(original, ini.readBytes())
-            launcher.start(AppState(game = GameInfo(game.toString())), false)
+            launcher.start(AppState(game = GameInfo(game.toString())), true)
+            blocked.set(true)
             withTimeout(5000) {
                 launcher.running.first { !it }
                 Unit
             }
+            assertEquals(2, notices.size) // A resolved failure permits a new notice.
         } finally {
             scope.cancelAndJoin()
         }
@@ -138,7 +142,7 @@ class DoorstopRestoreTest {
     }
 
     @Test
-    fun editFailureKeepsOriginalExceptionAndSuppressesRestoreFailure() = runBlocking {
+    fun partialEditFailureKeepsOriginalExceptionAndSuppressesRestoreFailure() = runBlocking {
         val home = temp()
         val game = temp()
         game.resolve("NuclearOption.exe").writeText("")
@@ -153,8 +157,12 @@ class DoorstopRestoreTest {
                     home,
                     scope,
                     detect = { false },
-                    writeDoorstop = { _, _ ->
-                        throw if (++writes == 1) editFailure else restoreFailure
+                    writeDoorstop = { path, bytes ->
+                        if (++writes == 1) {
+                            Files.write(path, bytes)
+                            throw editFailure
+                        }
+                        throw restoreFailure
                     },
                 )
             val failure =
@@ -163,7 +171,7 @@ class DoorstopRestoreTest {
                 }
             assertSame(editFailure, failure.cause)
             assertContentEquals(arrayOf(restoreFailure), failure.suppressed)
-            assertContentEquals(original, ini.readBytes())
+            assertFalse(ini.readBytes().contentEquals(original))
             assertFalse(record(home).read().isNullOrEmpty())
             assertFalse(launcher.running.value)
             assertTrue(loaderFailureHelp(failure).contains("close programs", true))
@@ -174,7 +182,7 @@ class DoorstopRestoreTest {
     }
 
     @Test
-    fun deletedFolderIsNotRecreatedAndRecordIsDropped() = runBlocking {
+    fun missingFolderIsNotRecreatedAndRecordIsRetained() = runBlocking {
         val home = temp()
         val gone = temp().resolve("gone")
         save(home, gone.resolve("doorstop_config.ini"))
@@ -182,7 +190,7 @@ class DoorstopRestoreTest {
         try {
             RealGameLauncher(home, scope, detect = { false })
             assertFalse(gone.exists())
-            assertTrue(record(home).read().isNullOrEmpty())
+            assertFalse(record(home).read().isNullOrEmpty())
         } finally {
             scope.cancelAndJoin()
         }
@@ -258,6 +266,95 @@ class DoorstopRestoreTest {
                 app.shutdown()
             }
         }
+
+    // Assertion ports of doorstop3/ZRound3ProbeTest A, C and F (B extends exitFailure above).
+    @Test
+    fun unchangedReadOnlyFileDoesNotBlockNormalPlay() = runBlocking {
+        val home = temp()
+        val game = temp()
+        game.resolve("NuclearOption.exe").writeText("")
+        val ini = game.resolve("doorstop_config.ini").apply { writeBytes(original) }
+        val notices = CopyOnWriteArrayList<String>()
+        var writes = 0
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val launcher =
+                RealGameLauncher(
+                    home,
+                    scope,
+                    listOf("sh", "-c", "true"),
+                    detect = { false },
+                    notice = { notices.add(it) },
+                    writeDoorstop = { path, _ ->
+                        writes++
+                        throw AccessDeniedException(path.toString())
+                    },
+                )
+            assertFailsWith<DoorstopSettingsFailure> {
+                launcher.start(AppState(game = GameInfo(game.toString())), true)
+            }
+            assertContentEquals(original, ini.readBytes())
+            assertTrue(record(home).read().isNullOrEmpty())
+            delay(3200) // Periodic retries must not rewrite an unchanged read-only INI.
+            launcher.start(AppState(game = GameInfo(game.toString())), false)
+            assertEquals(1, writes)
+            assertTrue(notices.isEmpty())
+        } finally {
+            scope.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun missingLibraryRestoresWhenItReturns() = runBlocking {
+        val home = temp()
+        val root = temp()
+        val game = root.resolve("game").createDirectories()
+        val ini = game.resolve("doorstop_config.ini").apply { writeText("disabled") }
+        save(home, ini)
+        val away = root.resolve("away")
+        Files.move(game, away)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            RealGameLauncher(home, scope, detect = { false })
+            assertFalse(game.exists())
+            assertFalse(record(home).read().isNullOrEmpty())
+            Files.move(away, game)
+            awaitCondition { record(home).read().isNullOrEmpty() }
+            assertContentEquals(original, ini.readBytes())
+        } finally {
+            scope.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun malformedUtf16DoesNotWriteOrSaveRestoreRecord() = runBlocking {
+        val home = temp()
+        val game = temp()
+        game.resolve("NuclearOption.exe").writeText("")
+        val malformed = byteArrayOf(0xff.toByte(), 0xfe.toByte(), 0x41)
+        val ini = game.resolve("doorstop_config.ini").apply { writeBytes(malformed) }
+        var writes = 0
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val launcher =
+                RealGameLauncher(
+                    home,
+                    scope,
+                    detect = { false },
+                    writeDoorstop = { _, _ -> writes++ },
+                )
+            val failure =
+                assertFailsWith<DoorstopSettingsFailure> {
+                    launcher.start(AppState(game = GameInfo(game.toString())), true)
+                }
+            assertTrue(loaderFailureHelp(failure).contains("invalid UTF-16"))
+            assertEquals(0, writes)
+            assertContentEquals(malformed, ini.readBytes())
+            assertTrue(record(home).read().isNullOrEmpty())
+        } finally {
+            scope.cancelAndJoin()
+        }
+    }
 
     private suspend fun CoroutineScope.cancelAndJoin() {
         val job = coroutineContext[Job]!!

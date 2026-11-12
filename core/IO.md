@@ -131,9 +131,10 @@ Doorstop 4 reads `enabled` (default true) and `target_assembly` (default
 `Doorstop.dll`) from the first case-insensitive `[General]` section. Sectionless
 keys do not count. Headers with inner spaces or a trailing comment count; the
 section name ends at the last `]`. A line starting with `[` without a closing
-`]` is a key line, not a section boundary. Only spaces and tabs are trimmed.
+`]` is a key line, not a section boundary. Trimming follows Wine PROFILE_isspaceW:
+U+0009–U+000D, U+001A and space.
 A missing target DLL disables Doorstop itself. A present enabled value is on only
-when it equals `true` (case-insensitive, after trimming spaces/tabs and removing
+when it equals `true` (case-insensitive, after trimming that whitespace and removing
 matched quotes). Other present values, including empty and numeric values, are off;
 a missing key or a key without `=` defaults to true.
 These rules were checked read-only against UnityDoorstop v4.0.0/v4.3.0
@@ -148,10 +149,12 @@ message asks the player to restore a valid copy. Other files use ISO-8859-1 as a
 byte-preserving mapping, including UTF-8 and its optional BOM.
 
 Play without mods changes the first `[General]` and, if present, the first
-`[UnityDoorstop]` section to `enabled = false`. A missing key is added directly
-after its header. With neither section, `[General]` is inserted at the top after
-any BOM. Other sections and duplicate later sections stay unchanged. The original
-bytes are saved durably as base64 in `doorstop-restore.json` before mutation.
+`[UnityDoorstop]` section to `enabled = false`. The first matching key, including a
+bare key without `=`, is replaced. A missing key is added directly after its header.
+With neither section, `[General]` is inserted at the top after any BOM. Other sections
+and duplicate later sections stay unchanged. Decoding and construction of the
+disabled bytes finish before any restore record is written. The original bytes are saved durably as base64 in
+`doorstop-restore.json` before mutation.
 Restoration waits for observed exit; startup while the game runs defers it. Startup
 with the game closed, a failed edit, or a failed launch restores the exact bytes.
 Legacy records containing only `text` still restore using the previous byte mapping.
@@ -159,8 +162,13 @@ Restore failure never stops startup or leaves the launcher marked running after
 exit. The durable record stays pending; NNOMM retries every three seconds while
 the game is closed, at startup and before the next Play. Play refuses to continue
 if that retry fails. One notice per unresolved failure asks the player to close
-programs using the game folder. A deleted game folder is never recreated: its
-restore record is cleared. Restore writes never create parent directories.
+programs using the game folder. A missing game folder is never recreated: its
+restore record stays pending,
+without a write, until the folder returns. This also covers unmounted Steam
+libraries. A later Play without mods can replace that pending record. Restore
+writes never create parent directories. If the current INI already equals the
+saved bytes, the record is cleared without rewriting the INI. Thus a refused
+write that left the original intact does not block normal Play.
 An edit failure retains its original cause and attaches any failed rollback as a
 suppressed exception; Play uses loader access, lock or free-space guidance.
 
@@ -169,8 +177,10 @@ are refused. A config is healthy if its first `[General]` has a nonempty `target
 missing `enabled` is healthy and left alone. A present enabled value other than true in a healthy
 file is set true unless a without-mods restore is pending for this game folder.
 An unhealthy file is replaced with the shipped default, with the original kept
-in transaction recovery and a result notice explaining that. A currently unreadable
-or locked file fails before any replacement, with instructions to close programs
+in transaction recovery and a result notice explaining that. If this folder has
+a pending restore, its saved bytes are changed to the shipped repaired bytes
+in the same journal, before the INI replacement, so a retry cannot undo Repair.
+A currently unreadable or locked file fails before any replacement, with instructions to close programs
 using it. Adopted binaries and other unowned loader files remain unchanged.
 The pinned archive SHA-256 is
 `f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
