@@ -266,4 +266,28 @@ class LastFindingsTest {
             nnomm.core.io.real.DoorstopIni.setEnabled(both, false),
         )
     }
+
+    @Test
+    fun doorstopRestoreUsesTheSectionDoorstopReads() {
+        val ini = nnomm.core.io.real.DoorstopIni
+        // No loader section: Doorstop 4 reads [General].
+        assertEquals("[General]\nenabled = true\ntarget=x\n", ini.restoreEnabled("target=x\n"))
+        // A UTF-8 byte-order mark stays first, and the existing [General] header is found.
+        val bom = "\u00EF\u00BB\u00BF"
+        assertEquals(
+            bom + "[General]\r\nenabled = true\r\ntarget=x\r\n",
+            ini.restoreEnabled(bom + "[General]\r\ntarget=x\r\n"),
+        )
+        assertTrue(ini.hasEnabled(bom + "[General]\nenabled=true\n"))
+    }
+
+    @Test
+    fun onlyRealFullDiskMessagesSayFreeSpace() {
+        val path = AccessDeniedException("D:\\Games\\Aerospace\\BepInEx\\core\\BepInEx.dll")
+        assertFalse(loaderFailureHelp(path).contains("Free some space"))
+        assertTrue(
+            loaderFailureHelp(java.io.IOException("No space left on device"))
+                .contains("Free some space")
+        )
+    }
 }

@@ -6,7 +6,16 @@ package nnomm.core.io.real
  * so it never counts and is never changed.
  */
 internal object DoorstopIni {
-    private val header = Regex("(?im)^[ \t]*\\[(?:UnityDoorstop|General)\\][ \t]*(?=\\r?$)")
+    /**
+     * The file is read and written as ISO-8859-1, which keeps every byte as it is, whatever the
+     * file's real encoding. All keys and headers NNOMM looks for are ASCII.
+     */
+    val charset: java.nio.charset.Charset = Charsets.ISO_8859_1
+
+    // An optional UTF-8 byte-order mark, as ISO-8859-1 characters, may start the first line.
+    private val header =
+        Regex("(?im)^(?:\u00EF\u00BB\u00BF)?[ \t]*\\[(?:UnityDoorstop|General)\\][ \t]*(?=\\r?$)")
+    private val bom = "\u00EF\u00BB\u00BF"
     private val nextSection = Regex("(?m)^[ \t]*\\[")
     private val key = Regex("(?im)^(\\s*enabled\\s*=)[^\\r\\n]*")
 
@@ -34,5 +43,25 @@ internal object DoorstopIni {
         return text.substring(0, range.first) +
             key.replace(part) { it.groupValues[1] + " " + value } +
             text.substring(range.last + 1)
+    }
+
+    /**
+     * Puts `enabled = true` into the loader section. Without a loader section it adds Doorstop 4's
+     * `[General]` section at the top (after a byte-order mark), the section Doorstop 4 reads.
+     */
+    fun restoreEnabled(text: String): String {
+        val newline = if (text.contains("\r\n")) "\r\n" else "\n"
+        val found = header.find(text)
+        if (found != null) {
+            val at = found.range.last + 1
+            return text.substring(0, at) + newline + "enabled = true" + text.substring(at)
+        }
+        val start = if (text.startsWith(bom)) bom.length else 0
+        return text.substring(0, start) +
+            "[General]" +
+            newline +
+            "enabled = true" +
+            newline +
+            text.substring(start)
     }
 }

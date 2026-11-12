@@ -1302,30 +1302,23 @@ class RealGameFolder(
                     if (repair && doorstop.exists()) {
                         val old =
                             try {
-                                Files.readString(doorstop)
+                                String(Files.readAllBytes(doorstop), DoorstopIni.charset)
                             } catch (_: java.io.IOException) {
                                 null
                             }
                         if (old == null || !DoorstopIni.hasEnabled(old)) {
                             val restored = staging.resolve("restored-doorstop.ini")
-                            restored.writeText(
-                                if (old == null) staging.resolve("doorstop_config.ini").readText()
-                                else {
-                                    val newline = if (old.contains("\r\n")) "\r\n" else "\n"
-                                    val section =
-                                        Regex(
-                                                "(?im)^[ \t]*\\[(?:UnityDoorstop|General)\\][ \t]*(?=\\r?$)"
-                                            )
-                                            .find(old)
-                                    if (section == null)
-                                        "[UnityDoorstop]${newline}enabled = true$newline$old"
-                                    else
-                                        old.substring(0, section.range.last + 1) +
-                                            newline +
-                                            "enabled = true" +
-                                            old.substring(section.range.last + 1)
-                                }
-                            )
+                            if (old == null)
+                                Files.copy(
+                                    staging.resolve("doorstop_config.ini"),
+                                    restored,
+                                    StandardCopyOption.REPLACE_EXISTING,
+                                )
+                            else
+                                Files.write(
+                                    restored,
+                                    DoorstopIni.restoreEnabled(old).toByteArray(DoorstopIni.charset),
+                                )
                             replacements += doorstop to restored
                         }
                     }

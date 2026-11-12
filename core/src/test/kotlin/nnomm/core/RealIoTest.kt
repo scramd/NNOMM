@@ -487,10 +487,12 @@ class RealIoTest {
             game.resolve("BepInEx/core/player.txt").writeText("player file")
             val beforeDll = game.resolve("BepInEx/core/BepInEx.dll").readBytes()
             folder.repairLoader(game.toString())
-            assertEquals(
-                if (unreadable) "[UnityDoorstop]\nenabled=true\n"
-                else old.replace("[UnityDoorstop]", "[UnityDoorstop]\nenabled = true"),
-                game.resolve("doorstop_config.ini").readText(),
+            // A file in another encoding keeps every byte; only the missing key is added.
+            assertContentEquals(
+                if (unreadable) "[General]\nenabled = true\n".toByteArray() + oldBytes
+                else
+                    old.replace("[UnityDoorstop]", "[UnityDoorstop]\nenabled = true").toByteArray(),
+                game.resolve("doorstop_config.ini").readBytes(),
             )
             assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())
             assertContentEquals(beforeDll, game.resolve("BepInEx/core/BepInEx.dll").readBytes())

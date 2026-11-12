@@ -73,13 +73,17 @@ internal fun component(name: String): String {
     return name
 }
 
-internal fun atomic(path: Path, text: String) {
+internal fun atomic(
+    path: Path,
+    text: String,
+    charset: java.nio.charset.Charset = StandardCharsets.UTF_8,
+) {
     safe(path.parent, path.fileName.toString())
     Files.createDirectories(path.parent)
     val tmp = Files.createTempFile(path.parent, ".nnomm-", ".tmp")
     try {
         FileChannel.open(tmp, StandardOpenOption.WRITE).use { ch ->
-            val buffer = StandardCharsets.UTF_8.encode(text)
+            val buffer = charset.encode(text)
             while (buffer.hasRemaining()) ch.write(buffer)
             ch.force(true)
         }

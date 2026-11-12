@@ -106,7 +106,7 @@ class RealGameLauncher(
         val restore = saved.read() ?: return
         if (restore.isEmpty()) return
         val path = Path.of(restore.getValue("path"))
-        atomic(path, restore.getValue("text"))
+        atomic(path, restore.getValue("text"), DoorstopIni.charset)
         saved.write(emptyMap())
     }
 
@@ -131,14 +131,14 @@ class RealGameLauncher(
                 if (withoutMods && ini.exists()) {
                     val text =
                         try {
-                            ini.readText()
+                            String(Files.readAllBytes(ini), DoorstopIni.charset)
                         } catch (e: java.io.IOException) {
                             throw DoorstopSettingsFailure(e)
                         }
                     if (!DoorstopIni.hasEnabled(text)) throw DoorstopSettingsFailure()
                     JsonFile(restoreFile, MapSerializer(String.serializer(), String.serializer()))
                         .write(mapOf("path" to ini.toString(), "text" to text))
-                    atomic(ini, DoorstopIni.setEnabled(text, false))
+                    atomic(ini, DoorstopIni.setEnabled(text, false), DoorstopIni.charset)
                 }
                 try {
                     val args =
