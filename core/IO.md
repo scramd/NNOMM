@@ -65,10 +65,10 @@ A crash can leave vanilla mode active until the next NNOMM launch attempt.
 
 Run `NNOMM_HOME=$HOME/nnomm-sandbox/home tools/gradlew-locked :core:realRegistryCheck`.
 Add `-Ptakeover` only on a fresh sandbox to check import. This task GETs the real
-registry, writes a sandbox cache and prints counts. Unit tests use loopback only.
+registry, writes a sandbox cache and prints counts. HTTP unit tests use loopback only; no external network is used.
 `AppStore.loadMetadata()` fills metadata progressively with three worker slots;
-registry refresh requests it for the newest release of each mod. Historical
-metadata can be requested through `io.meta`. Notes load only through `io.releaseNotes`.
+pass visible ids to request metadata lazily. Historical versions are included.
+Notes load through `store.loadReleaseNotes(id)` and are exposed in state.
 
 Decisions: loader toast is “Installed the mod loader BepInEx 5.4.23.4. Mods need
 it to run.” An unknown game version compares Made for with the newest registry

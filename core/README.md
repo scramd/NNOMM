@@ -1,135 +1,151 @@
 # Core integration
 
-This Kotlin/JVM module has no Compose dependency. JetBrains JDK 25 compiles it.
-Run checks from the repository root with tools/gradlew-locked :core:test.
+Kotlin/JVM domain and IO module with no Compose dependency. Use JetBrains JDK 25.
+Build and test only through `tools/gradlew-locked :core:test`.
+`tools/gradlew-locked :core:spotlessApply :core:spotlessCheck` formats/checks core Kotlin.
+The formatter does not target `composeApp/`.
 
-## UI entry point
+## Runtime and UI integration
 
-Use nnomm.core.demo.demoStore() for the demo or AppStore(initialState, AppIo(...))
-for custom IO. For production real mode use `RealRuntime.open()` in
-`nnomm.core.io.real`, then collect `runtime.store.state` and call its suspending
-`shutdown()` to flush before exit. See IO.md for paths, safety rules and boundaries.
-Collect store.state: StateFlow<AppState>. Close the store when the
-app exits. An optional coroutine scope supports virtual-time tests; production
-defaults to a SupervisorJob on Dispatchers.IO.
+Use `demoStore()` for invented data and fake IO. For real IO use
+`RealRuntime.open()`, then await `runtime.shutdown()` before exiting. `AppStore`
+owns a child coroutine job even with an injected scope. `close()` starts a bounded
+queue drain; suspending `shutdown()` waits for it and reports flush failures.
 
-The store exposes:
+Collect `store.state` for transient state and player actions. Prefer these stable
+observable views for lists: `libraryRows` (complete `LibraryRow` values),
+`libraryCounts`, `browseRows` (including each row's action), `browseTagCounts`, and
+`sidebarNumbers` (on count, update count). Toasts, download progress and note-load
+status do not invalidate their inputs. Filtered views use the pure `libraryView`,
+`libList`, `libCounts`, `browseList`, `tagCounts` and `browseSections` functions;
+recompute these when the query/filter or domain inputs change.
 
-- Mods: install, update, updateAll, setOn, toggle, uninstall, changeVersion,
-  repair, addLocal, paletteToggle, lookForUpdates.
-- Profiles: useProfile, newProfile, copyProfile, renameProfile, deleteProfile,
-  shareProfile.
-- Packs: importPack, updatePack, checkPackUpdates, addPreparedLocalMods.
-  Pass selected pack data explicitly; prepared local records stay off.
-- Settings: setSetting, ovset, ovreset, ovclear. Pass an optional profile ID to
-  setSetting; an inherited setting is locked until ovset.
-- Downloads: cancelDownload, clearFinished.
-- Game: play(withoutMods), gameClosed, repairLoader, takeOverExistingMods,
-  completeFirstStart.
-- Guided test: startBrokenModTest, answerBrokenModTest(stillThere),
-  stopBrokenModTest, endBrokenModTest("keep" | "off" | "remove"),
-  closeBrokenModTest.
-- Registry: refreshRegistry.
-- Toasts: dismissToast, runToast, undo.
+Actions return at once. Disk mutations are serialized; pending applies use the
+latest state. Shared transfers are keyed by mod/version; each requesting profile
+has its own completion. Progress changes at most ten times per second. Failed
+rows expose `DownloadStatus.FAILED`, `retryDownload(id)` and `cancelDownload(id)`;
+`clearFinished()` clears both failed and completed rows.
 
-runToast executes its optional callback, removes the toast, and returns an optional
-UiAction. For example, UiAction("openMod", id, "new") opens What's new.
-The UI owns navigation, panels, view filters, selection, dialogs, file writing,
-opening folders or links, and keyboard wiring. No Compose function is stored in
-the domain model. Undo callbacks retain the profile and affected records.
+Only the launcher supplies `gameRunning`. `gameStarting` covers the launch request
+and expires after 30 seconds if no process is observed. Deferred changes apply on
+observed game exit and before launch. Loader preparation uses the same disk queue.
+Preference changes save settings without applying game files.
 
-shareProfile returns pack data; the UI/platform layer chooses a file and writes
-it. It includes local files only when requested. includeSettings marks the pack;
-`RealPacks` writes the selected payload and optional config snapshot. The UI
-chooses the file and connects the preview and explicit local selections.
+## Catalog, packs and diagnostics
 
-## Pure functions
+Catalog lookups and newest artifacts are indexed/precomputed. Installed records
+survive registry removal and restart. Unknown ids have a safe “Not in the
+registry” record. A prerelease-only mod has an installable artifact. Updates use
+ordered versions and the profile's prerelease preference; a newer installed
+version is never offered a downgrade as an Update.
 
-Browse: browseList(state, BrowseFilter, skip), tagCounts, browseFiltered,
-browseSections. Filter skip names are have, type, tags. The three top sections
-appear only for the default sort without filters.
+An exact requested artifact or known installed copy must exist. No version is
+fabricated from another download URL. `dependencyClosure` includes dependencies
+and add-on parents, follows the selected artifact and stops cycles. Problems use
+the installed profile version, including reverse incompatibilities.
 
-Search: fuzzy, matchMod, palItems. Reasons contain name indices, plain tag or author
-text, or a description snippet and inclusive highlight range. Palette items
-contain grouped ranks, hints, primary UiAction, and optional Ctrl Enter alternative.
-The UI dispatches action data to the matching store method or opens a page/dialog.
-Servers are excluded from command search.
+Pack previews classify id/version pairs against current installed state, rather
+than trusting a fixture's kind. Local payloads remain off and require explicit
+selection through real pack IO and `addPreparedLocalMods`. A new profile uses the
+pack's exact versions. Existing profiles keep equal versions and preserve newer
+versions unless the player explicitly selects the pack version. Full pack updates
+compare against `PackInfo.memberVersions`; legacy delta items remain readable.
+Unrelated Undo toasts survive both import and update.
 
-Library: libList(state, LibraryFilter), libCounts, sourceOf, problems, problemFixes,
-hasUpdate, updates, verOf, onCount, usedIn, modAction. Problem badges with an empty
-kind (old game version) do not count as Problems.
+The broken-mod test uses dependency-closed subsets and strictly reduces suspects.
+It never guesses a culprit. An inseparable group reports an inconclusive result
+and restores the saved switches. The single-cause assumption remains: interacting
+mods can produce an inconclusive result. No production culprit is predefined.
 
-Packs/test: importRows, packUpdateRows, startTrouble, troubleRound, troubleAnswer,
-restoreTrouble.
+Unknown dates format as a dash (`ago(Int.MAX_VALUE)`); unknown sizes remain null.
+`updOf` uses the installed artifact's actual date. `effectiveGameVersion` falls back
+to the highest registry game version. Versions without a game version get no
+“Made for null” warning. Tags merge case and known variants, retain the most
+frequent spelling, and hide only each mod's own authors/owner and “mod”.
 
-Formatting/data: ago, size (KB input), num, plural, compareVersions, cleanTags, cleanCatalogTags, hash,
-daysAgo. Pack comparisons use the mock's numeric component comparison: suffixes do
-not affect equality. Versions are strings so registry pre-release labels remain
-intact. Release category is separate.
+## IO and settings
 
-## IO contracts
+See [IO.md](IO.md) for ownership and recovery rules. Game placement receives a
+resolved `GamePlan`; it contains only folder, profile, active id/version pairs and
+config ownership. First takeover copies files into the store and leaves the game
+unchanged. Uninstall remains reversible. Expired Undo protection makes unused
+versions eligible for explicit Clear; it does not automatically delete them.
 
-All IO methods suspend, except the injected Clock and observable running state.
+`loadMetadata(ids)` lazily requests version metadata with bounded concurrency and
+caches successful requests. `loadReleaseNotes(id)` exposes notes in state. Both
+have independent `LoadStatus` maps; failure does not mark the registry offline.
+The injected `Logger` records technical errors; player text does not expose them.
 
-| Interface | Responsibility |
+`findGameFolder` discovers through the real Steam-folder finder and selects only a
+validated folder. Choosing `gamePath` validates before changing either settings
+or `GameInfo`. `refreshStoreUsage`, `clearUnusedFiles`, and `moveStore` use the
+store port. Moving copies to the chosen empty destination and keeps the original
+recoverable. Reset preserves the selected game/store paths. `removeEverything`
+is a danger-zone action: the UI must obtain confirmation before calling it. It
+uninstalls managed mods and removes only loader files recorded as created by this
+manager, keeping recovery copies. Existing unowned loader files are preserved.
+
+The real runtime starts `startRegistrySchedule()`. “Only when I ask” disables
+scheduled reads; “When NNOMM starts” reads once; the hourly option reads while
+NNOMM is open. A successful refresh obeys the active profile's “Update by itself”
+choice. `lookForUpdates()` reads the registry first. Pack reading/writing and
+follow-address fetching remain in `RealRuntime.packs`/`PackSource`; file choosers
+and preview confirmation belong in the UI. Per-profile BepInEx config snapshots
+remain in the real game-folder implementation.
+
+Settings definitions live in `settings.json`, independently from invented mod
+records. `core/tools/regenerate-demo.cjs` regenerates both resources from the mock.
+Use `settingHelp(definition, state)` for live loader, storage and version wording,
+not the definition's mock help text. `AppState.setting(key)` reads the profile in
+use; `SettingsValues.value(key, profile)` supports another profile explicitly.
+
+The real-manifest fixture is a trimmed copy of the reviewer's captured registry.
+Tests are offline except the existing loopback HTTP fixtures. No real game folder
+is used. The 300-mod benchmark includes counts, sorted rows and row problems,
+after warm-up, with a 5 ms median budget. See [REVIEW-FIXES.md](REVIEW-FIXES.md)
+for the per-finding disposition, validation and remaining platform checks.
+
+## API changes
+
+Names remain stable except for the typed arguments/properties below. Use named
+arguments when constructing models: optional state fields have been added.
+
+| Old | New |
 | --- | --- |
-| Registry | Fetch list, read saved offline list and timestamp, save list |
-| MetaSource | Cached HEAD-derived size/date for one version |
-| ReleaseNotesSource | Cached newest release notes from Atom |
-| Downloader | Transfer with progress; coroutine cancellation aborts it |
-| ModStore | Put versions, reversible remove/restore, inspect local input |
-| GameFolder | Inspect, apply managed profile, take over files, install/repair loader |
-| GameLauncher | Launch with/without mods, expose running StateFlow |
-| SettingsFile | Read/write general and per-profile manager settings |
-| Clock | Milliseconds since epoch |
+| `Download.kind: String` | `DownloadKind` (`INSTALL`, `UPDATE`, `REPAIR`, `REPAIRPROBLEM`) |
+| Download completion inferred from percent alone | `Download.status: DownloadStatus`; `error` and `percent` remain available |
+| `UiAction.kind: String` | `ActionKind`; e.g. `"openMod"` → `ActionKind.OPENMOD`. The String constructor remains as a validating adapter. |
+| `TroubleSession.phase: String` | `TroublePhase` (`BASE`, `TEST`, `NOMOD`, `FOUND`, `INCONCLUSIVE`) |
+| `importPack(pack, mode: String, keep)` and `importRows(..., mode: String)` | `mode: ImportMode = ImportMode.NEW`; `"add"` → `ImportMode.ADD` |
+| `endBrokenModTest(choice: String)` | `TroubleChoice = TroubleChoice.OFF`; `KEEP` / `REMOVE` |
+| `BrowseFilter.sort: String` | `BrowseSort` (`DOWNLOADS`, `UPDATED`, `NEWEST`, `NAME`) |
+| `LibraryFilter.sort: String` | `LibrarySort` (`NAME`, `SIZE`, `UPD`, `SOURCE`, `ON`, `VER`) |
+| `PackItem.kind`, `ImportRow.kind`, `PackUpdateRow.kind`: String | `PackKind` (`VER`, `LOCAL`, `ADD`, `SAME`, `UP`, `CONFLICT`, `OTHER`, `REM`, `CHG`, `NEWER`, `UNAVAILABLE`) |
+| `GameFolder.apply(AppState, profileId)` only | Added `apply(GamePlan)`; the store uses it. The old overload remains as a compatibility adapter. Delegating fake implementations must override the new overload to intercept store applies. |
+| `ModStore` original four methods | Added default `clearUnused`, `unusedBytes`, `usedBytes`, `moveTo` ports; real implementation supports them |
+| `GameFolder` original methods | Added default `find(settings)` and `removeLoader(folder)` ports |
+| `AppIo(...)` | Added optional `logger: Logger` at the end |
+| `CatalogMod` metadata | Added `urls`, `imageHash`, `installable`; newest artifacts precomputed |
+| `ModVersion` metadata | Added `fileName`, `releaseTagPrefix`, `releaseAssetName` |
+| `RegistryEntry` mapping | Explicit GitHub owner/repository and release fields retained; string/boolean AI flag accepted as `JsonPrimitive?` |
+| `PackInfo` membership ids only | Added `memberVersions: Map<String,String>`; `mods` retained |
+| `BrowseRow(mod, match)` | Added optional `action: ModAction?` |
+| `AppState` | Added `setting(key)`, artifact/index helpers, `gameStarting`, `releaseNotes`, `notesStatus`, `metadataStatus`, `storeUnusedMb` |
+| `AppStore` | Added stable list/count flows, `shutdown`, `loadReleaseNotes`, `retryDownload`, `findGameFolder`, `resetSettings`, `removeEverything`, `clearUnusedFiles`, `refreshStoreUsage`, `moveStore`, `startRegistrySchedule`; `loadMetadata` accepts optional visible ids |
+| `RealModStore(home, catalog)` | Store-path option added before the trailing catalog lambda; trailing-lambda and named catalog calls remain valid. Positional second-argument lambdas must use `catalog = ...`. |
 
-RegistryEntry and RegistryArtifact preserve the upstream NOMNOM wire fields,
-including both download URL spellings, references, hashes, category and side.
-Convert entries with toCatalogMod(). Configure the real decoder to ignore unknown
-fields. Tags are cleaned during conversion; refreshRegistry also merges tag spelling and hides author tags across the entire list.
+JSON enum names preserve the previous lower/camel-case wire values. A concrete UI
+compile adaptation is `composeApp/src/jvmMain/kotlin/nnomm/ui/AppModel.kt`,
+`perform`: replace the `"openMod"` when branch with `ActionKind.OPENMOD` and import
+`ActionKind`. No `composeApp` files were edited or built in this task.
 
-Disk mutations are processed in order, so an immediate Undo cannot race the
-removal. Download transfers run concurrently with at most three slots. Actions
-retain the profile they started in. Transfers fail independently. A running game
-defers profile application until launch. The launcher observes real game exit;
-gameClosed() is also available to the demo harness.
+`gameClosed()` remains callable but now reads the launcher's observed state; it
+cannot force a running game to appear closed. Demo callers stop `DemoLauncher`
+through its existing `stop()` method. `ModStore.hasVersion(id, version)` is an
+additional suspending default port; the real store verifies a stored folder before
+selecting a previously downloaded version.
 
-## Demo and mock decisions
-
-- Demo.state(), Demo.io(), Demo.PACK_IMPORT, Demo.PACK_UPDATE, Demo.notes(id)
-  provide fixed data, no network and no game/disk writes. The clock is fixed at
-  2026-06-01 12:00 UTC. All relative ages match the mock.
-- The bundled JSON is an exact extraction of data.js except the seven excluded
-  server settings. Regenerate with node core/tools/regenerate-demo.cjs.
-- Demo historical artifacts are invented, as are the mock's release histories.
-  A previous version carries the first-release date so added/updated remain
-  derived from version dates. Real registry metadata remains nullable.
-- The mock's pack-import local-file checkbox has no effect: doimport filters
-  out local entries unconditionally. This port exposes a local warning row,
-  off by default, and preserves that omission during import. Local files can
-  still be added through addLocal.
-- The mock's Repair only clears the missing-file flag. The store downloads
-  through the injected IO first, retaining the mock's success toast. On failure
-  the file stays marked missing.
-- The mock's version comparison ignores pre-release suffixes, and its update
-  rule means “different from the newest release”, including a newer installed
-  version. Both behaviours are preserved.
-- The mock can label an imported version equal to the installed version as a
-  conflict. importRows preserves this comparison.
-- The broken-mod test has the mock's single-cause limitation. It cannot find a
-  failure that requires two mods together. The mock fallback culprit is retained for its demo answer path. With an empty
-  initial profile, found can be null.
-- The mock's UI-only no-ops (copying, file save, danger actions and window/page
-  rendering) have no fabricated effects in the store. Real archive/config export
-  is provided by `nnomm.core.io.real`; durable installed/profile persistence uses
-the optional `AppIo.persistence` port.
-- Mod-loader installation is called before applying a profile if needed.
-  Real and demo store calls now show the required loader-install notice:
-  “Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.”
-- No Opus/Sol review was run: this implementation task explicitly says to work
-  alone. The parent must arrange the project-required independent reviews.
-
-Tests port the domain steps of selftest.js; page/panel/dialog rendering, selection,
-keyboard and theme painting are UI responsibilities. Server and join steps are
-excluded. Additional tests cover screenshot counts, search reasons, queue
-concurrency/cancellation, toast expiry, registry mapping, tags and versions.
+`Problem.kind: String` → `ProblemKind` (`INFO`, `WARNING`, `DANGER`), and
+`MatchReason.kind: String` → `MatchKind` (`NAME`, `TAG`, `AUTHOR`, `DESCRIPTION`).
+`refreshRegistry()` now accepts optional `announce = false`; the explicit
+`lookForUpdates()` action requests the count toast without a Show button.
