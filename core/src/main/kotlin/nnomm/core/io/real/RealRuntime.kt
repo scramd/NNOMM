@@ -143,8 +143,7 @@ private constructor(
                             "Close Nuclear Option to recover pending changes and take over existing mods."
                         )
                     else {
-                        recoverTransactions(home.resolve("transactions"), notice = notice)
-                        recoverTransactions(home.resolve("game-transactions"), notice = notice)
+                        game.recoverPending()
                     }
                     val adopted =
                         if (
@@ -178,10 +177,7 @@ private constructor(
                             appVersion = version,
                             nowMillis = System.currentTimeMillis(),
                             gameRunning = launcher.running.value,
-                            gameIoPending =
-                                launcher.running.value ||
-                                    pendingTransactions(home.resolve("transactions")) ||
-                                    pendingTransactions(home.resolve("game-transactions")),
+                            gameIoPending = launcher.running.value || game.recoveryPending,
                         )
                     if (
                         System.getProperty("os.name").startsWith("Linux") &&

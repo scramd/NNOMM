@@ -27,6 +27,9 @@ internal data class Placement(
     val epoch: String? = null,
 )
 
+@Serializable
+internal data class PendingLoaderOwnership(val gameRoot: String, val hashes: Map<String, String>)
+
 class RealGameFolder(
     private val home: Path,
     private val store: RealModStore,
@@ -92,7 +95,8 @@ class RealGameFolder(
     override val recoveryPending: Boolean
         get() =
             pendingTransactions(home.resolve("transactions")) ||
-                pendingTransactions(home.resolve("game-transactions"))
+                pendingTransactions(home.resolve("game-transactions")) ||
+                pendingLoaderRecords().isNotEmpty()
 
     override suspend fun recoverPending() =
         withContext(Dispatchers.IO) {
@@ -100,6 +104,21 @@ class RealGameFolder(
                 if (!running()) {
                     recoverTransactions(home.resolve("transactions"), notice = notice)
                     recoverTransactions(home.resolve("game-transactions"), notice = notice)
+                    pendingLoaderRecords().forEach { path ->
+                        try {
+                            val pending =
+                                json.decodeFromString<PendingLoaderOwnership>(path.readText())
+                            val game = root(pending.gameRoot)
+                            check(pendingLoaderRecord(game) == path) {
+                                "Loader recovery folder mismatch"
+                            }
+                            finishLoaderOwnership(game)
+                        } catch (e: Exception) {
+                            notice(
+                                "Could not recover mod loader ownership. The pending record is kept: ${e.message}"
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1200,11 +1219,70 @@ class RealGameFolder(
             notice,
         )
 
+    private fun pendingLoaderRecord(game: Path): Path {
+        val key =
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(game.toString().toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        return home.resolve("loader-pending/$key.json")
+    }
+
+    private fun pendingLoaderRecords(): List<Path> {
+        val directory = home.resolve("loader-pending")
+        return if (directory.isDirectory()) directory.listDirectoryEntries("*.json")
+        else emptyList()
+    }
+
+    // Transactions must settle before matching bytes: recovery can still promote a target.
+    private fun recoverLoaderOwnership(game: Path) {
+        recoverTransactions(home.resolve("transactions"), notice = notice)
+        check(!pendingTransactions(home.resolve("transactions"))) {
+            "Game files still need recovery. Their journals and files have been kept."
+        }
+        finishLoaderOwnership(game)
+    }
+
+    private fun finishLoaderOwnership(game: Path): java.io.IOException? {
+        val path = pendingLoaderRecord(game)
+        if (!path.exists()) return null
+        check(!pendingTransactions(home.resolve("transactions"))) {
+            "Game files still need recovery. Their journals and files have been kept."
+        }
+        val pending = json.decodeFromString<PendingLoaderOwnership>(path.readText())
+        check(pending.gameRoot == game.toString()) { "Loader recovery folder mismatch" }
+        val owned = loaderRecord(game)
+        val names = owned.read().orEmpty().toMutableSet()
+        var failure: java.io.IOException? = null
+        pending.hashes.forEach { (relative, hash) ->
+            val target = safe(game, relative)
+            try {
+                val actual =
+                    if (relative == "doorstop_config.ini") {
+                        java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(readDoorstop(target))
+                            .joinToString("") { "%02x".format(it) }
+                    } else digest(target)
+                if (actual != hash) throw AccessDeniedException(target.toString())
+                names += relative
+            } catch (e: java.io.IOException) {
+                val problem =
+                    if (relative == "doorstop_config.ini") DoorstopSettingsFailure(e)
+                    else AccessDeniedException(target.toString()).apply { initCause(e) }
+                if (failure == null) failure = problem else failure.addSuppressed(problem)
+            }
+        }
+        owned.write(names.toList())
+        Files.delete(path)
+        forceDirectory(path.parent)
+        return failure
+    }
+
     override suspend fun removeLoader(folder: String) =
         withContext(Dispatchers.IO) {
             guarded {
                 require(!running()) { "Close Nuclear Option before removing the mod loader." }
                 val game = root(folder)
+                recoverLoaderOwnership(game)
                 val record = loaderRecord(game)
                 val removals =
                     record
@@ -1236,9 +1314,7 @@ class RealGameFolder(
             }
         }
 
-    override suspend fun installLoader(folder: String) {
-        if (!inspect(folder).loaderPresent) loader(folder, false)
-    }
+    override suspend fun installLoader(folder: String) = loader(folder, false)
 
     override suspend fun repairLoader(folder: String) = loader(folder, true)
 
@@ -1247,6 +1323,8 @@ class RealGameFolder(
             guarded {
                 require(!running()) { "Close Nuclear Option before changing the mod loader." }
                 val game = root(folder)
+                recoverLoaderOwnership(game)
+                if (!repair && inspect(folder).loaderPresent) return@guarded
                 val existingVersion = inspect(folder).loaderVersion
                 if (repair && existingVersion != "5.4.23.4") {
                     val message =
@@ -1333,6 +1411,15 @@ class RealGameFolder(
                         val doorstopIndex = replacements.indexOfFirst { it.first == doorstop }
                         if (doorstopIndex > 0)
                             replacements.add(0, replacements.removeAt(doorstopIndex))
+                        val hashes =
+                            replacements.associate { (target, source) ->
+                                game.relativize(target).toString().replace('\\', '/') to
+                                    digest(source)
+                            }
+                        atomic(
+                            pendingLoaderRecord(game),
+                            json.encodeToString(PendingLoaderOwnership(game.toString(), hashes)),
+                        )
                         replaceTrees(
                             replacements,
                             home.resolve("transactions"),
@@ -1340,32 +1427,8 @@ class RealGameFolder(
                                 check(!running()) { "Game started; loader changes are pending" }
                             },
                         )
-                        // A recovered batch can contain both promoted and rolled-back files.
-                        // Publish only verified placements, even when a later file failed.
-                        var placementFailure: java.io.IOException? = null
-                        replacements.forEach { (target, source) ->
-                            try {
-                                val matches =
-                                    if (target == doorstop)
-                                        readDoorstop(target)
-                                            .contentEquals(Files.readAllBytes(source))
-                                    else Files.mismatch(target, source) == -1L
-                                if (!matches)
-                                    throw java.nio.file.AccessDeniedException(target.toString())
-                                ownedNames += game.relativize(target).toString().replace('\\', '/')
-                            } catch (e: java.io.IOException) {
-                                val failure =
-                                    if (target == doorstop) DoorstopSettingsFailure(e)
-                                    else
-                                        java.nio.file
-                                            .AccessDeniedException(target.toString())
-                                            .apply { initCause(e) }
-                                if (placementFailure == null) placementFailure = failure
-                                else placementFailure.addSuppressed(failure)
-                            }
-                        }
-                        owned.write(ownedNames.distinct())
-                        placementFailure?.let { throw it }
+                        // A recovered batch may contain promoted and rolled-back files.
+                        finishLoaderOwnership(game)?.let { throw it }
                         if (replacedDoorstop)
                             notice(
                                 "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
