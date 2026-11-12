@@ -353,67 +353,81 @@ class RealDownloader(private val client: HttpClient, private val home: Path) : D
         mod: CatalogMod,
         version: ModVersion,
         progress: (Int) -> Unit,
-    ): DownloadedFile =
-        withContext(Dispatchers.IO) {
-            val staging = home.resolve("staging")
-            Files.createDirectories(staging)
-            val dir = Files.createTempDirectory(staging, "download-")
-            val url = requireNotNull(version.downloadUrl)
-            val name =
-                version.fileName?.trim()
-                    ?: java.net.URI(url).path.substringAfterLast('/').trim().ifEmpty { "download" }
-            try {
-                val path = safe(dir, name)
-                var lastPercent = -1
-                retryTransfer {
-                    client
-                        .prepareGet(checkedUrl(url)) {
-                            timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
-                        }
-                        .execute { response ->
-                            val channel = response.bodyAsChannel()
-                            val total = response.headers["Content-Length"]?.toLongOrNull()
-                            var received = 0L
-                            Files.newOutputStream(path).use { out ->
-                                val buffer = ByteArray(65536)
-                                while (true) {
-                                    ensureActive()
-                                    val n = channel.readAvailable(buffer)
-                                    if (n < 0) break
-                                    out.write(buffer, 0, n)
-                                    received += n
-                                    val percent =
-                                        if (total != null && total > 0)
-                                            (received * 100 / total).toInt().coerceIn(0, 99)
-                                        else 0
-                                    if (percent != lastPercent) {
-                                        lastPercent = percent
-                                        progress(percent)
+    ): DownloadedFile {
+        var ownedDirectory: Path? = null
+        var handedOver = false
+        try {
+            return withContext(Dispatchers.IO) {
+                    val staging = home.resolve("staging")
+                    Files.createDirectories(staging)
+                    val dir = Files.createTempDirectory(staging, "download-")
+                    ownedDirectory = dir
+                    val url = requireNotNull(version.downloadUrl)
+                    val name =
+                        version.fileName?.trim()
+                            ?: java.net.URI(url).path.substringAfterLast('/').trim().ifEmpty {
+                                "download"
+                            }
+                    val path = safe(dir, name)
+                    var lastPercent = -2
+                    retryTransfer {
+                        client
+                            .prepareGet(checkedUrl(url)) {
+                                timeout {
+                                    requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                                }
+                            }
+                            .execute { response ->
+                                val channel = response.bodyAsChannel()
+                                val total = response.headers["Content-Length"]?.toLongOrNull()
+                                var received = 0L
+                                Files.newOutputStream(path).use { out ->
+                                    val buffer = ByteArray(65536)
+                                    while (true) {
+                                        ensureActive()
+                                        val n = channel.readAvailable(buffer)
+                                        if (n < 0) break
+                                        out.write(buffer, 0, n)
+                                        received += n
+                                        val percent =
+                                            if (total != null && total > 0)
+                                                (received * 100 / total).toInt().coerceIn(0, 99)
+                                            else -1
+                                        if (percent != lastPercent) {
+                                            lastPercent = percent
+                                            progress(percent)
+                                        }
                                     }
                                 }
                             }
-                        }
-                }
-                normalizedHash(version.hash)?.let { expected ->
-                    require(expected.matches(Regex("[0-9a-f]{64}"))) {
-                        "Invalid SHA-256 for ${mod.name}"
                     }
-                    require(digest(path) == expected) { "SHA-256 mismatch for ${mod.name}" }
+                    normalizedHash(version.hash)?.let { expected ->
+                        require(expected.matches(Regex("[0-9a-f]{64}"))) {
+                            "Invalid SHA-256 for ${mod.name}"
+                        }
+                        require(digest(path) == expected) { "SHA-256 mismatch for ${mod.name}" }
+                    }
+                    ensureActive()
+                    progress(100)
+                    DownloadedFile(
+                        path.toString(),
+                        PayloadOrigin.REGISTRY_DOWNLOAD,
+                        normalizedHash(version.hash),
+                    ) {
+                        deleteTree(dir)
+                    }
                 }
-                ensureActive()
-                progress(100)
-                DownloadedFile(
-                    path.toString(),
-                    PayloadOrigin.REGISTRY_DOWNLOAD,
-                    normalizedHash(version.hash),
-                ) {
-                    deleteTree(dir)
+                .also { handedOver = true }
+        } finally {
+            // withContext can discard its result when the caller is cancelled at return.
+            if (!handedOver)
+                ownedDirectory?.let { dir ->
+                    withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                        deleteTree(dir)
+                    }
                 }
-            } catch (e: Exception) {
-                deleteTree(dir)
-                throw e
-            }
         }
+    }
 }
 
 internal fun checkedUrl(url: String): String {

@@ -28,7 +28,10 @@ interface ReleaseNotesSource {
     suspend fun releases(mod: CatalogMod): List<ReleaseNote>
 }
 
-/** Progress is 0..100; coroutine cancellation must abort transfer and discard partial data. */
+/**
+ * Progress is 0..100, or -1 while the total is unknown; coroutine cancellation must abort transfer
+ * and discard partial data.
+ */
 interface Downloader {
     suspend fun download(
         mod: CatalogMod,

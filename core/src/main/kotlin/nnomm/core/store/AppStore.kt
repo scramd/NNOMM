@@ -437,17 +437,19 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         val transferKey = "$id/$v"
                         val transfer =
                             synchronized(lock) {
+                                if (transfers[transferKey]?.isCancelled == true)
+                                    transfers.remove(transferKey)
                                 transfers.getOrPut(transferKey) {
                                     worker
                                         .async(start = CoroutineStart.LAZY) {
                                             slots.withPermit {
                                                 val artifact = x.versions.first { it.version == v }
                                                 var lastProgress = Long.MIN_VALUE
-                                                var lastPercent = -1
+                                                var lastPercent = -2
                                                 val file =
                                                     io.downloader.download(x, artifact) { pct ->
                                                         val now = System.nanoTime()
-                                                        val percent = pct.coerceIn(0, 99)
+                                                        val percent = pct.coerceIn(-1, 99)
                                                         if (
                                                             percent != lastPercent &&
                                                                 (lastProgress == Long.MIN_VALUE ||
