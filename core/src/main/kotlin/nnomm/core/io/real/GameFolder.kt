@@ -1339,6 +1339,11 @@ class RealGameFolder(
                             ) to ownedStaged
                         // The INI must commit before any owned loader file: a mixed batch
                         // can otherwise hide a failed INI move behind an earlier promotion.
+                        // This also covers creating a missing INI, which the archive walk adds
+                        // in file-system order.
+                        val doorstopIndex = replacements.indexOfFirst { it.first == doorstop }
+                        if (doorstopIndex > 0)
+                            replacements.add(0, replacements.removeAt(doorstopIndex))
                         val intendedDoorstop =
                             replacements
                                 .firstOrNull { it.first == doorstop }
