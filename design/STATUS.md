@@ -7,7 +7,7 @@ The first version of NNOMM is built: every screen of the agreed mock except the 
 - **Screens:** the window with its own title bar, sidebar, Play box, command search (Ctrl K), light and dark theme, narrow layout; Browse (registry, filters, search with match reasons, grid and list, the three rows on top, the state button per mod); Library (table, quick filters, selection and bulk actions, problem badges with fixes, Undo, keyboard, Add from a file, file drop); the mod panel (About, What's new from the release feed, Needs, per-profile switches and versions); Settings (search, profile selector, per-profile values, danger zone); dialogs (command search, pack import and update, new profile, share, rename, licences, the broken-mod test); first start, empty, loading and offline states; the download queue. Servers says "Coming later".
 - **Real data and files:** the NOMNOM registry with a saved copy for offline use, sizes and dates from HEAD requests, release notes from `releases.atom`, tag cleaning; verified downloads, one stored copy per version, per-profile versions, packs (share, import with preview, follow an address), the mod loader installed when the first mod is turned on, Play through Steam and Play without mods.
 - **The player's files:** NNOMM changes nothing in the game folder until the player installs, uninstalls or switches a mod. The first start takes over existing mods as they are. Changes run one mod at a time with a journal, so a crash leaves the old or the new state, and startup finishes or rolls back. Files a mod or the player creates or edits are kept per mod and profile. Nothing is deleted without a copy; Clear keeps every copy that cannot be downloaded again. No Steam sign-in and no Steam helper: Steam shows the player as playing only while the game runs.
-- **Checks:** 422 core tests and 26 UI tests; renders of every mock picture (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; mock left, app right in `composeApp/build/shots/compare/`).
+- **Checks:** 424 core tests and 26 UI tests; renders of every mock picture (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; mock left, app right in `composeApp/build/shots/compare/`).
 
 ## How it was reviewed
 
@@ -54,7 +54,8 @@ Every part was reviewed by an Opus agent and a Sol agent, then fixed, several ro
   the guards apply again once recovery finishes. A present loader that allows resume
   gets its missing files even beside extra unknown core files, which stay unchanged.
   A complete loader is never downloaded again after a mod recovery, so Play works
-  offline; an install that recovery completes is announced like a normal install.
+  offline; an install that recovery completes is announced like a normal install, and
+  recovering an interrupted Repair of a complete loader announces nothing.
 - Immediate download Retry replaces a cancelled transfer during its cleanup. Cancelled
   return handover deletes staging; tests await worker cleanup before deleting fixtures.
 - Responses without Content-Length show an indeterminate download bar and “Downloading”.

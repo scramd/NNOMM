@@ -215,10 +215,14 @@ class RealGameFolder(
                 else null
             val archive = loaderArchive(game).read().orEmpty()
             val hashes = ownedHashes(game)
-            // An install with a pending record is unfinished even before its archive list exists.
+            // A pending install or repair expects its own files too, even before the
+            // archive list is written. Completeness stays physical: present files count.
+            val pending = pendingLoader(game)
             val complete =
-                !pendingLoaderRecord(game).exists() &&
-                    (hashes.isEmpty() || archive.all { safe(game, it).isRegularFile() })
+                (hashes.isEmpty() || archive.all { safe(game, it).isRegularFile() }) &&
+                    (pending?.archiveFiles.orEmpty() + pending?.hashes.orEmpty().keys).all {
+                        safe(game, it).isRegularFile()
+                    }
             val resumeAllowed =
                 hashes.isNotEmpty() &&
                     loaderVersion == "5.4.23.4" &&
@@ -1356,16 +1360,18 @@ class RealGameFolder(
             }
             .sorted()
 
+    private fun pendingLoader(game: Path): PendingLoaderOwnership? =
+        pendingLoaderRecord(game)
+            .takeIf { it.exists() }
+            ?.let { path ->
+                runCatching { json.decodeFromString<PendingLoaderOwnership>(path.readText()) }
+                    .getOrNull()
+                    ?.takeIf { it.gameRoot == game.toString() }
+            }
+
     private fun foreignLoaderBinaries(game: Path): List<String> {
         val ownership = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
-        val pending =
-            pendingLoaderRecord(game)
-                .takeIf { it.exists() }
-                ?.let { path ->
-                    runCatching { json.decodeFromString<PendingLoaderOwnership>(path.readText()) }
-                        .getOrNull()
-                        ?.takeIf { it.gameRoot == game.toString() }
-                }
+        val pending = pendingLoader(game)
         // Pending placement names are ours to verify during recovery, not foreign files.
         // This classification grants no mutation authority; recovery still checks bytes.
         val known =
