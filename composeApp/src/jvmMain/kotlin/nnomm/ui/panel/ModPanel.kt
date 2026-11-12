@@ -143,15 +143,15 @@ fun ModPanel(ref: PanelRef) {
                     }
                 }
             }
-            problems(state, mod.id).filter { it.kind.isNotEmpty() }.forEach { problem ->
+            problems(state, mod.id).filter { it.kind != nnomm.core.model.ProblemKind.INFO }.forEach { problem ->
                 PanelMenu(problemFixes(state, mod.id, problem).map { fix ->
                     MenuEntry.Item(fix.label, danger = fix.danger) { model.perform(fix.action) }
                 }) { expand ->
-                    val ink = if (problem.kind == "danger") c.danger else c.warn
+                    val ink = if (problem.kind == nnomm.core.model.ProblemKind.DANGER) c.danger else c.warn
                     control(Modifier, onClick = expand) { modifier, _, _ ->
                         Row(
                             modifier.height(26.dp)
-                                .background(if (problem.kind == "danger") c.dangerBg else c.warnBg, RoundedCornerShape(4.dp))
+                                .background(if (problem.kind == nnomm.core.model.ProblemKind.DANGER) c.dangerBg else c.warnBg, RoundedCornerShape(4.dp))
                                 .padding(horizontal = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
