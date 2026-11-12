@@ -1279,7 +1279,7 @@ class RealGameFolder(
                     require(staging.resolve("BepInEx/core/BepInEx.dll").isRegularFile())
                     DoorstopLocks.locked(game) {
                         val pendingRestore = DoorstopRestores(home).read(game).isNotEmpty()
-                        val replacements = mutableListOf<Pair<Path, Path?>>()
+                        val replacements = mutableListOf<Pair<Path, Path>>()
                         val owned = loaderRecord(game)
                         val ownedNames = owned.read().orEmpty().toMutableList()
                         Files.walk(staging).use { paths ->
@@ -1294,11 +1294,6 @@ class RealGameFolder(
                                     )
                                     val dest = safe(game, relative)
                                     val wasOwned = relative in ownedNames
-                                    if (
-                                        !dest.exists() &&
-                                            !(relative == "doorstop_config.ini" && pendingRestore)
-                                    )
-                                        ownedNames += relative
                                     if (
                                         (!dest.exists() || (repair && wasOwned)) &&
                                             !(relative == "doorstop_config.ini" &&
@@ -1331,24 +1326,13 @@ class RealGameFolder(
                                 replacements.add(0, doorstop to restored)
                             }
                         }
-                        val ownedStaged = staging.resolve("ownership.json")
-                        ownedStaged.writeText(json.encodeToString(ownedNames.distinct()))
-                        replacements +=
-                            home.resolve(
-                                "loader-${Integer.toHexString(game.toString().hashCode())}.json"
-                            ) to ownedStaged
-                        // The INI must commit before any owned loader file: a mixed batch
-                        // can otherwise hide a failed INI move behind an earlier promotion.
+                        // Keep the INI first so a refused settings move cannot change
+                        // loader binaries.
                         // This also covers creating a missing INI, which the archive walk adds
                         // in file-system order.
                         val doorstopIndex = replacements.indexOfFirst { it.first == doorstop }
                         if (doorstopIndex > 0)
                             replacements.add(0, replacements.removeAt(doorstopIndex))
-                        val intendedDoorstop =
-                            replacements
-                                .firstOrNull { it.first == doorstop }
-                                ?.second
-                                ?.let { Files.readAllBytes(it) }
                         replaceTrees(
                             replacements,
                             home.resolve("transactions"),
@@ -1356,14 +1340,32 @@ class RealGameFolder(
                                 check(!running()) { "Game started; loader changes are pending" }
                             },
                         )
-                        if (intendedDoorstop != null) {
+                        // A recovered batch can contain both promoted and rolled-back files.
+                        // Publish only verified placements, even when a later file failed.
+                        var placementFailure: java.io.IOException? = null
+                        replacements.forEach { (target, source) ->
                             try {
-                                if (!readDoorstop(doorstop).contentEquals(intendedDoorstop))
-                                    throw java.nio.file.AccessDeniedException(doorstop.toString())
+                                val matches =
+                                    if (target == doorstop)
+                                        readDoorstop(target)
+                                            .contentEquals(Files.readAllBytes(source))
+                                    else Files.mismatch(target, source) == -1L
+                                if (!matches)
+                                    throw java.nio.file.AccessDeniedException(target.toString())
+                                ownedNames += game.relativize(target).toString().replace('\\', '/')
                             } catch (e: java.io.IOException) {
-                                throw DoorstopSettingsFailure(e)
+                                val failure =
+                                    if (target == doorstop) DoorstopSettingsFailure(e)
+                                    else
+                                        java.nio.file
+                                            .AccessDeniedException(target.toString())
+                                            .apply { initCause(e) }
+                                if (placementFailure == null) placementFailure = failure
+                                else placementFailure.addSuppressed(failure)
                             }
                         }
+                        owned.write(ownedNames.distinct())
+                        placementFailure?.let { throw it }
                         if (replacedDoorstop)
                             notice(
                                 "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
