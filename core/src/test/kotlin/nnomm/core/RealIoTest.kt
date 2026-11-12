@@ -446,7 +446,7 @@ class RealIoTest {
 
     @Test
     fun repairRestoresDoorstopKeyWithoutOverwritingUnownedLoaderFiles() = runBlocking {
-        for (adopted in listOf(false, true)) for (unreadable in listOf(false, true)) {
+        for (adopted in listOf(false, true)) for (arbitraryBytes in listOf(false, true)) {
             val home = temp()
             Files.createDirectories(home.resolve("staging"))
             val game = home.resolve("game")
@@ -458,7 +458,8 @@ class RealIoTest {
                 for ((name, bytes) in
                     mapOf(
                         "BepInEx/core/BepInEx.dll" to dll,
-                        "doorstop_config.ini" to "[UnityDoorstop]\nenabled=true\n".toByteArray(),
+                        "doorstop_config.ini" to
+                            "[General]\nenabled=true\ntarget_assembly=shipped.dll\n".toByteArray(),
                         "winhttp.dll" to "proxy".toByteArray(),
                     )) {
                     zip.putNextEntry(ZipEntry(name))
@@ -482,16 +483,16 @@ class RealIoTest {
             } else folder.installLoader(game.toString())
             val old =
                 "[UnityDoorstop]\n# player settings\ntargetAssembly=custom.dll\n[Other]\nplayer=true\nenabled=true\n"
-            val oldBytes = if (unreadable) byteArrayOf(0xC3.toByte(), 0x28) else old.toByteArray()
+            val oldBytes =
+                if (arbitraryBytes) byteArrayOf(0xC3.toByte(), 0x28) else old.toByteArray()
             game.resolve("doorstop_config.ini").writeBytes(oldBytes)
             game.resolve("BepInEx/core/player.txt").writeText("player file")
             val beforeDll = game.resolve("BepInEx/core/BepInEx.dll").readBytes()
             folder.repairLoader(game.toString())
-            // A file in another encoding keeps every byte; only the missing key is added.
+            // Neither a legacy-only file nor arbitrary bytes supplies Doorstop 4's target.
+            // Repair replaces these with the shipped defaults and retains the original below.
             assertContentEquals(
-                if (unreadable) "[General]\nenabled = true\n".toByteArray() + oldBytes
-                else
-                    old.replace("[UnityDoorstop]", "[UnityDoorstop]\nenabled = true").toByteArray(),
+                "[General]\nenabled=true\ntarget_assembly=shipped.dll\n".toByteArray(),
                 game.resolve("doorstop_config.ini").readBytes(),
             )
             assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())

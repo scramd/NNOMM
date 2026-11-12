@@ -5,6 +5,7 @@ import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.*
 import kotlinx.serialization.*
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.*
 import nnomm.core.io.*
@@ -37,6 +38,7 @@ class RealGameFolder(
     private val backgroundScope: CoroutineScope? = null,
     private val preferredVersions: () -> Map<String, String> = { emptyMap() },
     private val backgroundReady: () -> Boolean = { true },
+    private val readDoorstop: (Path) -> ByteArray = { Files.readAllBytes(it) },
 ) : GameFolder {
     private val mutex = Mutex()
     private val learningSlot = Semaphore(1)
@@ -1299,26 +1301,37 @@ class RealGameFolder(
                             }
                     }
                     val doorstop = safe(game, "doorstop_config.ini")
+                    var replacedDoorstop = false
                     if (repair && doorstop.exists()) {
                         val old =
                             try {
-                                String(Files.readAllBytes(doorstop), DoorstopIni.charset)
-                            } catch (_: java.io.IOException) {
-                                null
+                                readDoorstop(doorstop)
+                            } catch (e: java.io.IOException) {
+                                throw DoorstopSettingsFailure(e)
                             }
-                        if (old == null || !DoorstopIni.hasEnabled(old)) {
+                        val config = DoorstopIni.read(old)
+                        val restore =
+                            JsonFile(
+                                    home.resolve("doorstop-restore.json"),
+                                    MapSerializer(String.serializer(), String.serializer()),
+                                )
+                                .read()
+                                .orEmpty()
+                        val pendingRestore =
+                            restore["path"]?.let {
+                                Path.of(it).toAbsolutePath().normalize() ==
+                                    doorstop.toAbsolutePath().normalize()
+                            } == true
+                        if (!config.healthy || (config.explicitlyDisabled && !pendingRestore)) {
                             val restored = staging.resolve("restored-doorstop.ini")
-                            if (old == null)
+                            if (!config.healthy) {
                                 Files.copy(
                                     staging.resolve("doorstop_config.ini"),
                                     restored,
                                     StandardCopyOption.REPLACE_EXISTING,
                                 )
-                            else
-                                Files.write(
-                                    restored,
-                                    DoorstopIni.restoreEnabled(old).toByteArray(DoorstopIni.charset),
-                                )
+                                replacedDoorstop = true
+                            } else Files.write(restored, config.setEnabled(true))
                             replacements += doorstop to restored
                         }
                     }
@@ -1335,6 +1348,10 @@ class RealGameFolder(
                             check(!running()) { "Game started; loader changes are pending" }
                         },
                     )
+                    if (replacedDoorstop)
+                        notice(
+                            "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
+                        )
                 } finally {
                     deleteTree(staging)
                     transfer.close()

@@ -270,7 +270,8 @@ class LastFindingsTest {
     @Test
     fun doorstopRestoreUsesTheSectionDoorstopReads() {
         val ini = nnomm.core.io.real.DoorstopIni
-        // No loader section: Doorstop 4 reads [General].
+        // Sectionless keys are never loader keys; the editor adds an effective section.
+        assertFalse(ini.hasEnabled("enabled=true\ntarget=x\n"))
         assertEquals("[General]\nenabled = true\ntarget=x\n", ini.restoreEnabled("target=x\n"))
         // A UTF-8 byte-order mark stays first, and the existing [General] header is found.
         val bom = "\u00EF\u00BB\u00BF"

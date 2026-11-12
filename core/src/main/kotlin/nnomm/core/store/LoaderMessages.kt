@@ -6,14 +6,22 @@ internal fun loaderFailureHelp(error: Throwable): String {
     return when {
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
             "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
+        causes.any { it is nnomm.core.io.DoorstopSettingsFailure } ->
+            "Close programs that use doorstop_config.ini, check that NNOMM can read it, then try again."
         causes.any {
             it is java.nio.file.AccessDeniedException ||
                 it is java.nio.file.FileSystemException &&
                     it.reason.orEmpty().let { reason ->
                         reason.contains("used by another process", true) ||
                             reason.contains("locked", true) ||
-                            reason.contains("permission denied", true)
+                            reason.contains("permission denied", true) ||
+                            reason.contains("read-only file system", true)
                     }
+        } ->
+            "Check that NNOMM can change files in the game folder and in its own storage folder, and close programs using them, then try again."
+        causes.any {
+            it is java.io.FileNotFoundException &&
+                it.message.orEmpty().contains("Permission denied", true)
         } ->
             "Check that NNOMM can change files in the game folder and in its own storage folder, and close programs using them, then try again."
         causes.any {

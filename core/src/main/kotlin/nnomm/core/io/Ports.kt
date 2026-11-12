@@ -88,7 +88,7 @@ interface ModStore {
 
 /** Only managed files can be changed; takeover copies existing files without changing the game. */
 class DoorstopSettingsFailure(cause: Exception? = null) :
-    java.io.IOException("Doorstop's enabled setting was not found.", cause)
+    java.io.IOException("The mod loader settings file could not be read.", cause)
 
 class LoaderDownloadFailure(cause: Exception) : java.io.IOException(cause)
 

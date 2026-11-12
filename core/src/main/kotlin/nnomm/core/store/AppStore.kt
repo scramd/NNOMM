@@ -1033,13 +1033,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         if (applying)
                             "Some changes are pending. Retry or take over existing mods before Play."
                         else
-                            when (e.message) {
-                                "Doorstop's enabled setting was not found." ->
-                                    if (state.value.game.loaderVersion == "5.4.23.4")
-                                        "The mod loader’s settings file is damaged. Use Repair for the mod loader in Settings, Game."
-                                    else
-                                        "The mod loader’s settings file is damaged. Restore it using the loader’s original installer before playing without mods."
-                                "Nuclear Option is already running." ->
+                            when {
+                                e is DoorstopSettingsFailure -> loaderFailureHelp(e)
+                                e.message == "Nuclear Option is already running." ->
                                     "Nuclear Option is already running."
                                 else -> "Check that the game is installed and try Play again."
                             }

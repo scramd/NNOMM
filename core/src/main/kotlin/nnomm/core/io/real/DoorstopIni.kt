@@ -1,67 +1,126 @@
 package nnomm.core.io.real
 
-/**
- * Doorstop's `enabled` key lives in the loader's own section (`[General]` in Doorstop 4,
- * `[UnityDoorstop]` in older files). A key of the same name in another section is not the loader's,
- * so it never counts and is never changed.
- */
+/** A byte-preserving editor for the first section of each name, as read by Doorstop. */
 internal object DoorstopIni {
-    /**
-     * The file is read and written as ISO-8859-1, which keeps every byte as it is, whatever the
-     * file's real encoding. All keys and headers NNOMM looks for are ASCII.
-     */
-    val charset: java.nio.charset.Charset = Charsets.ISO_8859_1
+    val charset = Charsets.ISO_8859_1
+    private const val UTF8_BOM = "\u00ef\u00bb\u00bf"
 
-    // An optional UTF-8 byte-order mark, as ISO-8859-1 characters, may start the first line.
-    private val header =
-        Regex("(?im)^(?:\u00EF\u00BB\u00BF)?[ \t]*\\[(?:UnityDoorstop|General)\\][ \t]*(?=\\r?$)")
-    private val bom = "\u00EF\u00BB\u00BF"
-    private val nextSection = Regex("(?m)^[ \t]*\\[")
-    private val key = Regex("(?im)^(\\s*enabled\\s*=)[^\\r\\n]*")
+    class Document internal constructor(bytes: ByteArray) {
+        private val encoding =
+            when {
+                bytes.size >= 2 && bytes[0] == 0xff.toByte() && bytes[1] == 0xfe.toByte() ->
+                    Charsets.UTF_16LE
+                bytes.size >= 2 && bytes[0] == 0xfe.toByte() && bytes[1] == 0xff.toByte() ->
+                    Charsets.UTF_16BE
+                else -> charset
+            }
+        private val prefix =
+            when {
+                encoding != charset -> bytes.copyOfRange(0, 2)
+                bytes.size >= 3 &&
+                    bytes.copyOfRange(0, 3).contentEquals(UTF8_BOM.toByteArray(charset)) ->
+                    bytes.copyOfRange(0, 3)
+                else -> byteArrayOf()
+            }
+        private val lines = split(String(bytes, prefix.size, bytes.size - prefix.size, encoding))
+        private val newline
+            get() = lines.firstOrNull { it.end.isNotEmpty() }?.end ?: "\n"
 
-    /**
-     * The loader section's body: after its header line up to the next section. A file without a
-     * loader section header counts its keys before the first section as the loader's.
-     */
-    private fun body(text: String): IntRange? {
-        val found = header.find(text)
-        if (found == null) {
-            val end = nextSection.find(text)?.range?.first ?: text.length
-            return if (end == 0) null else 0 until end
+        private fun section(name: String): Int? =
+            lines.indices.firstOrNull { header(lines[it].text)?.equals(name, true) == true }
+
+        private fun key(section: Int, name: String): Int? =
+            ((section + 1) until lines.size)
+                .takeWhile { header(lines[it].text) == null }
+                .firstOrNull { keyName(lines[it].text)?.equals(name, true) == true }
+
+        val healthy: Boolean
+            get() = section("General")?.let { key(it, "target_assembly") != null } == true
+
+        val explicitlyDisabled: Boolean
+            get() =
+                section("General")
+                    ?.let { key(it, "enabled") }
+                    ?.let {
+                        lines[it]
+                            .text
+                            .substringAfter('=')
+                            .trim()
+                            .trim('"', '\'')
+                            .equals("false", true)
+                    } == true
+
+        fun hasEnabled(): Boolean = section("General")?.let { key(it, "enabled") != null } == true
+
+        fun setEnabled(value: Boolean, includeLegacy: Boolean = false): ByteArray {
+            val names = if (includeLegacy) listOf("General", "UnityDoorstop") else listOf("General")
+            if (names.none { section(it) != null }) {
+                lines.addAll(
+                    0,
+                    listOf(Line("[General]", newline), Line("enabled = $value", newline)),
+                )
+            } else
+                for (name in names) {
+                    val start = section(name) ?: continue
+                    val at = key(start, "enabled")
+                    if (at != null) {
+                        val line = lines[at]
+                        line.text = line.text.substringBefore('=') + "= $value"
+                    } else {
+                        val end = lines[start].end.ifEmpty { newline }
+                        lines[start].end = end
+                        lines.add(start + 1, Line("enabled = $value", end))
+                    }
+                }
+            return bytes()
         }
-        val start = found.range.last + 1
-        val end = nextSection.find(text, start)?.range?.first ?: text.length
-        return start until end
+
+        fun bytes(): ByteArray =
+            prefix + lines.joinToString("") { it.text + it.end }.toByteArray(encoding)
     }
 
-    fun hasEnabled(text: String): Boolean =
-        body(text)?.let { key.containsMatchIn(text.substring(it.first, it.last + 1)) } ?: false
+    private data class Line(var text: String, var end: String)
 
-    fun setEnabled(text: String, value: Boolean): String {
-        val range = body(text) ?: return text
-        val part = text.substring(range.first, range.last + 1)
-        return text.substring(0, range.first) +
-            key.replace(part) { it.groupValues[1] + " " + value } +
-            text.substring(range.last + 1)
-    }
-
-    /**
-     * Puts `enabled = true` into the loader section. Without a loader section it adds Doorstop 4's
-     * `[General]` section at the top (after a byte-order mark), the section Doorstop 4 reads.
-     */
-    fun restoreEnabled(text: String): String {
-        val newline = if (text.contains("\r\n")) "\r\n" else "\n"
-        val found = header.find(text)
-        if (found != null) {
-            val at = found.range.last + 1
-            return text.substring(0, at) + newline + "enabled = true" + text.substring(at)
+    // Only CRLF, LF and CR are line endings. In particular, byte 0x85 is ordinary data.
+    private fun split(text: String): MutableList<Line> {
+        val lines = mutableListOf<Line>()
+        var start = 0
+        var at = 0
+        while (at < text.length) {
+            if (text[at] != '\r' && text[at] != '\n') {
+                at++
+                continue
+            }
+            val end = if (text[at] == '\r' && text.getOrNull(at + 1) == '\n') at + 2 else at + 1
+            lines += Line(text.substring(start, at), text.substring(at, end))
+            at = end
+            start = at
         }
-        val start = if (text.startsWith(bom)) bom.length else 0
-        return text.substring(0, start) +
-            "[General]" +
-            newline +
-            "enabled = true" +
-            newline +
-            text.substring(start)
+        if (start < text.length) lines += Line(text.substring(start), "")
+        return lines
     }
+
+    // A line starting with '[' starts a section even if its header is malformed.
+    private fun header(text: String): String? {
+        val trimmed = text.trim()
+        if (!trimmed.startsWith('[')) return null
+        val last = trimmed.lastIndexOf(']')
+        return if (last > 0) trimmed.substring(1, last).trim() else ""
+    }
+
+    private fun keyName(text: String): String? {
+        val trimmed = text.trimStart()
+        if (trimmed.startsWith(';') || trimmed.startsWith('#') || '=' !in trimmed) return null
+        return trimmed.substringBefore('=').trim()
+    }
+
+    fun read(bytes: ByteArray) = Document(bytes)
+
+    fun hasEnabled(text: String) = read(text.toByteArray(charset)).hasEnabled()
+
+    fun setEnabled(text: String, value: Boolean) =
+        String(read(text.toByteArray(charset)).setEnabled(value, true), charset)
+
+    fun restoreEnabled(text: String) =
+        String(read(text.toByteArray(charset)).setEnabled(true), charset)
 }

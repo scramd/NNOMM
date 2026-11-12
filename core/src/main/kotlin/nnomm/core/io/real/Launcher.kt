@@ -106,7 +106,10 @@ class RealGameLauncher(
         val restore = saved.read() ?: return
         if (restore.isEmpty()) return
         val path = Path.of(restore.getValue("path"))
-        atomic(path, restore.getValue("text"), DoorstopIni.charset)
+        val bytes =
+            restore["bytes"]?.let { java.util.Base64.getDecoder().decode(it) }
+                ?: restore.getValue("text").toByteArray(DoorstopIni.charset)
+        atomic(path, String(bytes, DoorstopIni.charset), DoorstopIni.charset)
         saved.write(emptyMap())
     }
 
@@ -128,19 +131,28 @@ class RealGameLauncher(
                     if (!saved.isNullOrEmpty()) restoreDoorstop()
                 }
                 val ini = safe(game, "doorstop_config.ini")
-                if (withoutMods && ini.exists()) {
-                    val text =
-                        try {
-                            String(Files.readAllBytes(ini), DoorstopIni.charset)
-                        } catch (e: java.io.IOException) {
-                            throw DoorstopSettingsFailure(e)
-                        }
-                    if (!DoorstopIni.hasEnabled(text)) throw DoorstopSettingsFailure()
-                    JsonFile(restoreFile, MapSerializer(String.serializer(), String.serializer()))
-                        .write(mapOf("path" to ini.toString(), "text" to text))
-                    atomic(ini, DoorstopIni.setEnabled(text, false), DoorstopIni.charset)
-                }
                 try {
+                    if (withoutMods && ini.exists()) {
+                        val bytes =
+                            try {
+                                Files.readAllBytes(ini)
+                            } catch (e: java.io.IOException) {
+                                throw DoorstopSettingsFailure(e)
+                            }
+                        JsonFile(
+                                restoreFile,
+                                MapSerializer(String.serializer(), String.serializer()),
+                            )
+                            .write(
+                                mapOf(
+                                    "path" to ini.toString(),
+                                    "bytes" to java.util.Base64.getEncoder().encodeToString(bytes),
+                                )
+                            )
+                        val disabled =
+                            DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
+                        atomic(ini, String(disabled, DoorstopIni.charset), DoorstopIni.charset)
+                    }
                     val args =
                         state.settings.value("launchArgs", state.profileId)?.content.orEmpty()
                     val uri =

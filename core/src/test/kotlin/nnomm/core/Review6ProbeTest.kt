@@ -94,12 +94,12 @@ class Review6ProbeTest {
                 },
         )
 
-    private fun launcher(fail: String? = null) =
+    private fun launcher(fail: Throwable? = null) =
         object : GameLauncher {
             override val running = MutableStateFlow(false)
 
             override suspend fun start(state: AppState, withoutMods: Boolean) {
-                if (fail != null) error(fail)
+                if (fail != null) throw fail
             }
         }
 
@@ -243,14 +243,20 @@ class Review6ProbeTest {
                     .copy(
                         modStore = store,
                         gameFolder = f,
-                        launcher = launcher("Doorstop's enabled setting was not found."),
+                        launcher =
+                            launcher(
+                                DoorstopSettingsFailure(
+                                    java.nio.file.AccessDeniedException("doorstop_config.ini")
+                                )
+                            ),
                         persistence = null,
                     ),
             )
         a.play(withoutMods = true)
         delay(1500)
         a.awaitDiskIdle()
-        assertTrue(a.state.value.toasts.any { it.text.contains("settings file is damaged") })
+        assertTrue(a.state.value.toasts.any { it.text.contains("Close programs") })
+        assertFalse(a.state.value.toasts.any { it.text.contains("Use Repair") })
         assertFalse(a.state.value.toasts.any { it.text.contains("Some changes are pending") })
         println("PROBE P4 toasts ${a.state.value.toasts.map { it.text + " [" + it.action + "]" }}")
         a.shutdown()

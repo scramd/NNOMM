@@ -125,10 +125,39 @@ official source later fails. Failed HEAD metadata is retried after five minutes.
 
 ## Launch and platform limits
 
-Without-mods launch saves Doorstop text durably before disabling it. Restoration
-waits until observed exit, including when NNOMM reopens while the game runs.
+### Doorstop settings
+
+Doorstop 4 reads `enabled` (default true) and `target_assembly` (default
+`Doorstop.dll`) from the first case-insensitive `[General]` section. Sectionless
+keys do not count. Headers with inner spaces or a trailing comment count; the
+section name ends at the last `]`. A missing target DLL disables Doorstop itself.
+These rules were checked read-only against UnityDoorstop v4.0.0/v4.3.0
+`src/windows/config.c`, v4.3.0 `entrypoint.c`, and Wine's `dlls/kernel32/profile.c`.
+Native Windows behaviour remains a platform check.
+
+The line editor splits only CRLF, LF and CR, preserving individual line endings.
+Byte 0x85 in a comment is ordinary data. UTF-16 LE/BE files with a BOM are decoded
+and re-encoded with the same BOM and byte order. Other files use ISO-8859-1 as a
+byte-preserving mapping, including UTF-8 and its optional BOM.
+
+Play without mods changes the first `[General]` and, if present, the first
+`[UnityDoorstop]` section to `enabled = false`. A missing key is added directly
+after its header. With neither section, `[General]` is inserted at the top after
+any BOM. Other sections and duplicate later sections stay unchanged. The original
+bytes are saved durably as base64 in `doorstop-restore.json` before mutation.
+Restoration waits for observed exit; startup while the game runs defers it. Startup
+with the game closed, a failed edit, or a failed launch restores the exact bytes.
+Legacy records containing only `text` still restore using the previous byte mapping.
+
 Loader Repair accepts only detected BepInEx 5.4.23.4. Unknown/different versions
-are refused. Existing Doorstop config is preserved. The pinned archive SHA-256 is
+are refused. A config is healthy if its first `[General]` has `target_assembly`;
+missing `enabled` is healthy and left alone. An explicitly false key in a healthy
+file is set true unless a without-mods restore is pending for this game folder.
+An unhealthy file is replaced with the shipped default, with the original kept
+in transaction recovery and a result notice explaining that. A currently unreadable
+or locked file fails before any replacement, with instructions to close programs
+using it. Adopted binaries and other unowned loader files remain unchanged.
+The pinned archive SHA-256 is
 `f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
 
 Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
@@ -288,10 +317,11 @@ exception messages remain in logs, not Play toasts.
 ## Final loader and metadata fixes
 
 Repair changes existing loader files only when this home recorded ownership.
-For detected BepInEx 5.4.23.4, it can also restore a missing or unreadable Doorstop
-enabled setting, preserving the previous file in transaction recovery. Readable
-unrelated settings remain. Adopted loader binaries and other unowned files stay
-unchanged. Other loader versions require their original installer; Repair offers
+For detected BepInEx 5.4.23.4, it also repairs Doorstop as described above:
+a missing enabled key alone is healthy, an ineffective target configuration is
+replaced with the shipped default and retained in recovery, and unreadable files
+are left alone. Adopted loader binaries and other unowned files stay unchanged.
+Other loader versions require their original installer; Repair offers
 instructions without Retry. Loader removal reports actual removed files and
 remaining loader files; an empty ownership record cannot claim removal.
 
