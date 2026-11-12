@@ -36,7 +36,10 @@ A screen is done when it matches the mock in pictures at 1360 x 860 and at 760 p
 - The Gradle toolchain needs JetBrains JDK 25 and downloads it. Gradle itself needs a JDK to start.
 - On the shared development machine, run Gradle only through `tools/gradlew-locked` (it limits parallel builds; memory is tight).
 - Build and tests: `tools/gradlew-locked :core:test :composeApp:jvmJar :composeApp:jvmTest`. Renders of every mock picture: `tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`.
-- Run: `tools/gradlew-locked :composeApp:createDistributable`, then `composeApp/build/compose/binaries/main/app/NNOMM/bin/NNOMM` (`--demo` for the mock's data). `:composeApp:run` uses `JAVA_HOME`, not the toolchain, so point `JAVA_HOME` at the JDK 25 for it.
+- Run: `tools/gradlew-locked :composeApp:createDistributable`, then `composeApp/build/compose/binaries/main/app/NNOMM/bin/NNOMM` (`--demo` for the mock's data). Packaging and `:composeApp:run` use the toolchain JDK, whatever `JAVA_HOME` is.
+- On Windows use `gradlew.bat` (`tools/gradlew-locked` is a Linux script). The app is `composeApp\build\compose\binaries\main\app\NNOMM\NNOMM.exe`. Close a running NNOMM before `createDistributable`, or the task cannot replace its files.
+- Windows installer: `gradlew.bat :composeApp:packageMsi -Pcompose.electronBuilder.nodePath=<full path of node.exe>` (it needs Node.js 18 or newer with npm beside `node.exe`). After a version change run it with `--rerun-tasks`, or the old package is kept. Building the installer locally is fine; a release is not (see Limits).
+- For checks on Windows set `NNOMM_HOME` to a folder outside `%APPDATA%` and use a copy of the game folder. `NNOMM_SANDBOX_LAUNCHER=<path of NuclearOption.exe in the copy>` makes Play start that copy in place of Steam; it works only when `NNOMM_HOME` is below `nnomm-sandbox` in the user folder.
 
 ## Syncing with upstream NOMM
 
@@ -50,4 +53,4 @@ NNOMM replaced most of NOMM's code, but it keeps NOMM's history and merges upstr
 
 ## Checks that need Windows
 
-These cannot be checked on Linux and are checked later on Windows: the custom window frame, the installer, the self-updater, finding the game folder through Steam, and starting the real game with mods. Keep NOMM's working code paths for them where possible, and list every change to them in `design/WINDOWS-CHECKS.md`.
+These cannot be checked on Linux: the custom window frame, the installer, the self-updater, finding the game folder through Steam, and starting the real game with mods. The first Windows run is recorded in `design/WINDOWS-RESULTS.md`; what it left open is listed there. Keep NOMM's working code paths for these parts where possible, list every change to them in `design/WINDOWS-CHECKS.md`, and check a change to them on Windows before it counts as done.

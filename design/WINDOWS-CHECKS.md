@@ -1,5 +1,6 @@
 # Checks that need Windows
 
+The first run on Windows was on 2026-11-12. Its results, check by check, are in [Windows results](WINDOWS-RESULTS.md). This file stays the list of what to check before a release.
 These parts cannot be checked on the Linux development machine. Check them on Windows before a release. Each entry says what changed from NOMM 5.5.0 (`3dacae5`) and what to check. Upstream 5.6.0 (`8786356`, merged) changed none of these Windows-only paths. Linux packaging checks are tracked in `STATUS.md`.
 
 | Part | Change from NOMM | What to check |

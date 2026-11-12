@@ -1,13 +1,13 @@
 # NNOMM status
 
-The first version of NNOMM is built: every screen of the agreed mock except the Servers page, with real data and real game-folder work. It is checked on Linux in a sandbox game folder only. The parts that need Windows are listed in [Windows checks](WINDOWS-CHECKS.md) and are not checked yet. Until those checks pass, do not point NNOMM at a real game installation.
+The first version of NNOMM is built: every screen of the agreed mock except the Servers page, with real data and real game-folder work. It was built and checked on Linux in a sandbox game folder, and then run on Windows 11 against copies of a real game install: [Windows results](WINDOWS-RESULTS.md). On Windows it starts, finds the game, takes over mods, installs real mods, installs the mod loader, and the game loads those mods. One step is not proven: the start of the game through Steam itself, which needs the owner's Steam install (the steps are in the results). Use NNOMM on a real game folder only after that step, and with a copy of the folder kept the first time.
 
 ## What works
 
 - **Screens:** the window with its own title bar, sidebar, Play box, command search (Ctrl K), light and dark theme, narrow layout; Browse (registry, filters, search with match reasons, grid and list, the three rows on top, the state button per mod); Library (table, quick filters, selection and bulk actions, problem badges with fixes, Undo, keyboard, Add from a file, file drop); the mod panel (About, What's new from the release feed, Needs, per-profile switches and versions); Settings (search, profile selector, per-profile values, danger zone); dialogs (command search, pack import and update, new profile, share, rename, licences, the broken-mod test); first start, empty, loading and offline states; the download queue. Servers says "Coming later".
 - **Real data and files:** the NOMNOM registry with a saved copy for offline use, sizes and dates from HEAD requests, release notes from `releases.atom`, tag cleaning; verified downloads, one stored copy per version, per-profile versions, packs (share, import with preview, follow an address), the mod loader installed when the first mod is turned on, Play through Steam and Play without mods.
 - **The player's files:** NNOMM changes nothing in the game folder until the player installs, uninstalls or switches a mod. The first start takes over existing mods as they are. Changes run one mod at a time with a journal, so a crash leaves the old or the new state, and startup finishes or rolls back. Files a mod or the player creates or edits are kept per mod and profile. Nothing is deleted without a copy; Clear keeps every copy that cannot be downloaded again. No Steam sign-in and no Steam helper: Steam shows the player as playing only while the game runs.
-- **Checks:** 391 normal core tests, 11 separate crash tests and 24 UI tests; renders of every mock picture (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; mock left, app right in `composeApp/build/shots/compare/`).
+- **Checks:** 405 normal core tests (14 of them new from the Windows run), 11 separate crash tests and 24 UI tests. The Linux run before the Windows work passed; the 14 new tests and the changes were run on Windows only. On Windows the 24 UI tests pass and 385 of the 405 core tests that run there pass (4.4 minutes on a disk, crash tests not run); the other 20 fail because their fixtures assume Linux (see [Windows results](WINDOWS-RESULTS.md)). Also renders of every mock picture (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; mock left, app right in `composeApp/build/shots/compare/`).
 
 ## Upstream NOMM
 
@@ -17,11 +17,20 @@ NNOMM started at upstream NOMM 5.5.0 and is merged with upstream 5.6.0 (`8786356
 
 Every part was reviewed by an Opus agent and a Sol agent, then fixed, several rounds deep: the core, the kit, each page, the real IO (five safety reviews), two acceptance checks against the owner's requirements, and closing checks of each later fix round. The review notes are in `design/notes/` and the core's `*FIXES*.md` and `REAL-IO-ROUND*.md` files.
 
+The Windows run used another method: run the real app first, change code only where a check fails, one independent review per batch of fixes, then stop. It found nine defects that no test and no earlier review had found, among them an app that did not start. Findings that need two rare events together are listed under "Known limits" and are not worked on.
+
 ## Known limits
 
 - Loader changes recheck each file before its rename; another program can still change it in the instant between the check and rename. See `core/IO.md`.
 
-- Windows-only parts are unchecked: native window frame, installer beside NOMM, self-updater, Steam folder search, a real game start with mods, locked files, junctions, home and game on different drives. See [Windows checks](WINDOWS-CHECKS.md).
+- On Windows these parts are still unchecked: a game start through Steam with start options, the automatic update of an installed build (no release exists), an install for all users, display scales other than 100 %, a second Steam library, settings and game on different drives, file drop, and the rare file cases of the check list. See [Windows results](WINDOWS-RESULTS.md).
+- The rare cases of [Windows checks](WINDOWS-CHECKS.md) (Doorstop file encodings and unusual values, interrupted loader work followed by hand changes) are not run on Windows. They need two rare events together.
+- A hostile 7z file can make the unpacker use much memory before NNOMM's size limit applies. Registry downloads are checked against the registry's hash first.
+- A game version with a letter at its end (for example `0.35.0b`) shows as unknown; NNOMM then compares with the newest game version the registry names.
+- NNOMM and NOMM both register the `.nommpack` file type. The program installed last owns it, and uninstalling that program leaves the file type without a program until the other one is repaired.
+- Repair of the mod loader works only for BepInEx 5.4.23.4. A game folder with another version (5.4.23.5 was seen in a real install) is used as it is.
+- When a mod change fails because of a locked file or a junction, a toast names the mod, but the Problems filter of the Library still shows 0.
+- Arrow keys of the number pad do not move a selection.
 - Offline pack import can add the selected bundled files and then refuse to make the profile without a connection.
 - Loose files taken over from the game folder are not later matched to registry mods.
 - The broken-mod test assumes one cause; two mods that only fail together give an inconclusive result.
