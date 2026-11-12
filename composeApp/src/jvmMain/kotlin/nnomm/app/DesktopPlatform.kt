@@ -74,7 +74,7 @@ class DesktopPlatform : Platform, AutoCloseable {
         val result = CompletableDeferred<List<File>>()
         javax.swing.SwingUtilities.invokeLater {
             try {
-                val chooser = javax.swing.JFileChooser().apply {
+                val chooser = (if (saveName != null) SaveFileChooser(extensions.firstOrNull()) else javax.swing.JFileChooser()).apply {
                     dialogTitle = title
                     fileSelectionMode = if (directory) javax.swing.JFileChooser.DIRECTORIES_ONLY else javax.swing.JFileChooser.FILES_ONLY
                     isMultiSelectionEnabled = multiple
@@ -84,9 +84,7 @@ class DesktopPlatform : Platform, AutoCloseable {
                 val answer = if (saveName != null) chooser.showSaveDialog(null) else chooser.showOpenDialog(null)
                 result.complete(if (answer != javax.swing.JFileChooser.APPROVE_OPTION) emptyList()
                     else if (multiple) chooser.selectedFiles.toList()
-                    else listOf(chooser.selectedFile).map { file ->
-                        if (saveName != null && extensions.isNotEmpty() && !file.name.endsWith(".${extensions.first()}", true)) File(file.path + ".${extensions.first()}") else file
-                    })
+                    else listOf(chooser.selectedFile))
             } catch (e: Exception) { result.completeExceptionally(e) }
         }
         result.await()
@@ -110,3 +108,29 @@ class DesktopPlatform : Platform, AutoCloseable {
         scope.cancel()
     }
 }
+
+/** Resolve the name before confirming; a refusal leaves the chooser and its name intact. */
+internal class SaveFileChooser(private val extension: String?) : javax.swing.JFileChooser() {
+    override fun approveSelection() {
+        val file = finalSaveFile(selectedFile ?: return, extension)
+        selectedFile = file
+        if (file.exists()) {
+            if (!file.isFile) {
+                javax.swing.JOptionPane.showMessageDialog(this, "Choose a file name, not a folder.", "Save file", javax.swing.JOptionPane.WARNING_MESSAGE)
+                return
+            }
+            val answer = javax.swing.JOptionPane.showConfirmDialog(
+                this,
+                "${file.name} already exists. Replace it?",
+                "Replace file?",
+                javax.swing.JOptionPane.YES_NO_OPTION,
+                javax.swing.JOptionPane.WARNING_MESSAGE,
+            )
+            if (answer != javax.swing.JOptionPane.YES_OPTION) return
+        }
+        super.approveSelection()
+    }
+}
+
+internal fun finalSaveFile(file: File, extension: String?): File =
+    if (extension != null && !file.name.endsWith(".$extension", ignoreCase = true)) File(file.path + ".$extension") else file

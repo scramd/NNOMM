@@ -204,15 +204,17 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                             followAddress = address.takeIf { it.isNotBlank() },
                                             includeSettings = settings,
                                         )
-                                    withPackIo(state) {
-                                        it.write(
-                                            file.toPath(),
-                                            pack,
-                                            state.copy(profileId = profile.id,
-                                                game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game),
-                                        )
+                                    val recovery = withPackRecovery(file) {
+                                        withPackIo(state) {
+                                            it.write(
+                                                file.toPath(),
+                                                pack,
+                                                state.copy(profileId = profile.id,
+                                                    game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game),
+                                            )
+                                        }
                                     }
-                                    model.store.toast("Saved ${file.name}", "Show the file", undo = { model.platform.openFolder(file.parentFile) })
+                                    model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.platform.openFolder(file.parentFile) })
                                     model.closeOverlay()
                                 }
                             } catch (e: Exception) {
