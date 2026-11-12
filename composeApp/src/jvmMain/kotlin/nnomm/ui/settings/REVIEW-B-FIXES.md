@@ -1,7 +1,7 @@
-# Review B fixes
+# Review B fixes (historical)
 
 Branch: `t3/fix-browse-settings-dialogs` (kept the assigned implementation branch).
-First-start implementation and text files are untouched. No push, tags, release, or external activity.
+This records that implementation round, not the current integration state. See `design/STATUS.md` for current limits. First-start implementation and text files were untouched in this round. No push, tags, release, or external activity.
 
 ## Finding ledger
 
@@ -49,14 +49,14 @@ Each line uses the numbering in the two supplied reviews. “Fixed” describes 
 
 - Build and tests use only `tools/gradlew-locked`, JetBrains JDK 25.
 - Three new `PageBRegressionTest` cases cover import counts, no null-version download, and reversed completion of game-folder inspection.
-- Full core and Compose JVM tests and the complete render suite passed; final combined build/test/render log is `/tmp/b-complete.log`.
+- Full core and Compose JVM tests and the complete render suite passed; the combined build/test/render log was temporary evidence from that round.
 - Render output: `composeApp/build/shots/`; comparisons: `composeApp/build/shots/compare/`. Main affected names: 01, 02, 03, 08, 10–15, 19, 20, 23–28, 32, 36. New phases use `dialog-trouble-{intro,base,test,found,nomod,inconclusive}-{dark,light}-{wide,narrow}.png`.
 - Desktop checked on isolated Xvfb :59, 1600x1000. Normal launch hit another instance's lock; setting java.io.tmpdir to a temporary folder isolated the test without disturbing it. Window and settings stayed under `<sandbox>`.
 - Ran Start -> base -> successive tests -> Found -> Keep it on; the enabled count returned from 16 to 17. Typed in new-profile and all Share fields; prefilled values appended at the end. Exercised palette typing/reopen and forward/reverse Tab in the trouble dialog. Checked game-folder typing/Escape and both-width Servers display. Opened Reset confirmation and used its keyboard controls; demo confirmation produced the mock no-op toast.
-- Desktop evidence: `/tmp/b-{desktop,pal2,trouble-key,wrap,test,test2,test3,test4,found,new,share-typed,reverse-ok,forward-ok,settings-runtime,confirm-runtime,confirm-reverse,servers-narrow}.png`.
+- Desktop evidence was captured for the palette, trouble phases, sharing, focus traversal, Settings confirmation and narrow Servers. Those temporary captures are not repository artifacts.
 - INCONCLUSIVE was checked through actual dependency-cycle render fixtures; it was not driven through the running window. Not every dialog/action and Settings field received a separate desktop keyboard check. Rename/import/pack-update/light-theme interaction checks remain for integration review.
 - A render attempt failed in Compose SnapshotStateObserver with a multithread access exception; a retry rendered the complete suite successfully. An intermediate focus-direction implementation crashed under reverse Tab; it was replaced and reverse Tab was rechecked successfully.
 
-## Core boundaries and remaining integration
+## Core boundaries and remaining integration (historical)
 
-The only extra core API change is making the existing toast method public. This minimal visibility change was needed to satisfy the request that UI feedback use store toasts; it adds no new toast implementation. Remaining TODO(core) comments concern bundled pack settings/config application, not player-visible UI. Real stop-following, report export, custom registries and editable shortcuts still need core support. Windows-specific paths were not changed or verified. This implementation was performed alone as requested; no new Opus/Sol review was launched.
+The only extra core API change in that round was making the existing toast method public. This minimal visibility change was needed to satisfy the request that UI feedback use store toasts; it adds no new toast implementation. At that point, remaining TODO(core) comments concerned bundled pack settings/config application, not player-visible UI. Those limits were superseded by later integration: stop-following, problem reports and custom registries are wired; consult the current status for remaining checks. Windows-specific paths were not changed or verified. This implementation was performed alone as requested; no new Opus/Sol review was launched.

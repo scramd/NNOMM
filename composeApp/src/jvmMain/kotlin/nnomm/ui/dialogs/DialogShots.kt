@@ -20,6 +20,9 @@ val dialogMockShots = buildList {
             "trouble-nomod" to "page=library&trouble=1&overlay=trouble",
             "trouble-inconclusive" to "page=library&trouble=1&overlay=trouble",
             "first" to "mock=first",
+            "first-missing" to "mock=first",
+            "danger" to "page=settings&cat=danger",
+            "danger-confirm" to "page=settings&cat=danger",
         )
     for ((name, address) in states) {
         for (light in listOf(false, true)) {
@@ -31,7 +34,9 @@ val dialogMockShots = buildList {
                         if (narrow) 728 else 1328,
                         if (narrow) 720 else 792,
                         initialState = { state ->
-                            if (name == "trouble-inconclusive") {
+                            if (name == "first-missing") {
+                                state.copy(game = state.game.copy(folder = null, folderMissing = true))
+                            } else if (name == "trouble-inconclusive") {
                                 val ids = state.installed.keys.filter { nnomm.core.rules.isOn(state, it) }
                                 state.copy(catalog = state.catalog.map { mod ->
                                     if (mod.id !in ids) mod else mod.copy(versions = mod.versions.map { version ->
@@ -42,6 +47,10 @@ val dialogMockShots = buildList {
                         },
                         seed = { model ->
                             when (name) {
+                                "danger-confirm" -> {
+                                    model.ui.settings.confirmKey = "dzAll"
+                                    model.openOverlay("confirm")
+                                }
                                 "trouble-test", "trouble-inconclusive" -> model.store.answerBrokenModTest(false)
                                 "trouble-found" -> {
                                     model.store.answerBrokenModTest(false)

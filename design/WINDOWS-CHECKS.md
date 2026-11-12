@@ -116,3 +116,14 @@ unknown-origin stored mods in the Library, off in every profile, with their stor
 copies retained. Verify this on Windows with locked files and after restart. The
 Library footline now counts installed stored versions only; Settings continues to
 count all store/recovery use. Linux choosers use Swing; Windows still uses FileKit.
+
+## Last app findings
+
+- Pack exports keep a uniquely named previous pack beside any replaced file, on
+  every platform. Check FileKit replacement confirmation, extension handling,
+  cancellation, repeated replacements and failed writes in a protected directory.
+  Each recovery copy must remain readable after restart. Linux's Swing confirmation
+  is platform-specific; Windows continues to use FileKit.
+- The removal row/button/confirmation now says “Remove all mods”; confirm the
+  combined core completion toast and actual retained files agree with the help,
+  including when a locked DLL prevents removal.

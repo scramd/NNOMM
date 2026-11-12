@@ -90,7 +90,7 @@ class FirstStart(private val model: AppModel) : Overlay {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Label(
-                    if (game.folder == null || game.folderMissing) "Game folder not found"
+                    if (game.folder == null || game.folderMissing) "Choose your game folder"
                     else "Check your game",
                     size = 26f,
                     weight = 650,
@@ -104,8 +104,9 @@ class FirstStart(private val model: AppModel) : Overlay {
                 Column(Modifier.border(1.dp, c.line2, RoundedCornerShape(9.dp)).fillMaxWidth()) {
                     CheckRow(
                         NnIcons.folder,
-                        game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it" } ?: if (game.folder == null || game.folderMissing) "Game folder not found" else "Game version is unknown",
-                        if (model.ui.mock == "first")
+                        if (game.folder == null || game.folderMissing) "Game folder not found"
+                        else game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it" } ?: "Game version is unknown",
+                        if (model.ui.mock == "first" && game.folder != null && !game.folderMissing)
                             "D:\\SteamLibrary\\steamapps\\common\\Nuclear Option"
                         else game.folder ?: "Choose the folder containing NuclearOption.exe.",
                     ) {

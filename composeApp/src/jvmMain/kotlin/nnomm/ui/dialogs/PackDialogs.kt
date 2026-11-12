@@ -183,7 +183,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     .filter { it.kind == PackKind.LOCAL }
                     .forEach { item ->
                         Note(
-                            "This pack also contains a file that is not from the registry: ${localNames[item.id] ?: item.id} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
+                            "This pack also contains a file that is not from the registry: ${localNames[item.id] ?: item.id} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by.takeIf { it.isNotBlank() } ?: "the source of this pack"}.",
                             modifier = Modifier.heightIn(min = 54.dp),
                             warn = true,
                             action = {
