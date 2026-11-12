@@ -5,6 +5,9 @@ internal object DoorstopIni {
     val charset = Charsets.ISO_8859_1
     private const val UTF8_BOM = "\u00ef\u00bb\u00bf"
 
+    // Wine PROFILE_isspaceW; CR/LF are already split as line endings.
+    private fun profileSpace(c: Char) = c in '\u0009'..'\u000d' || c == '\u001a' || c == ' '
+
     class Document internal constructor(bytes: ByteArray) {
         private val encoding =
             when {
@@ -47,7 +50,7 @@ internal object DoorstopIni {
                 .firstOrNull { keyName(lines[it].text)?.equals(name, true) == true }
 
         private fun value(at: Int): String {
-            val value = lines[at].text.substringAfter('=').trim(' ', '\t')
+            val value = lines[at].text.substringAfter('=', "").trim(::profileSpace)
             return if (
                 value.length >= 2 &&
                     (value.first() == '"' || value.first() == '\'') &&
@@ -68,7 +71,7 @@ internal object DoorstopIni {
             get() =
                 section("General")
                     ?.let { key(it, "enabled") }
-                    ?.let { !value(it).equals("true", true) } == true
+                    ?.let { '=' in lines[it].text && !value(it).equals("true", true) } == true
 
         fun hasEnabled(): Boolean = section("General")?.let { key(it, "enabled") != null } == true
 
@@ -85,7 +88,9 @@ internal object DoorstopIni {
                     val at = key(start, "enabled")
                     if (at != null) {
                         val line = lines[at]
-                        line.text = line.text.substringBefore('=') + "= $value"
+                        line.text =
+                            if ('=' in line.text) line.text.substringBefore('=') + "= $value"
+                            else line.text.trimEnd(::profileSpace) + " = $value"
                     } else {
                         val end = lines[start].end.ifEmpty { newline }
                         lines[start].end = end
@@ -122,16 +127,16 @@ internal object DoorstopIni {
 
     // An unmatched '[' is a key line, not a section boundary.
     private fun header(text: String): String? {
-        val trimmed = text.trim(' ', '\t')
+        val trimmed = text.trim(::profileSpace)
         if (!trimmed.startsWith('[')) return null
         val last = trimmed.lastIndexOf(']')
-        return if (last > 0) trimmed.substring(1, last).trim(' ', '\t') else null
+        return if (last > 0) trimmed.substring(1, last).trim(::profileSpace) else null
     }
 
     private fun keyName(text: String): String? {
-        val trimmed = text.trimStart(' ', '\t')
-        if (trimmed.startsWith(';') || trimmed.startsWith('#') || '=' !in trimmed) return null
-        return trimmed.substringBefore('=').trim(' ', '\t')
+        val trimmed = text.trimStart(::profileSpace)
+        if (trimmed.startsWith(';') || trimmed.startsWith('#')) return null
+        return trimmed.substringBefore('=').trim(::profileSpace)
     }
 
     fun read(bytes: ByteArray) = Document(bytes)

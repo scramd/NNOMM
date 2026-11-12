@@ -1331,6 +1331,27 @@ class RealGameFolder(
                                     restored,
                                     StandardCopyOption.REPLACE_EXISTING,
                                 )
+                                if (pendingRestore) {
+                                    // Publish the repaired restore bytes in the same journal,
+                                    // before the INI, so a retry cannot undo Repair.
+                                    val restoreStaged = staging.resolve("doorstop-restore.json")
+                                    restoreStaged.writeText(
+                                        json.encodeToString(
+                                            mapOf(
+                                                "path" to doorstop.toString(),
+                                                "bytes" to
+                                                    java.util.Base64.getEncoder()
+                                                        .encodeToString(
+                                                            Files.readAllBytes(restored)
+                                                        ),
+                                            )
+                                        )
+                                    )
+                                    replacements.add(
+                                        0,
+                                        home.resolve("doorstop-restore.json") to restoreStaged,
+                                    )
+                                }
                                 replacedDoorstop = true
                             } else Files.write(restored, config.setEnabled(true))
                             replacements += doorstop to restored
