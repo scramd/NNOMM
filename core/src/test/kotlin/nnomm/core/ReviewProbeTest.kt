@@ -430,7 +430,7 @@ class ReviewProbeTest {
         launcher.start(AppState(game = GameInfo(game.toString())), true)
         scope.cancel()
         delay(100)
-        assertTrue(ini.readText().contains("false"))
+        assertEquals("[General]\nenabled = false\n" + original, ini.readText())
         val next = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {
             RealGameLauncher(home, next, detect = { false })
