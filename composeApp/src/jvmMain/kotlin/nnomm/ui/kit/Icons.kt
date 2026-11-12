@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.*
 import androidx.compose.ui.unit.dp
 
-/** Generated from ICONS and PICS in design/mock/src/core.js. */
+/** Vector paths transcribed from ICONS and PICS in design/mock/src/core.js. */
 object NnIcons {
     val search: ImageVector by lazy {
         ImageVector.Builder("search", 16.dp, 16.dp, 16f, 16f)
@@ -990,4 +990,46 @@ object NnIcons {
             "wing" to picWing,
         )
     }
+}
+
+/** Copy the mock's path geometry with a control-specific stroke. */
+internal fun ImageVector.withStroke(width: Float): ImageVector {
+    val builder =
+        ImageVector.Builder(name, defaultWidth, defaultHeight, viewportWidth, viewportHeight)
+    fun copy(group: VectorGroup) {
+        for (node in group) {
+            when (node) {
+                is VectorPath ->
+                    builder.addPath(
+                        pathData = node.pathData,
+                        pathFillType = node.pathFillType,
+                        fill = node.fill,
+                        fillAlpha = node.fillAlpha,
+                        stroke = node.stroke,
+                        strokeAlpha = node.strokeAlpha,
+                        strokeLineWidth = width,
+                        strokeLineCap = node.strokeLineCap,
+                        strokeLineJoin = node.strokeLineJoin,
+                        strokeLineMiter = node.strokeLineMiter,
+                    )
+                is VectorGroup -> {
+                    builder.addGroup(
+                        name = node.name,
+                        rotate = node.rotation,
+                        pivotX = node.pivotX,
+                        pivotY = node.pivotY,
+                        scaleX = node.scaleX,
+                        scaleY = node.scaleY,
+                        translationX = node.translationX,
+                        translationY = node.translationY,
+                        clipPathData = node.clipPathData,
+                    )
+                    copy(node)
+                    builder.clearGroup()
+                }
+            }
+        }
+    }
+    copy(root)
+    return builder.build()
 }

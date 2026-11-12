@@ -14,9 +14,12 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import coil3.compose.AsyncImage
 import nnomm.ui.theme.*
 
 enum class ButtonKind {
@@ -56,32 +59,21 @@ internal fun control(
     val hovered by source.collectIsHoveredAsState()
     val pressed by source.collectIsPressedAsState()
     val focused by source.collectIsFocusedAsState()
-    var pointerFocus by remember { mutableStateOf(false) }
+    val inputMode = LocalFocusMode.current
     val c = LocalNnTheme.current.colors
     content(
         modifier
             .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-            .onPreviewKeyEvent {
-                pointerFocus = false
-                false
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        if (awaitPointerEvent().type == PointerEventType.Press) pointerFocus = true
-                    }
-                }
-            }
             .drawWithContent {
                 drawContent()
-                if (preview == PreviewState.Focus || (focused && !pointerFocus)) {
+                if (preview == PreviewState.Focus || (focused && inputMode.keyboard)) {
                     drawRoundRect(
                         c.text2,
-                        topLeft = androidx.compose.ui.geometry.Offset(-3.dp.toPx(), -3.dp.toPx()),
+                        topLeft = androidx.compose.ui.geometry.Offset(-2.dp.toPx(), -2.dp.toPx()),
                         size =
                             androidx.compose.ui.geometry.Size(
-                                size.width + 6.dp.toPx(),
-                                size.height + 6.dp.toPx(),
+                                size.width + 4.dp.toPx(),
+                                size.height + 4.dp.toPx(),
                             ),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()),
@@ -95,7 +87,7 @@ internal fun control(
                 role = role,
                 onClick = onClick,
             ),
-        hovered || preview == PreviewState.Hover,
+        hovered || preview == PreviewState.Hover || preview == PreviewState.Pressed,
         pressed || preview == PreviewState.Pressed,
     )
 }
@@ -108,11 +100,23 @@ fun Label(
     size: Float = 13f,
     weight: Int = 400,
     width: Float = 100f,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
+    textAlign: TextAlign = TextAlign.Start,
+    lineHeight: TextUnit = TextUnit.Unspecified,
 ) =
     BasicText(
         text,
         modifier,
-        style = LocalNnTheme.current.text(size, weight, width).copy(color = color),
+        style =
+            LocalNnTheme.current
+                .text(size, weight, width)
+                .copy(color = color, textAlign = textAlign)
+                .let {
+                    if (lineHeight == TextUnit.Unspecified) it else it.copy(lineHeight = lineHeight)
+                },
+        maxLines = maxLines,
+        overflow = overflow,
     )
 
 @Composable
@@ -121,7 +125,16 @@ fun Icon(
     modifier: Modifier = Modifier,
     color: Color = LocalNnTheme.current.colors.text2,
     description: String? = null,
-) = Image(icon, description, modifier.size(16.dp), colorFilter = ColorFilter.tint(color))
+    strokeWidth: Float? = null,
+) =
+    Image(
+        remember(icon, strokeWidth) {
+            if (strokeWidth == null) icon else icon.withStroke(strokeWidth)
+        },
+        description,
+        modifier.size(16.dp),
+        colorFilter = ColorFilter.tint(color),
+    )
 
 private fun Color.brighten(f: Float) =
     Color(
@@ -141,6 +154,8 @@ fun Button(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     preview: PreviewState = PreviewState.Normal,
+    shape: Shape = RoundedCornerShape(LocalNnTheme.current.radius),
+    iconOnly: Boolean = false,
 ) {
     val c = LocalNnTheme.current.colors
     val bg =
@@ -185,21 +200,23 @@ fun Button(
         Row(
             m.alpha(if (enabled) 1f else .45f)
                 .height(h.dp)
-                .background(fill, RoundedCornerShape(6.dp))
-                .border(1.dp, border, RoundedCornerShape(6.dp))
-                .padding(horizontal = pad.dp),
+                .background(fill, shape)
+                .border(1.dp, border, shape)
+                .padding(horizontal = if (iconOnly) 0.dp else pad.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
-            if (icon != null) Icon(icon, color = ink)
-            Label(
-                text,
-                color = ink,
-                size =
-                    if (size == ControlSize.Small) 12f
-                    else if (size == ControlSize.Large) 14f else 13f,
-                weight = if (kind == ButtonKind.Ghost) 500 else 600,
-            )
+            val foreground = if (hover && kind == ButtonKind.Ghost) c.text else ink
+            if (icon != null) Icon(icon, color = foreground)
+            if (!iconOnly)
+                Label(
+                    text,
+                    color = foreground,
+                    size =
+                        if (size == ControlSize.Small) 12f
+                        else if (size == ControlSize.Large) 14f else 13f,
+                    weight = if (kind == ButtonKind.Ghost) 500 else 600,
+                )
         }
     }
 }
@@ -225,7 +242,7 @@ fun IconButton(
                 m.size(if (small) 22.dp else 28.dp)
                     .background(
                         if (h || selected) c.raise2 else Color.Transparent,
-                        RoundedCornerShape(6.dp),
+                        RoundedCornerShape(LocalNnTheme.current.radius),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -258,7 +275,7 @@ fun Switch(
         onClick = { onCheckedChange(!checked) },
     ) { m, _, _ ->
         Box(
-            m.alpha(if (enabled) 1f else .45f)
+            m.alpha(if (enabled) 1f else .5f)
                 .size(30.dp, 18.dp)
                 .background(if (checked) c.onFill else c.line2, CircleShape)
         ) {
@@ -298,7 +315,7 @@ fun CheckBox(
                 .border(1.5.dp, if (checked) c.strong else c.text3, RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            if (checked) Icon(NnIcons.check, Modifier.size(11.dp), c.strongInk)
+            if (checked) Icon(NnIcons.check, Modifier.size(11.dp), c.strongInk, strokeWidth = 2.2f)
         }
     }
 }
@@ -318,11 +335,15 @@ fun Radio(
         onClick = onClick,
     ) { m, _, _ ->
         Box(
-            m.size(15.dp).border(1.5.dp, if (selected) c.on else c.text3, CircleShape),
+            m.alpha(if (enabled) 1f else .45f)
+                .size(15.dp)
+                .border(
+                    if (selected) 4.5.dp else 1.5.dp,
+                    if (selected) c.strong else c.text3,
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
-        ) {
-            if (selected) Box(Modifier.size(7.dp).background(c.on, CircleShape))
-        }
+        ) {}
     }
 }
 
@@ -353,7 +374,7 @@ fun Chip(
                 Label(
                     count.toString(),
                     Modifier.alpha(.75f),
-                    color = if (selected) c.onInk else c.text2,
+                    color = if (selected) c.onInk else if (h) c.text else c.text2,
                     size = 11.5f,
                 )
         }
@@ -367,12 +388,14 @@ fun FilterOption(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    radio: Boolean = false,
 ) {
     val c = LocalNnTheme.current.colors
-    control(modifier.fillMaxWidth().semantics { this.selected = selected }, onClick = onClick) {
-        m,
-        h,
-        _ ->
+    control(
+        modifier.fillMaxWidth().semantics { this.selected = selected },
+        role = if (radio) Role.RadioButton else Role.Checkbox,
+        onClick = onClick,
+    ) { m, h, _ ->
         Row(
             m.height(25.dp)
                 .background(if (h) c.raise else Color.Transparent, RoundedCornerShape(4.dp))
@@ -380,12 +403,19 @@ fun FilterOption(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CheckBox(selected, { onClick() })
-            Label(text, Modifier.weight(1f), color = if (selected || h) c.text else c.text2)
+            SelectionGlyph(selected, radio)
+            Label(
+                text,
+                Modifier.weight(1f),
+                color = if (selected || h) c.text else c.text2,
+                maxLines = 1,
+            )
             Label("$count", color = c.text3, size = 11.5f)
         }
     }
 }
+
+data class Segment(val title: String, val icon: ImageVector? = null, val iconOnly: Boolean = false)
 
 @Composable
 fun SegmentedControl(
@@ -393,30 +423,49 @@ fun SegmentedControl(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    small: Boolean = false,
+    segments: List<Segment> = options.map { Segment(it) },
 ) {
     val c = LocalNnTheme.current.colors
     Row(
         modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(c.raise)
-            .border(1.dp, c.line, RoundedCornerShape(6.dp))
+            .background(c.raise, RoundedCornerShape(LocalNnTheme.current.radius))
+            .border(1.dp, c.line, RoundedCornerShape(LocalNnTheme.current.radius))
+            .padding(1.dp)
     ) {
-        options.forEachIndexed { i, text ->
-            control(
-                Modifier.semantics { this.selected = i == selected },
-                onClick = { onSelect(i) },
-            ) { m, h, _ ->
-                Box(
-                    m.height(26.dp)
-                        .background(if (i == selected || h) c.raise2 else Color.Transparent)
-                        .padding(horizontal = 9.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Label(
-                        text,
-                        color = if (i == selected) c.text else c.text2,
-                        weight = if (i == selected) 600 else 400,
-                    )
+        segments.forEachIndexed { i, segment ->
+            Tooltip(segment.title) {
+                control(
+                    Modifier.semantics {
+                        this.selected = i == selected
+                        contentDescription = segment.title
+                    },
+                    onClick = { onSelect(i) },
+                ) { m, _, _ ->
+                    val shape =
+                        RoundedCornerShape(
+                            topStart = if (i == 0) 5.dp else 0.dp,
+                            bottomStart = if (i == 0) 5.dp else 0.dp,
+                            topEnd = if (i == segments.lastIndex) 5.dp else 0.dp,
+                            bottomEnd = if (i == segments.lastIndex) 5.dp else 0.dp,
+                        )
+                    Row(
+                        m.height(if (small) 20.dp else 26.dp)
+                            .background(if (i == selected) c.raise2 else Color.Transparent, shape)
+                            .padding(horizontal = if (small) 6.dp else 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        val ink = if (i == selected) c.text else c.text2
+                        segment.icon?.let { Icon(it, color = ink) }
+                        if (!segment.iconOnly)
+                            Label(
+                                segment.title,
+                                color = ink,
+                                size = if (small) 11.5f else 13f,
+                                weight = if (i == selected) 600 else 400,
+                            )
+                    }
                 }
             }
         }
@@ -426,17 +475,22 @@ fun SegmentedControl(
 @Composable
 fun LinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalNnTheme.current.colors
+    var baseline by remember { mutableFloatStateOf(0f) }
     control(modifier, onClick = onClick) { m, h, _ ->
         BasicText(
             text,
-            m,
-            style =
-                LocalNnTheme.current
-                    .text()
-                    .copy(
-                        color = if (h) c.text else c.text2,
-                        textDecoration = TextDecoration.Underline,
-                    ),
+            m.drawWithContent {
+                drawContent()
+                val y = baseline + 2.dp.toPx()
+                drawLine(
+                    c.line2,
+                    androidx.compose.ui.geometry.Offset(0f, y),
+                    androidx.compose.ui.geometry.Offset(size.width, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            },
+            style = LocalNnTheme.current.text().copy(color = if (h) c.text else c.text2),
+            onTextLayout = { baseline = it.firstBaseline },
         )
     }
 }
@@ -449,15 +503,27 @@ fun TextField(
     placeholder: String = "",
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    bg: Boolean = false,
+    focusRequester: FocusRequester? = null,
+    autofocus: Boolean = false,
+    palette: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
+    val requester = focusRequester ?: remember { FocusRequester() }
+    LaunchedEffect(autofocus) { if (autofocus && enabled) requester.requestFocus() }
     val t = LocalNnTheme.current
     val c = t.colors
     var focus by remember { mutableStateOf(false) }
     Row(
         modifier
-            .height(28.dp)
-            .background(c.raise, RoundedCornerShape(6.dp))
-            .border(1.dp, if (focus) c.text3 else c.line, RoundedCornerShape(6.dp))
+            .alpha(if (enabled) 1f else .55f)
+            .height(if (palette) 44.dp else 28.dp)
+            .background(if (bg) c.bg else c.raise, RoundedCornerShape(LocalNnTheme.current.radius))
+            .border(
+                1.dp,
+                if (palette) Color.Transparent else if (focus) c.text3 else c.line,
+                RoundedCornerShape(LocalNnTheme.current.radius),
+            )
             .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -466,18 +532,37 @@ fun TextField(
         BasicTextField(
             value,
             onValueChange,
-            Modifier.weight(1f).onFocusChanged { focus = it.hasFocus },
+            Modifier.weight(1f)
+                .focusRequester(requester)
+                .onFocusChanged { focus = it.hasFocus }
+                .onPreviewKeyEvent {
+                    if (
+                        it.type == KeyEventType.KeyDown &&
+                            it.key == Key.Escape &&
+                            value.isNotEmpty()
+                    ) {
+                        onValueChange("")
+                        true
+                    } else false
+                },
             enabled = enabled,
             singleLine = true,
-            textStyle = t.text(),
+            textStyle = t.text(if (palette) 15f else 13f),
             cursorBrush = SolidColor(c.text),
             decorationBox = { inner ->
                 Box {
-                    if (value.isEmpty()) Label(placeholder, color = c.text3)
+                    if (value.isEmpty())
+                        Label(
+                            placeholder,
+                            color = c.text3,
+                            size = if (palette) 15f else 13f,
+                            maxLines = 1,
+                        )
                     inner()
                 }
             },
         )
+        trailing?.invoke()
     }
 }
 
@@ -505,6 +590,7 @@ fun Badge(
     kind: BadgeKind = BadgeKind.Normal,
     icon: ImageVector? = null,
     onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val c = LocalNnTheme.current.colors
     val bg =
@@ -525,6 +611,7 @@ fun Badge(
     fun surface(modifier: Modifier, hovered: Boolean = false) {
         Row(
             modifier
+                .clipToBounds()
                 .height(19.dp)
                 .background(if (hovered) bg.brighten(1.15f) else bg, RoundedCornerShape(4.dp))
                 .then(
@@ -536,21 +623,28 @@ fun Badge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (icon != null) Icon(icon, Modifier.size(12.dp), ink)
-            Label(text, color = ink, size = 11.5f, weight = 600)
+            if (icon != null)
+                Icon(
+                    icon,
+                    Modifier.size(12.dp),
+                    ink,
+                    strokeWidth = if (kind == BadgeKind.Ok) 2f else null,
+                )
+            Label(text, color = ink, size = 11.5f, weight = 600, maxLines = 1)
         }
     }
-    if (onClick == null) surface(Modifier)
-    else control(Modifier, onClick = onClick) { m, h, _ -> surface(m, h) }
+    if (onClick == null) surface(modifier)
+    else control(modifier, onClick = onClick) { m, h, _ -> surface(m, h) }
 }
 
 @Composable
-fun Tag(text: String, onClick: (() -> Unit)? = null) {
+fun Tag(text: String, onClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val c = LocalNnTheme.current.colors
     @Composable
     fun surface(modifier: Modifier, hovered: Boolean = false) {
         Box(
             modifier
+                .clipToBounds()
                 .height(19.dp)
                 .background(if (hovered) c.line2 else c.raise2, RoundedCornerShape(4.dp))
                 .padding(horizontal = 6.dp),
@@ -559,8 +653,8 @@ fun Tag(text: String, onClick: (() -> Unit)? = null) {
             Label(text, color = if (hovered) c.text else c.text2, size = 11.5f, width = 92f)
         }
     }
-    if (onClick == null) surface(Modifier)
-    else control(Modifier, onClick = onClick) { m, h, _ -> surface(m, h) }
+    if (onClick == null) surface(modifier)
+    else control(modifier, onClick = onClick) { m, h, _ -> surface(m, h) }
 }
 
 @Composable
@@ -569,17 +663,25 @@ fun Note(
     modifier: Modifier = Modifier,
     warn: Boolean = false,
     action: (@Composable () -> Unit)? = null,
+    icon: ImageVector = if (warn) NnIcons.alert else NnIcons.info,
 ) {
     val c = LocalNnTheme.current.colors
     Row(
         modifier
-            .background(if (warn) c.warnBg else Color.Transparent, RoundedCornerShape(6.dp))
-            .border(1.dp, if (warn) c.warn else c.line2, RoundedCornerShape(6.dp))
+            .background(
+                if (warn) c.warnBg else Color.Transparent,
+                RoundedCornerShape(LocalNnTheme.current.radius),
+            )
+            .border(
+                1.dp,
+                if (warn) c.warn else c.line2,
+                RoundedCornerShape(LocalNnTheme.current.radius),
+            )
             .padding(horizontal = 11.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        Icon(if (warn) NnIcons.alert else NnIcons.info, color = if (warn) c.warn else c.text2)
+        Icon(icon, Modifier.padding(top = 1.dp), color = if (warn) c.warn else c.text2)
         Label(text, Modifier.weight(1f), color = if (warn) c.warn else c.text2)
         action?.invoke()
     }
@@ -588,7 +690,11 @@ fun Note(
 @Composable
 fun ProgressBar(progress: Float, modifier: Modifier = Modifier, neutral: Boolean = false) {
     val t = LocalNnTheme.current
-    val pct by animateFloatAsState(progress.coerceIn(0f, 1f), tween(t.progressMillis))
+    val pct by
+        animateFloatAsState(
+            progress.coerceIn(0f, 1f),
+            tween(t.progressMillis, easing = LinearEasing),
+        )
     Box(
         modifier.height(3.dp).clip(RoundedCornerShape(2.dp)).background(t.colors.line2).semantics {
             progressBarRangeInfo = ProgressBarRangeInfo(progress.coerceIn(0f, 1f), 0f..1f)
@@ -657,23 +763,38 @@ fun ModTile(
     picture: String? = null,
     size: TileSize = TileSize.Normal,
     modifier: Modifier = Modifier,
+    off: Boolean = false,
+    imageUrl: String? = null,
 ) {
+    val tileColor = tileColors[(tileHash(id) % 8u).toInt()]
+    val gray = tileColor.red * .2126f + tileColor.green * .7152f + tileColor.blue * .0722f
+    val filter =
+        if (off) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
     Box(
         modifier
+            .alpha(if (off) .38f else 1f)
             .size(size.pixels.dp)
             .clip(RoundedCornerShape(size.radius.dp))
-            .background(tileColors[(tileHash(id) % 8u).toInt()]),
+            .background(if (off) Color(gray, gray, gray) else tileColor),
         contentAlignment = Alignment.Center,
     ) {
         val vector = NnIcons.pictures[picture]
-        if (vector != null) Image(vector, null, Modifier.fillMaxSize())
+        if (vector != null) Image(vector, null, Modifier.fillMaxSize(), colorFilter = filter)
         else
             Label(
                 tileInitials(name),
-                color = Color(0xfff0ecd8),
+                color = if (off) Color(0xffebebeb) else Color(0xfff0ecd8),
                 size = size.text,
                 weight = 700,
                 width = 88f,
+            )
+        if (imageUrl != null)
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                colorFilter = filter,
             )
     }
 }
@@ -682,22 +803,34 @@ fun ModTile(
 fun Skeleton(modifier: Modifier = Modifier) {
     val t = LocalNnTheme.current
     if (t.reduceMotion)
-        Box(modifier.height(128.dp).background(t.colors.raise2, RoundedCornerShape(9.dp)))
+        Box(
+            modifier
+                .height(128.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(t.colors.raise, t.colors.raise2, t.colors.raise)
+                    ),
+                    RoundedCornerShape(LocalNnTheme.current.radiusLarge),
+                )
+        )
     else {
         val transition = rememberInfiniteTransition()
         val fraction by
             transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing)))
         Box(
-            modifier.height(128.dp).clip(RoundedCornerShape(9.dp)).drawBehind {
-                val x = (fraction * 2f - 1f) * size.width
-                drawRect(
-                    Brush.linearGradient(
-                        listOf(t.colors.raise, t.colors.raise2, t.colors.raise),
-                        start = androidx.compose.ui.geometry.Offset(x, 0f),
-                        end = androidx.compose.ui.geometry.Offset(x + size.width, 0f),
+            modifier
+                .height(128.dp)
+                .clip(RoundedCornerShape(LocalNnTheme.current.radiusLarge))
+                .drawBehind {
+                    val x = (fraction * 2f - 1f) * size.width
+                    drawRect(
+                        Brush.linearGradient(
+                            listOf(t.colors.raise, t.colors.raise2, t.colors.raise),
+                            start = androidx.compose.ui.geometry.Offset(x, 0f),
+                            end = androidx.compose.ui.geometry.Offset(x + size.width, 0f),
+                        )
                     )
-                )
-            }
+                }
         )
     }
 }
@@ -706,13 +839,14 @@ fun Skeleton(modifier: Modifier = Modifier) {
 fun ScrollArea(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val state = rememberScrollState()
     Box(modifier) {
-        Column(Modifier.fillMaxSize().verticalScroll(state).padding(end = 10.dp), content = content)
+        Column(Modifier.fillMaxSize().verticalScroll(state), content = content)
         VerticalScrollbar(
             rememberScrollbarAdapter(state),
             Modifier.align(Alignment.CenterEnd)
                 .fillMaxHeight()
                 .width(10.dp)
                 .padding(horizontal = 2.dp),
+            style = LocalScrollbarStyle.current.copy(hoverColor = LocalNnTheme.current.colors.line2),
         )
     }
 }

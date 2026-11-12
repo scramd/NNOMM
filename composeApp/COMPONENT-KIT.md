@@ -68,3 +68,83 @@ blur can differ between Chromium and Skia even with the same inputs; these still
 Windows packaging, native caption behaviour and updater execution need the checks in
 `design/WINDOWS-CHECKS.md`. The inherited app artwork is retained. Command search and pack imports
 are callback/queue seams only; the palette, import screen and domain module are separate work.
+
+## Tables and selection
+
+`Table(keys, modifier, columns = LibraryColumns, selection, header, cell)` supplies a lazy,
+scrollable table with a sticky 30 dp header. `header(columnId)` and `cell(key, columnId)` draw
+only the visible columns. `LibraryColumns` is the mock's column template; source and size disappear
+when the table's available width is at most 800 dp. Rows use the theme's 34/40 dp height.
+Pass stable mod IDs as keys, including after sorting. Pass `isOff` for the off appearance, and use
+`TableValue` and `NameCell` in cells to inherit the off text colour and weight. `ModTile(off = true)`
+and the switch remain explicit so their appearance also works outside a table.
+`NameCell` reserves space for badges; pass `Badge(modifier = Modifier.weight(1f))` within its
+badge slot when multiple badges must share limited space. Badge and Tag accept modifiers and clip.
+
+`rememberRowSelection<Id>()` provides `picked`, `focused`, and `anchor`.
+Ctrl-click toggles; Shift-click extends from the anchor; Ctrl+Shift adds a range.
+An ordinary row click focuses and opens the item, as in the mock, without changing the selection.
+The table handles arrows, Home/End, Shift ranges, Ctrl+A and Escape. `onToggleSelection`, `onOpen`, and
+`onDelete` receive Space, Enter, and Delete. Space and Delete use the selection or fall back to
+the focused row. The default bulk toggle calls `onToggle` for each key; pages should supply
+`onToggleSelection` to turn a mixed selection uniformly on or off. A moved row is brought into view below the header.
+Selection survives sorting and drops keys removed by filtering. Pages own the actual domain actions.
+`LazyList` exposes the same themed scrollbar without table semantics; `tableKeyboard` and `TableRow`
+are available for custom tables. Call `RowSelection.retain` when filtering custom lists.
+
+## Text, cards and other screen pieces
+
+`Label` accepts String or AnnotatedString, `maxLines`, `overflow`, and `textAlign`.
+Use `Label(highlightedText(name, indices), maxLines = 1)` for mock search marks, and
+`maxLines = 2` for clamped descriptions. Highlight indices are UTF-16 positions, as in JavaScript.
+`highlightedText` also has a non-composable overload that takes mark and ink colours.
+
+`CardGrid(items, key) { ModCard(...) }` lays out lazy columns of at least 228 dp, with 8 dp gaps.
+`CardStrip(items, key) { ModCard(strip = true, ...) }` uses 244 dp cards and the right-edge fade.
+`ModCard` supplies the tile, title, author, clamped description, tags, match reason and footer slot.
+Its current state and hover follow `.card`. `Skeleton` works in either container, including a static
+gradient under reduced motion. `PanelTabs`, `OptionCard`, `NavItem` (count, icon, profile dot/initial,
+and tail slot), and `EmptyState` supply the other common screen elements. `Note` accepts any icon
+and top-aligns its icon and action with multi-line text. `ModTile(imageUrl = ...)` overlays a Coil 3
+image on the fallback tile: the initials remain visible during loading or on failure. Coil handles
+fetching and decoding away from the UI thread. `off` desaturates the picture and dims the whole tile.
+
+`FilterOption(radio = true)` uses a radio glyph. Both forms have one click target and Tab stop.
+`SegmentedControl` supports `small` and a list of `Segment(title, icon, iconOnly)`; titles are tooltips.
+`TextField` supports `bg`, `focusRequester`, `autofocus`, `trailing`, and the 44 dp `palette` variant.
+Escape consumes the event only when it clears a nonempty field, leaving the next Escape for the shell.
+`SplitButton` supplies ordinary and Play geometry; `Button` also exposes shape and iconOnly for
+custom halves. `Icon(strokeWidth = ...)` changes stroke geometry without changing the source vector.
+
+## Shared focus mode: shell integration required
+
+Create one `remember { FocusMode() }` per window. Provide it with
+`CompositionLocalProvider(LocalFocusMode provides mode)` around the whole window and install
+`Modifier.windowInputMode(mode)` on its outermost container. Include the in-window overlay layer
+in that provider. Controls then show the CSS focus ring only in keyboard mode; any pointer press
+changes all controls to pointer mode. This prevents stale rings on controls previously reached by Tab.
+The ring has a 1 dp gap and 2 dp stroke. Do not clip parent containers around focusable controls;
+leave space between the control and scrolling viewport boundaries. The gallery installs this mode;
+the application shell must install it separately. Popup windows need their own event forwarding.
+
+## Kit verification and pictures
+
+The gallery has Controls, 500-row table and Cards pages. The render harness adds
+`kit-table-dark/light`, `kit-table-narrow-dark/light`, and `kit-cards-dark/light` alongside
+`kit-dark/light`. Run `uv run --with playwright --with pillow tools/kit-reference.py` from the
+repository root after rendering. It captures Browse and Library mock states at both widths and
+in both themes, and creates same-data table/card CSS specimens with side-by-side crops in
+`composeApp/build/shots/compare` (mock on the left). These are primitive comparisons, not completed
+screens. The desktop table has been exercised through row 500, Shift range selection, Ctrl+A,
+Home/End and wheel scrolling. This is a manual responsiveness check, not an FPS benchmark.
+The app was closed after checking. RowSelection tests cover range anchoring, additive selection,
+toggling, filtering and key identity through sorting.
+
+Known limits: the strip CSS specimen still has different description wrapping and slightly
+different card height. The cause has not been isolated; the bundled TTF and mock WOFF2 have
+matching ASCII advances and axis ranges. Theme/font-layout follow-up is required before claiming
+pixel equivalence. Chromium and Skia also have different text rasterization. Highlighted Label draws grouped mark
+backgrounds with the mock's 2 dp rounded corners. Profile initial/dot visibility is a page/shell
+choice (initial for the narrow rail, dot for the wide sidebar). Card footers remain page-owned slots.
+Remote image success/error rendering has not been exercised against the live registry in this pass.
+Independent Opus/Sol review is still required by the project before this work counts as done.
