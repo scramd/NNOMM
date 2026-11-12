@@ -22,7 +22,10 @@ data class PanelRef(val modId: String, val tab: PanelTab = PanelTab.About)
  * target...). Each dialog defines its own class that implements this, in `nnomm.ui.dialogs` or
  * `nnomm.ui.palette`, and the shell draws the open one.
  */
-interface Overlay
+interface Overlay {
+    /** Draws the layer. The shell places it above the window content and below toasts. */
+    @androidx.compose.runtime.Composable fun Content()
+}
 
 /**
  * View state that is not domain state (domain state lives in `AppStore.state` in :core). One
