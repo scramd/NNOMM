@@ -2,7 +2,6 @@
 
 # Real IO implementation handoff
 
-Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-04b80b35-109a7494ca638ce1`
 Branch: `t3/implement-core-real-io`. Work stays on the assigned branch; no push,
 tag, release or GitHub activity. No composeApp changes. No independent reviewers
 were started because this assignment says to work alone.

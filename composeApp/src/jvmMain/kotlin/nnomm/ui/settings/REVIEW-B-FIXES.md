@@ -1,6 +1,5 @@
 # Review B fixes
 
-Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-85098674-28d478c851529d11`.
 Branch: `t3/fix-browse-settings-dialogs` (kept the assigned implementation branch).
 First-start implementation and text files are untouched. No push, tags, release, or external activity.
 
@@ -52,7 +51,7 @@ Each line uses the numbering in the two supplied reviews. “Fixed” describes 
 - Three new `PageBRegressionTest` cases cover import counts, no null-version download, and reversed completion of game-folder inspection.
 - Full core and Compose JVM tests and the complete render suite passed; final combined build/test/render log is `/tmp/b-complete.log`.
 - Render output: `composeApp/build/shots/`; comparisons: `composeApp/build/shots/compare/`. Main affected names: 01, 02, 03, 08, 10–15, 19, 20, 23–28, 32, 36. New phases use `dialog-trouble-{intro,base,test,found,nomod,inconclusive}-{dark,light}-{wide,narrow}.png`.
-- Desktop checked on isolated Xvfb :59, 1600x1000. Normal launch hit another instance's lock; setting java.io.tmpdir to `/tmp/nnomm-b-runtime` isolated the test without disturbing it. Window and settings stayed under `/home/agent/nnomm-sandbox/page-b-home`.
+- Desktop checked on isolated Xvfb :59, 1600x1000. Normal launch hit another instance's lock; setting java.io.tmpdir to `/tmp/nnomm-b-runtime` isolated the test without disturbing it. Window and settings stayed under `<sandbox>`.
 - Ran Start -> base -> successive tests -> Found -> Keep it on; the enabled count returned from 16 to 17. Typed in new-profile and all Share fields; prefilled values appended at the end. Exercised palette typing/reopen and forward/reverse Tab in the trouble dialog. Checked game-folder typing/Escape and both-width Servers display. Opened Reset confirmation and used its keyboard controls; demo confirmation produced the mock no-op toast.
 - Desktop evidence: `/tmp/b-{desktop,pal2,trouble-key,wrap,test,test2,test3,test4,found,new,share-typed,reverse-ok,forward-ok,settings-runtime,confirm-runtime,confirm-reverse,servers-narrow}.png`.
 - INCONCLUSIVE was checked through actual dependency-cycle render fixtures; it was not driven through the running window. Not every dialog/action and Settings field received a separate desktop keyboard check. Rename/import/pack-update/light-theme interaction checks remain for integration review.

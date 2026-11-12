@@ -116,7 +116,6 @@ No Compose files, releases, tags, pushes or remote publication are part of this 
 
 ## Validation and checkout
 
-- Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-d15757d8-bfe2a456705a732c`
 - Branch: `t3/fix-real-io-safety`
 - `tools/gradlew-locked :core:spotlessApply :core:test :core:spotlessCheck`: passed.
 - JUnit results: 117 tests, zero failures, errors or skips. The two ported probe

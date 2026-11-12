@@ -1,6 +1,5 @@
 # Second real IO safety round
 
-Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-d4e7c354-12b4aa0f63fcba7f`.
 Branch: `t3/safe-per-entry-game-apply`. Local commits only, authored as clankagent.
 No push, tags, releases, GitHub activity, delegates or real game folder.
 

@@ -1,6 +1,5 @@
 # Core review fixes
 
-Implementation worktree: `/home/agent/.t3/worktrees/NNOMM/t3-7cdfaa6a-86bc31ab396a544b`.
 Branch: `t3/fix-core-review-findings`. No push, tag, release, PR, issue or external
 message. No Compose files changed. All game-folder tests use temporary sandboxes
 with an empty NuclearOption.exe, never a real installation.
