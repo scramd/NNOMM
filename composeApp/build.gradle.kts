@@ -157,6 +157,12 @@ nucleus.application {
             appCategory = "Utility"
             debMaintainer = "clankagent <${authorEmail}>"
             iconFile.set(project.file("icons/icon.png"))
+
+            flatpak {
+                runtime = "org.freedesktop.Platform"
+                runtimeVersion = "24.08" // Forces GLIBC 2.39+ runtime branch
+                sdk = "org.freedesktop.Sdk"
+            }
         }
 
         macOS {
