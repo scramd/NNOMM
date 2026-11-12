@@ -116,7 +116,8 @@ a DOS header and a PE signature at its declared offset. This checks the containe
 not whether its code can run. Unsupported RAR
 artifacts remain unavailable with a reason.
 
-Downloads trim manifest filenames and clean failed staging. Transfers retry up to
+Downloads trim manifest filenames and clean failed staging, including cancellation at
+the return to the caller. Unknown response sizes report indeterminate progress. Transfers retry up to
 three times, except HTTP 4xx. HTTPS is required for external addresses; loopback
 HTTP is permitted for offline fixtures. Redirect destinations are checked before
 following them. Text responses are bounded to 16 MiB. Successful official registry
@@ -495,3 +496,8 @@ original crash/hand-change matrix and the focused v3 probes. The slower explicit
 `:core:loaderRecoveryMatrix` task covers a second crash at each staging cleanup
 boundary, followed by hand changes between recovery runs (2,600 cases). Neither
 suite uses the network or a real game installation.
+
+A persisted rollback with no previous copy has already moved it back. Recovery
+finishes even if the player then deletes that restored target. An original
+`old-moved` record with neither copy available still blocks its targets. A present
+relinquished loader file guards Install even without the BepInEx detection DLL.

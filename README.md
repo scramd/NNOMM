@@ -23,7 +23,7 @@ To run, set `JAVA_HOME` to JetBrains JDK 25:
 tools/gradlew-locked :composeApp:run --args=--demo
 ```
 
-`NNOMM_DEMO=1` also enables demo mode. `--kit` opens the component gallery. Until real IO is integrated, `createStore(args)` also uses the demo store in real mode. Page and dialog implementations are still in progress.
+`NNOMM_DEMO=1` also enables demo mode. `--kit` opens the component gallery. Normal mode opens `RealRuntime` with persistent settings, the registry and real file operations.
 
 Never use a real game installation for development. Use `NNOMM_HOME` for a sandbox settings directory and a sandbox game folder containing an empty `NuclearOption.exe`.
 
