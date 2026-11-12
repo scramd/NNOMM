@@ -31,7 +31,7 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Copy-only placement, stable takeover names and parent/addons placement | Verify loader reads one copy; native mods and Blueprinter keep their expected paths. |
 | Doorstop restoration tied to observed game exit and startup | Steam delayed start, app closes first, app restart while game runs, and Steam URI arguments need real Windows checks. |
 | Process polling every three seconds, executable/argument detection | Verify external Steam starts and exits, CPU usage, and game-close apply timing. |
-| Pinned loader batch repair preserves existing Doorstop INI | Check 5.4.23.4 repair, differing-version refusal and interrupted repair with locked DLLs. |
+| Pinned loader Repair preserves healthy enabled INIs and skips pending restores | Check 5.4.23.4 repair, differing-version refusal and interrupted repair with locked DLLs. |
 
 ## Real-mode startup integration
 
@@ -148,9 +148,11 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 ## Final loader fixes
 
 - Repair Doorstop for owned and adopted BepInEx 5.4.23.4: a missing enabled key
-  with a valid General target stays unchanged; ineffective configs receive shipped
-  defaults and the original stays in recovery. Unowned binaries stay unchanged.
-  Without a pending restore, a locked/unreadable INI must fail without replacing any files; pending restore handling is described below.
+  with a valid General target stays unchanged; without a pending restore for that
+  folder, ineffective configs receive shipped defaults and the original stays in
+  recovery. With a pending restore, Repair skips the INI and asks for Repair again.
+  Unowned binaries stay unchanged. Without a pending restore, an unreadable INI
+  or a refused INI replacement move must fail without replacing any loader files.
 - Play without mods after Repair; verify enabled restoration after observed exit.
 - Full disk during loader download or placement gives free-space guidance; TLS
   and dropped transfers give connection guidance. First-mod Retry repeats installation.
@@ -187,3 +189,11 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 | Pause automatic restore after it reads saved bytes; request Repair, then allow restore to finish. | Repair waits on the same per-folder lock, then reads the current record. It never races a stale restore write or record clear. |
 | With a pending restore, hold the INI without FILE_SHARE_DELETE and run Repair. Also try a missing or unreadable INI. | No INI replacement or restore-record rewrite is attempted. Other eligible loader files can repair. The result asks for Repair again after restoration and makes no false recovery-copy claim. |
 | Disconnect sandbox library A with a pending restore, use Play without mods in sandbox B, then reconnect A. | Separate records retain both exact originals. B restores after exit; A is never recreated and restores when it returns. Repeat across NNOMM restart. |
+
+## Doorstop5 Repair result and folder aliases
+
+| Check on real Windows | Expected result |
+| --- | --- |
+| With an NNOMM-owned 5.4.23.4 loader, deny INI rename without denying reads. Repair both an unhealthy INI and a healthy disabled INI. | The INI replacement is first. A failed move leaves all loader file bytes unchanged, gives close-programs guidance and makes no success or recovery-copy claim. After a successful batch the INI must match the intended bytes before success is reported. |
+| Save a legacy restore through a junction or a differently cased path, disconnect that sandbox library before startup, then reconnect it. | The absent folder is not recreated. The legacy record keeps its recorded path until canonicalisation is possible. Repair finds the pending record through the canonical path; restoration returns the exact saved bytes and clears it. Linux regression covers a symlink; Windows junction and case handling remain unchecked. |
+| Keep restore locked in sandbox A, then use both normal Play and Play without mods in sandbox B. | B launches and its own original restores after exit. A's record and INI remain unchanged, its notice names A, and Play in A still refuses until restoration succeeds. |

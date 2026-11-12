@@ -510,6 +510,59 @@ class DoorstopSpecTest {
         }
     }
 
+    // Assertion ports of review5 mixedCommit and Sol's owned-loader locked move.
+    @Test
+    fun ownedLoaderLockedIniFailsBeforeAnyPromotion() = runBlocking {
+        for (target in listOf("", "valid.dll")) {
+            val original = bytes("[General]\nenabled=false\ntarget_assembly=$target\n")
+            val f = fixture(original)
+            JsonFile(
+                    f.home.resolve(
+                        "loader-${Integer.toHexString(f.game.toString().hashCode())}.json"
+                    ),
+                    ListSerializer(String.serializer()),
+                )
+                .write(listOf("BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini"))
+            val ini = f.game.resolve("doorstop_config.ini")
+            val moves = mutableListOf<Path>()
+            DiskFaults.beforeMove = {
+                moves.add(it)
+                if (it == ini) throw AccessDeniedException(it.toString())
+            }
+            try {
+                val failure =
+                    assertFailsWith<AccessDeniedException> {
+                        f.folder.repairLoader(f.game.toString())
+                    }
+                assertTrue(loaderFailureHelp(failure).contains("close programs", true))
+            } finally {
+                DiskFaults.beforeMove = {}
+            }
+            assertEquals(listOf(ini), moves)
+            assertContentEquals(original, ini.readBytes())
+            assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
+            assertTrue(f.notices.isEmpty())
+        }
+    }
+
+    @Test
+    fun repairVerifiesIniBeforeSuccessNotice() = runBlocking {
+        val original = bytes("[General]\ntarget_assembly=\n")
+        val f = fixture(original)
+        val ini = f.game.resolve("doorstop_config.ini")
+        DiskFaults.step = { if (it == "ownership-published") ini.writeBytes(original) }
+        try {
+            val failure =
+                assertFailsWith<DoorstopSettingsFailure> {
+                    f.folder.repairLoader(f.game.toString())
+                }
+            assertTrue(loaderFailureHelp(failure).contains("close programs", true))
+            assertTrue(f.notices.isEmpty())
+        } finally {
+            DiskFaults.step = {}
+        }
+    }
+
     @Test
     fun repairLockedMoveLeavesPendingIniAndRecordUntouched() = runBlocking {
         for (pending in listOf(false, true)) {

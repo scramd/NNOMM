@@ -202,6 +202,88 @@ class DoorstopRestoreTest {
         }
     }
 
+    // Assertion port of review5 legacyOrphan: migration starts with a broken alias.
+    @Test
+    fun absentLegacyAliasIsFoundWhenLibraryReturns() =
+        runBlocking<Unit> {
+            val home = temp()
+            val root = temp()
+            val library = root.resolve("library").createDirectories()
+            val game = library.resolve("game").createDirectories()
+            game.resolve("NuclearOption.exe").writeText("")
+            val ini = game.resolve("doorstop_config.ini").apply { writeText("disabled") }
+            val alias = Files.createSymbolicLink(root.resolve("alias"), library)
+            save(home, alias.resolve("game/doorstop_config.ini"))
+            val away = root.resolve("away")
+            Files.move(library, away)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                RealGameLauncher(home, scope, detect = { false })
+                scope.cancelAndJoin() // Keep the return/lookup assertion independent of retry
+                // timing.
+                assertFalse(library.exists())
+                assertTrue(home.resolve("doorstop-restore.json").readText().contains("alias"))
+                assertEquals(1, DoorstopRestores(home).records().size)
+                Files.move(away, library)
+                // This is also the lookup Repair uses, before restoration has run.
+                assertTrue(DoorstopRestores(home).read(game).isNotEmpty())
+                val retryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                try {
+                    RealGameLauncher(home, retryScope, detect = { false })
+                    assertContentEquals(original, ini.readBytes())
+                    assertTrue(DoorstopRestores(home).records().isEmpty())
+                } finally {
+                    retryScope.cancelAndJoin()
+                }
+            } finally {
+                scope.cancelAndJoin()
+            }
+        }
+
+    // Assertion port of review5 lockedOtherFolder, for both Play modes.
+    @Test
+    fun lockedRestoreDoesNotBlockPlayInAnotherFolder() =
+        runBlocking<Unit> {
+            val home = temp()
+            val a = temp()
+            val b = temp()
+            for (game in listOf(a, b)) game.resolve("NuclearOption.exe").writeText("")
+            val aIni = a.resolve("doorstop_config.ini").apply { writeText("disabled") }
+            val bIni = b.resolve("doorstop_config.ini").apply { writeBytes(original) }
+            save(home, aIni)
+            val notices = CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                val launcher =
+                    RealGameLauncher(
+                        home,
+                        scope,
+                        listOf("sh", "-c", "sleep 0.2"),
+                        detect = { false },
+                        notice = { notices.add(it) },
+                        writeDoorstop = { path, bytes ->
+                            if (path.parent == a) throw AccessDeniedException(path.toString())
+                            Files.write(path, bytes)
+                        },
+                    )
+                for (withoutMods in listOf(false, true)) {
+                    launcher.start(AppState(game = GameInfo(b.toString())), withoutMods)
+                    withTimeout(5000) { launcher.running.first { !it } }
+                    assertContentEquals(original, bIni.readBytes())
+                    assertEquals("disabled", aIni.readText())
+                    assertTrue(DoorstopRestores(home).read(a).isNotEmpty())
+                    assertTrue(DoorstopRestores(home).read(b).isEmpty())
+                }
+                assertEquals(1, notices.size)
+                assertTrue(notices.single().contains(a.toString()))
+                assertFailsWith<DoorstopSettingsFailure> {
+                    launcher.start(AppState(game = GameInfo(a.toString())), false)
+                }
+            } finally {
+                scope.cancelAndJoin()
+            }
+        }
+
     @Test
     fun runtimeOpensWithUnrestorableRecordWithoutNetwork() = runBlocking {
         val home = temp()
