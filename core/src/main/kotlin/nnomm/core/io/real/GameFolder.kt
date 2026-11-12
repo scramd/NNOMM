@@ -1417,6 +1417,8 @@ class RealGameFolder(
         check(pending.gameRoot == game.toString()) { "Loader recovery folder mismatch" }
         val report = promotionReport(game)
         val promoted = promoted(report, pending.operationId)
+        // Only recovery's confirmed hand replacements relinquish matching old bytes.
+        // A refused eligibility check is unmoved, not preserved; it still needs verification.
         val preserved =
             runCatching { json.decodeFromString<PromotionReport>(report.readText()) }
                 .getOrNull()
