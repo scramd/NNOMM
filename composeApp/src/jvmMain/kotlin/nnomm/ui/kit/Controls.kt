@@ -708,6 +708,12 @@ fun Note(
 @Composable
 fun ProgressBar(progress: Float, modifier: Modifier = Modifier, neutral: Boolean = false) {
     val t = LocalNnTheme.current
+    if (progress < 0f) {
+        Skeleton(modifier.height(3.dp).semantics {
+            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+        })
+        return
+    }
     val pct by
         animateFloatAsState(
             progress.coerceIn(0f, 1f),
