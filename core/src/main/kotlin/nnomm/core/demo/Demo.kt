@@ -48,13 +48,17 @@ object Demo {
                         sizeKb = x.str("size").toLong(),
                         dateMillis = NOW - upd * 86400000,
                     )
+                val installedVersion =
+                    data.getValue("installed").jsonObject[x.str("id")]?.jsonObject?.str("v")
+                val olderInstalled = installedVersion != null && installedVersion != v.version
                 val versions = buildList {
                     add(v)
                     if (added != upd)
                         add(
                             v.copy(
                                 version = x.str("prev", prevVersion(v.version)),
-                                dateMillis = NOW - added * 86400000,
+                                dateMillis =
+                                    NOW - (if (olderInstalled) upd + 38 else added) * 86400000,
                             )
                         )
                     if (x["pre"] !is JsonNull && x["pre"] != null)
@@ -70,6 +74,9 @@ object Demo {
                     demoPicture = x["img"]?.jsonPrimitive?.content?.takeUnless { it == "false" },
                     side = if (x.str("side") == "server") Side.SERVER else Side.CLIENT,
                     versions = versions,
+                    githubOwner = x.str("author"),
+                    githubRepository = x.str("id"),
+                    firstReleaseMillis = NOW - added * 86400000,
                     localFile = if (x.str("local") == "true") x.str("file") else null,
                 )
             }
@@ -143,18 +150,25 @@ object Demo {
             x.str("name"),
             x.str("by"),
             x.str("v"),
-            x.getValue("items").jsonArray.map { node ->
-                val a = node.jsonArray
-                PackItem(
-                    PackKind.valueOf(a[0].jsonPrimitive.content.uppercase()),
-                    a[1].jsonPrimitive.content,
-                    a.getOrNull(2)?.jsonPrimitive?.content?.takeUnless {
-                        a[0].jsonPrimitive.content == "local"
-                    },
-                    a.getOrNull(3)?.jsonPrimitive?.content,
-                    if (a[0].jsonPrimitive.content == "local") a[2].jsonPrimitive.long else null,
-                )
-            },
+            x.getValue("items")
+                .jsonArray
+                .map { node ->
+                    val a = node.jsonArray
+                    PackItem(
+                        PackKind.valueOf(a[0].jsonPrimitive.content.uppercase()),
+                        a[1].jsonPrimitive.content,
+                        a.getOrNull(2)?.jsonPrimitive?.content?.takeUnless {
+                            a[0].jsonPrimitive.content == "local"
+                        },
+                        a.getOrNull(3)?.jsonPrimitive?.content,
+                        if (a[0].jsonPrimitive.content == "local") a[2].jsonPrimitive.long else null,
+                    )
+                }
+                .map { item ->
+                    if (item.kind == PackKind.SAME && item.version == null)
+                        item.copy(version = state().installed[item.id]?.defaultVersion)
+                    else item
+                },
             x.str("file").ifEmpty { null },
         )
 
@@ -265,12 +279,21 @@ object Demo {
     }
 }
 
-class DemoLauncher : GameLauncher {
+class DemoLauncher(
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+) : GameLauncher {
     private val flow = MutableStateFlow(false)
+    private var end: Job? = null
     override val running = flow.asStateFlow()
 
     override suspend fun start(state: AppState, withoutMods: Boolean) {
         flow.value = true
+        end?.cancel()
+        end =
+            scope.launch {
+                delay(20_000)
+                stop()
+            }
     }
 
     fun stop() {

@@ -70,6 +70,13 @@ fun Menu(
     initialIndex: Int = -1,
 ) {
     if (!expanded) return
+    val app = nnomm.ui.LocalOptionalApp.current
+    val dismiss by rememberUpdatedState(onDismiss)
+    val registration = remember { { dismiss() } }
+    DisposableEffect(app) {
+        app?.ui?.dismissMenu = registration
+        onDispose { if (app?.ui?.dismissMenu === registration) app?.ui?.dismissMenu = null }
+    }
     val gap = with(LocalDensity.current) { 4.dp.roundToPx() }
     val inset = with(LocalDensity.current) { 24.dp.roundToPx() }
     val pointer =
@@ -110,7 +117,7 @@ fun Menu(
     val shortcut = LocalShortcutHandler.current
     Popup(position, onDismiss, properties = PopupProperties(focusable = true)) {
         Box(
-            Modifier.padding(24.dp).onPreviewKeyEvent {
+            Modifier.padding(24.dp).onKeyEvent {
                 if (it.key == Key.Escape) false else shortcut(it)
             }
         ) {

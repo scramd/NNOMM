@@ -19,6 +19,8 @@ import java.awt.dnd.*
 import java.io.File
 import java.util.Properties
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import nnomm.core.demo.demoStore
 import nnomm.core.io.real.RealRuntime
 import nnomm.core.store.AppStore
@@ -167,7 +169,19 @@ fun main(args: Array<String>) {
                 }
             }
         }
-        val storeState = model?.store?.state?.collectAsState()?.value
+        // Collect only what the window root needs, so downloads and toasts do not recompose it.
+        val generalFlow =
+            remember(model) {
+                model?.store?.state?.map { it.settings.general }?.distinctUntilChanged()
+            }
+        val general =
+            generalFlow?.collectAsState(model!!.store.state.value.settings.general)?.value.orEmpty()
+        val firstStartFlow =
+            remember(model) {
+                model?.store?.state?.map { it.firstStart.complete }?.distinctUntilChanged()
+            }
+        val firstStartDone =
+            firstStartFlow?.collectAsState(model!!.store.state.value.firstStart.complete)?.value
         DisposableEffect(Unit) {
             onDispose {
                 model?.close()
@@ -176,7 +190,7 @@ fun main(args: Array<String>) {
         }
         LaunchedEffect(
             model,
-            storeState?.firstStart?.complete,
+            firstStartDone,
             LaunchRequests.pendingFiles.toList(),
         ) {
             val ready = model ?: return@LaunchedEffect
@@ -223,16 +237,14 @@ fun main(args: Array<String>) {
         model?.checkAppUpdates = {
             if (!isDemo)
                 scope.launch {
-                    updates.check(
-                        storeState!!.settings.general["appUpdate"]?.content ?: "Tell me"
-                    ) { message ->
+                    updates.check(general["appUpdate"]?.content ?: "Tell me") { message ->
                         scope.launch { model?.ui?.updateStatus = message }
                     }
                 }
         }
         model?.openAppReleases = { platform.openUrl(NNOMM_LATEST_RELEASE_URL) }
         LaunchedEffect(model) { if (!isDemo) model?.checkAppUpdates?.invoke() }
-        val values = storeState?.settings?.general.orEmpty()
+        val values = general
         val dark =
             when {
                 "--light" in args -> false
@@ -255,7 +267,19 @@ fun main(args: Array<String>) {
                 state = state,
                 minimumSize = DpSize(720.dp, 560.dp),
                 onCloseRequest = saveAndExit,
-                onPreviewKeyEvent = { model?.shortcut(it) ?: false },
+                onPreviewKeyEvent = { event ->
+                    if (System.getenv("NNOMM_LOG_KEYS") == "1")
+                        System.err.println(
+                            "NNOMM key=${event.key} type=${event.type} utf16=${event.utf16CodePoint} native=${event.nativeKeyEvent}"
+                        )
+                    val m = model
+                    m != null &&
+                        (m.suppressHandledCharacter(event) ||
+                            ((event.isCtrlPressed || event.isMetaPressed) &&
+                                event.key == Key.Enter &&
+                                m.shortcut(event)))
+                },
+                onKeyEvent = { model?.shortcut(it) ?: false },
             ) {
                 val win = nucleusWindow
                 val drag = Modifier.windowDragArea(window = checkNotNull(win.unsafe.taoWindow))
@@ -263,7 +287,11 @@ fun main(args: Array<String>) {
                 val maximized = state.placement == WindowPlacement.Maximized
                 val focusMode = remember { nnomm.ui.kit.FocusMode() }
                 CompositionLocalProvider(nnomm.ui.kit.LocalFocusMode provides focusMode) {
-                    Box(Modifier.fillMaxSize().then(Modifier.windowInputMode(focusMode))) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .onKeyEvent { model?.shortcut(it) ?: false }
+                            .then(Modifier.windowInputMode(focusMode))
+                    ) {
                         WindowScaffold(
                             modifier =
                                 Modifier.fillMaxSize()

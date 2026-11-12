@@ -74,10 +74,8 @@ internal fun modItems(model: AppModel, s: AppState, id: String): List<MenuEntry>
         add(MenuEntry.Item("See what's new") { model.ui.openMod(id, PanelTab.WhatsNew) })
     }
     add(MenuEntry.Separator)
-    // TODO(core): expose managed mod/config paths rather than guessing a path under the game
-    // folder.
-    add(MenuEntry.Item("Open the mod folder", icon = NnIcons.folder, enabled = false) {})
-    add(MenuEntry.Item("Open its settings file", icon = NnIcons.file, enabled = false) {})
+    add(MenuEntry.Item("Open the mod folder", icon = NnIcons.folder) { model.openModFolder(id) })
+    add(MenuEntry.Item("Open its settings file", icon = NnIcons.file) { model.openModSettings(id) })
     add(MenuEntry.Separator)
     add(
         MenuEntry.Item(
@@ -94,10 +92,7 @@ internal fun modItems(model: AppModel, s: AppState, id: String): List<MenuEntry>
 
 internal fun moreItems(model: AppModel): List<MenuEntry> =
     listOf(
-        MenuEntry.Item("Import a modpack", icon = NnIcons.box) {
-            model.ui.importMode = "new"
-            model.openOverlay("import")
-        },
+        MenuEntry.Item("Import a modpack", icon = NnIcons.box) { model.importPack() },
         MenuEntry.Item("Share this profile as a modpack", icon = NnIcons.share) {
             model.ui.overlayProfileId = model.store.state.value.profileId
             model.openOverlay("share")
@@ -113,8 +108,6 @@ internal fun moreItems(model: AppModel): List<MenuEntry> =
             icon = NnIcons.folder,
             enabled = model.store.state.value.game.folder != null,
         ) {
-            model.store.state.value.game.folder?.let {
-                model.platform.openFolder(File(it, "BepInEx/plugins"))
-            }
+            model.store.state.value.game.folder?.let { model.openPath(File(it, "BepInEx/plugins")) }
         },
     )

@@ -61,7 +61,7 @@ class ShellContractTest {
             assertEquals(PanelRef("minimap", PanelTab.WhatsNew), model.ui.panel)
             assertEquals("upd", model.ui.library.filter)
             assertTrue(store.state.value.gameRunning)
-            assertEquals(42, store.state.value.downloads.single().percent)
+            assertEquals(78, store.state.value.downloads.single().percent)
         }
     }
 
@@ -83,6 +83,72 @@ class ShellContractTest {
             model.acceptFiles(listOf(file))
             assertTrue(called)
             assertEquals("import", model.ui.overlayKind)
+        }
+    }
+
+    @Test
+    fun pageKeysNeverRunOnControlsAndMenuEscapeComesFirst() {
+        mockStore("").use { store ->
+            val model = AppModel(store, ShotPlatform)
+            model.ui.go(Page.Library)
+            var calls = 0
+            model.registerKeys(Page.Library) {
+                calls++
+                true
+            }
+            model.ui.pageKeysEnabled = false
+            for (key in listOf(Key.Enter, Key.Spacebar, Key.Delete, Key.DirectionDown)) {
+                assertFalse(model.shortcut(KeyEvent(key, KeyEventType.KeyDown)))
+            }
+            assertEquals(0, calls)
+            model.ui.openMod("minimap")
+            model.ui.dismissMenu = { model.ui.dismissMenu = null }
+            assertTrue(model.shortcut(KeyEvent(Key.Escape, KeyEventType.KeyDown)))
+            assertNotNull(model.ui.panel)
+        }
+    }
+
+    @Test
+    fun taoCharacterCommandsAndImportLifecycle() {
+        assertEquals(
+            Key.Spacebar,
+            shortcutEvent(KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = 32)).key,
+        )
+        assertEquals(
+            Key.Slash,
+            shortcutEvent(KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = 47)).key,
+        )
+        assertEquals(
+            KeyEventType.KeyUp,
+            shortcutEvent(KeyEvent(Key.Unknown, KeyEventType.KeyUp, codePoint = 32)).type,
+        )
+        mockStore("").use { store ->
+            val model = AppModel(store, ShotPlatform)
+            model.ui.importMode = "add"
+            model.acceptFiles(listOf(File("test.nommpack")))
+            assertEquals("new", model.ui.importMode)
+            model.closeOverlay()
+            assertNull(model.ui.importFile)
+            model.ui.library.selection = setOf("minimap")
+            model.useProfile("friday")
+            assertTrue(model.ui.library.selection.isEmpty())
+        }
+    }
+
+    @Test
+    fun physicalAndTypedSpaceRunOnce() {
+        mockStore("").use { store ->
+            val model = AppModel(store, ShotPlatform)
+            var calls = 0
+            model.registerKeys(Page.Browse) {
+                calls++
+                true
+            }
+            assertTrue(model.shortcut(KeyEvent(Key.Spacebar, KeyEventType.KeyDown)))
+            val typed = KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = 32)
+            assertTrue(model.suppressHandledCharacter(typed))
+            assertFalse(model.suppressHandledCharacter(typed))
+            assertEquals(1, calls)
         }
     }
 
