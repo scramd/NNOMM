@@ -34,8 +34,14 @@ class RealGameFolder(
     private val catalog: () -> List<CatalogMod> = { emptyList() },
     private val running: () -> Boolean = { gameProcessRunning() },
     private val notice: (String) -> Unit = {},
+    private val backgroundScope: CoroutineScope? = null,
+    private val preferredVersions: () -> Map<String, String> = { emptyMap() },
 ) : GameFolder {
     private val mutex = Mutex()
+    private val learning = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun displayName(id: String) = catalog().find { it.id == id }?.name ?: "this mod"
+
     override var applySucceeded = false
         private set
 
@@ -155,6 +161,7 @@ class RealGameFolder(
                         previousAdoption?.applied == true && it.epoch == previousAdoption.epoch
                     }
                 val owned = trusted?.entries.orEmpty()
+                val matchVersion = store.versionMatcher(preferredVersions())
                 val found = mutableListOf<Pair<CatalogMod, InstalledMod>>()
                 val entries = mutableMapOf<String, ManagedMod>()
                 val unplaced = mutableMapOf<String, ManagedMod>()
@@ -190,7 +197,7 @@ class RealGameFolder(
                                     else null
                                 val stale = staleRecord?.entries?.get(path.name)
                                 val match =
-                                    store.matchingVersion(
+                                    matchVersion(
                                         path,
                                         path.isRegularFile(),
                                         stale?.let { it.id to it.version },
@@ -360,6 +367,24 @@ class RealGameFolder(
                                 },
                     ),
                 )
+                found.forEach { (mod, installed) ->
+                    val artifact = mod.versions.find { it.version == installed.defaultVersion }
+                    if (
+                        artifact != null &&
+                            store.unprovenTakeover(mod.id, artifact.version) &&
+                            learning.add("${mod.id}/${artifact.version}")
+                    ) {
+                        backgroundScope?.launch {
+                            try {
+                                store.learnShipped(mod, artifact, downloader)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                /* Offline: same-version-only restoration remains safe. */
+                            }
+                        }
+                    }
+                }
                 found
             }
         }
@@ -459,9 +484,12 @@ class RealGameFolder(
                             "Two enabled mods use the same game folder name. Turn off one of them and Retry.",
                         )
                     }
-                    return@guarded
                 }
-                val wanted = wantedPairs.toMap()
+                val collisionNames = collisions.flatten().map { it.first.lowercase() }.toSet()
+                // Preserve existing colliding placements; unrelated entries can still proceed.
+                val wanted =
+                    wantedPairs.filter { it.first.lowercase() !in collisionNames }.toMap() +
+                        old.entries.filterKeys { it.lowercase() in collisionNames }
                 val result = old.entries.toMutableMap()
                 val owners =
                     old.entries.keys
@@ -492,7 +520,8 @@ class RealGameFolder(
                         .toSet()
                 fun extras(m: ManagedMod, profile: String) =
                     home.resolve("player-files/${component(profile)}/${component(m.id)}")
-                val blocked = mutableSetOf<String>()
+                val blocked =
+                    old.entries.keys.filter { it.lowercase() in collisionNames }.toMutableSet()
                 for (name in changed) {
                     try {
                         val target = safe(plugin, name)
@@ -553,6 +582,10 @@ class RealGameFolder(
                         val dest = safe(plugin, name)
                         val payload = store.version(m.id, m.version)
                         val kept = extras(m, owners[name] ?: "default")
+                        val baseline =
+                            if (store.unprovenTakeover(m.id, m.version))
+                                store.hashes(m.id, m.version)
+                            else store.shippedHashes(m.id, m.version)
                         val snapshot = home.resolve("staging/player-${java.util.UUID.randomUUID()}")
                         Files.createDirectories(snapshot)
                         if (dest.isDirectory())
@@ -570,8 +603,7 @@ class RealGameFolder(
                                                         "$name/$rel".startsWith("$it/"))
                                             }
                                         ) {
-                                            val originalHash =
-                                                store.shippedHashes(m.id, m.version)[rel]
+                                            val originalHash = baseline[rel]
                                             if (
                                                 originalHash == null || originalHash != digest(file)
                                             )
@@ -581,8 +613,7 @@ class RealGameFolder(
                             }
                         if (dest.isRegularFile()) {
                             val rel = dest.fileName.toString()
-                            if (store.shippedHashes(m.id, m.version)[rel] != digest(dest))
-                                copyTree(dest, safe(snapshot, rel))
+                            if (baseline[rel] != digest(dest)) copyTree(dest, safe(snapshot, rel))
                         }
                         // Shipped-file edits belong to this exact version/generation. A later
                         // version's capture cannot overwrite edits that it never put back.
@@ -597,7 +628,10 @@ class RealGameFolder(
                                     .forEach { file ->
                                         val relative =
                                             snapshot.relativize(file).toString().replace('\\', '/')
-                                        if (relative in shipped)
+                                        if (
+                                            relative in shipped ||
+                                                store.unprovenTakeover(m.id, m.version)
+                                        )
                                             copyTree(file, safe(editedStage, relative))
                                     }
                             }
@@ -624,9 +658,12 @@ class RealGameFolder(
                             m.version,
                         )
                         captured[name] = snapshot
-                        if (Files.walk(snapshot).use { it.anyMatch { p -> p.isRegularFile() } })
+                        if (
+                            !store.unprovenTakeover(m.id, m.version) &&
+                                Files.walk(snapshot).use { it.anyMatch { p -> p.isRegularFile() } }
+                        )
                             notice(
-                                "Kept changed files for ${m.id} in $kept. They return with this profile."
+                                "Kept changed files for ${displayName(m.id)} in recovery storage. They return with this profile."
                             )
                     } catch (e: Exception) {
                         problem(
@@ -737,6 +774,78 @@ class RealGameFolder(
                                 copyTree(payload.resolve(Path.of(name).fileName), next)
                             else copyTree(payload, next)
                             val kept = extras(m, plan.profileId)
+                            val versionSidecar =
+                                kept.resolveSibling(kept.fileName.toString() + ".version")
+                            val originalVersion =
+                                if (versionSidecar.isRegularFile()) versionSidecar.readText()
+                                else
+                                    kept
+                                        .resolveSibling(kept.fileName.toString() + ".generation")
+                                        .let {
+                                            if (it.isRegularFile())
+                                                store.versionForGeneration(m.id, it.readText())
+                                            else null
+                                        }
+                            if (
+                                originalVersion != null &&
+                                    !versionSidecar.exists() &&
+                                    kept.isDirectory()
+                            )
+                                atomic(versionSidecar, originalVersion)
+                            if (
+                                kept.isDirectory() &&
+                                    (originalVersion == null ||
+                                        (originalVersion != m.version &&
+                                            store.unprovenTakeover(m.id, originalVersion)))
+                            ) {
+                                val saved =
+                                    home.resolve(
+                                        "player-edits/${component(plan.profileId)}/${component(m.id)}/" +
+                                            (originalVersion?.let(::component)
+                                                ?: "unknown-version") +
+                                            "-" +
+                                            java.util.UUID.randomUUID()
+                                    )
+                                val recoveryStage =
+                                    Files.createTempDirectory(
+                                        home.resolve("staging"),
+                                        "unknown-files-",
+                                    )
+                                try {
+                                    if (
+                                        originalVersion != null &&
+                                            store.version(m.id, originalVersion).isDirectory()
+                                    )
+                                        copyTreeContents(
+                                            store.version(m.id, originalVersion),
+                                            recoveryStage,
+                                        )
+                                    Files.walk(kept).use { files ->
+                                        files
+                                            .filter { it.isRegularFile() }
+                                            .forEach { file ->
+                                                val to =
+                                                    safe(
+                                                        recoveryStage,
+                                                        kept
+                                                            .relativize(file)
+                                                            .toString()
+                                                            .replace('\\', '/'),
+                                                    )
+                                                if (to.exists()) deleteTree(to)
+                                                copyTree(file, to)
+                                            }
+                                    }
+                                    replaceTree(saved, recoveryStage, home.resolve("transactions"))
+                                } finally {
+                                    deleteTree(recoveryStage)
+                                }
+                                deleteTree(kept)
+                                notice(
+                                    "Saved files for ${displayName(m.id)} were set aside in recovery storage. The selected version uses its own files."
+                                )
+                            }
+                            var collisionNoticed = false
                             if (next.isDirectory() && kept.isDirectory())
                                 Files.walk(kept).use { files ->
                                     files
@@ -796,9 +905,11 @@ class RealGameFolder(
                                                         file,
                                                         home.resolve("transactions"),
                                                     )
-                                                notice(
-                                                    "Shipped files were placed for ${m.id}. Its edits stay saved for their original version in ${home.resolve("player-edits")}."
-                                                )
+                                                if (!collisionNoticed)
+                                                    notice(
+                                                        "Shipped files were placed for ${displayName(m.id)}. Its edits stay saved for their original version in recovery storage."
+                                                    )
+                                                collisionNoticed = true
                                             }
                                         }
                                 }

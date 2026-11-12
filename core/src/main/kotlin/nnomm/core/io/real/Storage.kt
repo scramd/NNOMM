@@ -206,6 +206,20 @@ class RealModStore(
             if (it.exists()) it.readText() else ""
         }
 
+    internal fun versionForGeneration(id: String, saved: String): String? {
+        val stamp = saved.substringAfterLast('|')
+        if (stamp.isBlank()) return null
+        val versions = safe(storeRoot, component(id))
+        if (!versions.isDirectory()) return null
+        return Files.list(versions).use { paths ->
+            paths
+                .filter { it.isDirectory() && generation(id, it.name) == stamp }
+                .toList()
+                .singleOrNull()
+                ?.name
+        }
+    }
+
     internal fun hashes(id: String, version: String): Map<String, String> {
         val file =
             JsonFile(
@@ -224,36 +238,101 @@ class RealModStore(
         if (provenance(id, version).read()?.origin != PayloadOrigin.TAKEOVER)
             return hashes(id, version)
         val verified = registryPayload(id, version).read() ?: return emptyMap()
-        return if (verified.artifactHash != null) verified.payloadHashes else emptyMap()
+        return if (verified.artifactHash != null)
+            verified.payloadHashes + hashes(id, version).filterKeys { it == "meta.json" }
+        else emptyMap()
+    }
+
+    /** One operation-local index; each candidate is hashed at most once, after size filtering. */
+    internal fun versionMatcher(
+        preferredVersions: Map<String, String> = emptyMap(),
+        onCandidateHash: (Path) -> Unit = {},
+    ): (Path, Boolean, Pair<String, String>?) -> Pair<String, String>? {
+        val candidates = mutableListOf<Pair<Pair<String, String>, Path>>()
+        if (storeRoot.isDirectory())
+            Files.list(storeRoot).use { ids ->
+                ids.filter { it.isDirectory() }
+                    .forEach { id ->
+                        Files.list(id).use { versions ->
+                            versions
+                                .filter { it.isDirectory() }
+                                .forEach { v -> candidates += (id.name to v.name) to v }
+                        }
+                    }
+            }
+        val sizes = mutableMapOf<Path, Long>()
+        val hashes = mutableMapOf<Path, String>()
+        fun size(p: Path): Long =
+            sizes.getOrPut(p) {
+                Files.walk(p).use { files ->
+                    files.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+                }
+            }
+        return { path, loose, preferred ->
+            val bytes = size(path)
+            val actual by lazy { treeHash(path) }
+            val matches =
+                candidates
+                    .filter { (_, v) ->
+                        val candidate = if (loose) v.resolve(path.name) else v
+                        candidate.exists() &&
+                            size(candidate) == bytes &&
+                            hashes.getOrPut(candidate) {
+                                onCandidateHash(candidate)
+                                treeHash(candidate)
+                            } == actual
+                    }
+                    .map { it.first }
+            require(matches.map { it.first }.distinct().size <= 1) {
+                "These files match several different mods. Both copies have been kept."
+            }
+            if (preferred in matches) preferred
+            else
+                matches.find { preferredVersions[it.first] == it.second }
+                    ?: matches.maxWithOrNull { x, y -> compareVersions(x.second, y.second) }
+        }
     }
 
     internal fun matchingVersion(
         path: Path,
         loose: Boolean,
         preferred: Pair<String, String>? = null,
-    ): Pair<String, String>? {
-        if (!storeRoot.isDirectory()) return null
-        val actual = treeHash(path)
-        val matches = mutableListOf<Pair<String, String>>()
-        Files.list(storeRoot).use { ids ->
-            ids.filter { it.isDirectory() }
-                .forEach { id ->
-                    Files.list(id).use { versions ->
-                        versions
-                            .filter { it.isDirectory() }
-                            .forEach { version ->
-                                val candidate = if (loose) version.resolve(path.name) else version
-                                if (candidate.exists() && treeHash(candidate) == actual)
-                                    matches += id.name to version.name
-                            }
-                    }
+    ) = versionMatcher()(path, loose, preferred)
+
+    internal fun unprovenTakeover(id: String, version: String) =
+        provenance(id, version).read()?.origin == PayloadOrigin.TAKEOVER &&
+            registryPayload(id, version).read()?.artifactHash == null
+
+    /** Learn shipped files without replacing the player's takeover snapshot. */
+    internal suspend fun learnShipped(
+        mod: CatalogMod,
+        artifact: ModVersion,
+        downloader: Downloader,
+    ) {
+        if (!unprovenTakeover(mod.id, artifact.version) || artifact.hash.isNullOrBlank()) return
+        downloader
+            .download(mod, artifact) {}
+            .use { transfer ->
+                val source = Path.of(transfer.path)
+                require(
+                    transfer.origin == PayloadOrigin.REGISTRY_DOWNLOAD && source.isRegularFile()
+                )
+                val expected = requireNotNull(normalizedHash(artifact.hash))
+                require(transfer.verifiedHash == expected && digest(source) == expected)
+                val staging = Files.createTempDirectory(home.resolve("staging"), "learn-shipped-")
+                try {
+                    unpack(source, staging)
+                    val record =
+                        PayloadProvenance(
+                            PayloadOrigin.REGISTRY_DOWNLOAD,
+                            artifact.hash,
+                            hashPayload(staging),
+                        )
+                    mutex.withLock { registryPayload(mod.id, artifact.version).write(record) }
+                } finally {
+                    deleteTree(staging)
                 }
-        }
-        if (preferred in matches) return preferred
-        require(matches.size <= 1) {
-            "These files match several stored mods. They were left unchanged; keep only the intended version before taking over."
-        }
-        return matches.singleOrNull()
+            }
     }
 
     private fun hashPayload(path: Path): Map<String, String> =

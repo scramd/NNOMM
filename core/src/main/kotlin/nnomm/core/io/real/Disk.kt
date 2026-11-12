@@ -357,7 +357,25 @@ internal fun recoverTransactions(
             .toList()
             .forEach { journal ->
                 try {
-                    var batch = json.decodeFromString<TransactionBatch>(journal.readText())
+                    var batch =
+                        try {
+                            json.decodeFromString<TransactionBatch>(journal.readText())
+                        } catch (e: kotlinx.serialization.SerializationException) {
+                            if (folder.fileName.toString() != "transactions" || notice == null)
+                                throw e
+                            val aside = folder.resolve("damaged-records")
+                            Files.createDirectories(aside)
+                            Files.move(
+                                journal,
+                                aside.resolve(
+                                    journal.fileName.toString() + "-" + java.util.UUID.randomUUID()
+                                ),
+                            )
+                            notice(
+                                "A record of an unfinished change is damaged. NNOMM set it aside in recovery storage; your files have been kept."
+                            )
+                            return@forEach
+                        }
                     if (
                         homeOnly &&
                             batch.changes.any { it.gameTarget || isGameTarget(Path.of(it.target)) }

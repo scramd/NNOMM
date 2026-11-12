@@ -228,3 +228,33 @@ Play failures show entry-specific reasons with working Retry and Turn off toast
 actions. Turn off disables the failed entries; the next Play uses the remaining
 mods. Loader repair uses AppStore's serialized disk queue. Unknown placement
 errors no longer claim another program necessarily holds a file open.
+
+## Last core review
+
+Takeover builds one operation-local store index, filters by file size and hashes
+matching candidates once. Identical copies under one mod id prefer the recorded
+version, otherwise the newest version. Different mod identities remain ambiguous.
+For registry takeovers, the real runtime downloads the original verified artifact
+once in its background scope to learn shipped file hashes without replacing the
+player's snapshot. Offline or unknown takeovers restore unproven files only with
+the same version. On a version change, those files are set aside under
+`player-edits` with one notice. NOMM metadata is not carried to another version.
+Legacy extras without a `.version` record use their saved generation to identify
+the source version. If no unique version matches, they are copied to identified
+unknown-version recovery storage before applying the requested version.
+
+Malformed home journals are moved to `transactions/damaged-records` with one plain
+notice. Malformed game journals continue to block game mutation because their
+unknown targets cannot be safely ignored. Folder-name collisions report a problem
+for both mods and leave those entries alone; unrelated entries still apply.
+Remove all mods applies the proposed game plan before changing Library records.
+A failed apply leaves Library records available for retry.
+
+Routine disk operations refresh file sizes only. The hash-based Clear estimate is
+computed only by `refreshStoreUsage` or Clear. The estimate remains the last explicit scan;
+`storeUnusedMb = null` means no estimate has been requested. Clear still verifies duplicate bytes before
+removing recoverable files.
+Unproven takeover snapshots themselves supply the baseline for detecting later
+player edits. An unchanged switch-off does not duplicate the whole mod as edits.
+Those edits return with the original version and generation; a version change
+keeps an identified recovery snapshot of the unproven original files.

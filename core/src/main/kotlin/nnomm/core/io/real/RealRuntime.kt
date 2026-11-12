@@ -124,6 +124,12 @@ private constructor(
                             { current().catalog },
                             { launcher.running.value || gameProcessRunning() },
                             notice,
+                            backgroundScope = scope,
+                            preferredVersions = {
+                                current().installed.mapValues { (_, mod) ->
+                                    mod.profiles[current().profileId]?.version ?: mod.defaultVersion
+                                }
+                            },
                         )
                     val folder =
                         initial.settings.general["gamePath"]?.content?.takeIf { it.isNotBlank() }
