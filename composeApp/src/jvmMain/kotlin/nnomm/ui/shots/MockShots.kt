@@ -1,0 +1,70 @@
+package nnomm.ui.shots
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import nnomm.ui.AppModel
+import nnomm.ui.shell.*
+
+data class MockShot(
+    val name: String,
+    val address: String,
+    val width: Int = 1328,
+    val height: Int = 792,
+)
+
+val mockShots =
+    listOf(
+        MockShot("01-browse", "page=browse", 1328, 792),
+        MockShot("02-browse-search", "page=browse&q=hud&panel=mod:fuel-planner", 1328, 792),
+        MockShot("03-browse-list-tags", "page=browse&view=list&tags=Map,Visual", 1328, 792),
+        MockShot("04-library", "page=library", 1328, 792),
+        MockShot(
+            "05-library-bulk",
+            "page=library&sel=minimap,delivery,spectator&panel=mod:harrier-kai&tab=needs",
+            1328,
+            792,
+        ),
+        MockShot(
+            "06-library-updates",
+            "page=library&lf=upd&dl=minimap&panel=mod:minimap&tab=new",
+            1328,
+            792,
+        ),
+        MockShot("08-settings-game", "page=settings&cat=game", 1328, 792),
+        MockShot("10-settings-profile", "page=settings&scope=profile&pid=hardcore", 1328, 792),
+        MockShot("11-settings-search", "page=settings&sq=update", 1328, 792),
+        MockShot("12-palette", "page=library&overlay=palette&pq=map", 1328, 792),
+        MockShot("13-import", "page=library&overlay=import", 1328, 792),
+        MockShot("14-pack-update", "page=library&prof=friday&overlay=packupdate", 1328, 792),
+        MockShot("15-troubleshoot", "page=library&trouble=1", 1328, 792),
+        MockShot("16-first-start", "mock=first", 1328, 792),
+        MockShot("17-drop", "page=library&overlay=drop", 1328, 792),
+        MockShot("18-light-library", "page=library&theme=light&panel=mod:spectator", 1328, 792),
+        MockShot("19-light-browse", "page=browse&theme=light", 1328, 792),
+        MockShot("20-narrow-browse", "page=browse", 728, 720),
+        MockShot("21-narrow-library", "page=library&panel=mod:minimap", 728, 720),
+        MockShot("22-empty-library", "page=library&mock=empty", 1328, 792),
+        MockShot("23-offline", "page=browse&mock=offline", 1328, 792),
+        MockShot("24-new-profile", "page=library&overlay=newprofile", 1328, 792),
+        MockShot("25-share", "page=library&overlay=share", 1328, 792),
+        MockShot("26-settings-danger", "page=settings&cat=danger", 1328, 792),
+        MockShot("27-settings-mods", "page=settings&cat=mods", 1328, 792),
+        MockShot("28-import-add", "page=library&overlay=import&mode=add", 1328, 792),
+        MockShot("30-local-mod", "page=library&lf=local&panel=mod:local-testhud", 1328, 792),
+        MockShot("31-friday", "page=library&prof=friday&panel=mod:harrier-kai", 1328, 792),
+        MockShot("32-settings-registry", "page=settings&cat=browse", 1328, 792),
+        MockShot("36-browse-tags", "page=browse&tags=HUD,Map", 1328, 792),
+    )
+
+fun MockShot.spec() =
+    ShotSpec(name, !address.contains("theme=light"), width, height) {
+        val model = remember {
+            AppModel(mockStore(address), ShotPlatform).also { applyMockAddress(it, address) }
+        }
+        DisposableEffect(model) { onDispose { model.close() } }
+        Box(Modifier.fillMaxSize()) {
+            WindowShell { AppShell(model) }
+            AppLayers(model)
+        }
+    }

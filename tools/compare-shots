@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Bound ImageMagick resources so comparisons cannot exhaust desktop memory.
+export MAGICK_THREAD_LIMIT=1
+export MAGICK_MEMORY_LIMIT=128MiB
+export MAGICK_MAP_LIMIT=256MiB
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 shots="$root/composeApp/build/shots"
 mkdir -p "$shots/compare"
