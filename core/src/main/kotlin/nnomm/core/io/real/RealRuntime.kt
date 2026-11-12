@@ -20,9 +20,12 @@ private constructor(
     private val client: io.ktor.client.HttpClient,
 ) {
     suspend fun shutdown() {
-        store.shutdown()
-        scope.cancel()
-        client.close()
+        try {
+            store.shutdown()
+        } finally {
+            scope.cancel()
+            client.close()
+        }
     }
 
     companion object {
@@ -72,8 +75,7 @@ private constructor(
                                 ?.content
                                 ?.split(Regex("[\\n,;]+"))
                                 ?.map { it.trim() }
-                                ?.filter { it.isNotEmpty() }
-                                ?.takeIf { it.isNotEmpty() } ?: listOf(DEFAULT_REGISTRY)
+                                ?.filter { it.isNotEmpty() } ?: listOf(DEFAULT_REGISTRY)
                         },
                         notice,
                     )
@@ -101,7 +103,8 @@ private constructor(
                         ?: findGameFolder(initial.settings)
                 val adopted =
                     if (
-                        initial.installed.isEmpty() &&
+                        initial.firstStart.complete &&
+                            initial.installed.isEmpty() &&
                             folder != null &&
                             Path.of(folder).resolve("NuclearOption.exe").isRegularFile()
                     )
