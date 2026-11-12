@@ -295,7 +295,22 @@ internal data class TransactionBatch(
     val changes: List<DiskTransaction>,
     val commitPath: String? = null,
     val commitText: String? = null,
+    val promotionReport: String? = null,
+    val commitRemovals: Boolean = false,
 )
+
+private fun reportPromotions(batch: TransactionBatch) {
+    batch.promotionReport?.let { report ->
+        atomic(
+            Path.of(report),
+            json.encodeToString(
+                batch.changes
+                    .filter { it.phase == "promoted" || it.phase == "recover-commit" }
+                    .map { it.target }
+            ),
+        )
+    }
+}
 
 internal class DiskCrash : Error("Simulated process interruption")
 
@@ -399,6 +414,9 @@ internal fun recoverTransactions(
                                             phase =
                                                 if (
                                                     tx.phase == "promoted" ||
+                                                        (batch.commitRemovals &&
+                                                            tx.staged == null &&
+                                                            Path.of(tx.previous).exists()) ||
                                                         (tx.phase == "old-moved" &&
                                                             tx.staged != null &&
                                                             !Path.of(tx.staged).exists() &&
@@ -411,6 +429,7 @@ internal fun recoverTransactions(
                         )
                     atomic(journal, json.encodeToString(batch))
                     val committed = batch.changes.any { it.phase == "recover-commit" }
+                    reportPromotions(batch)
                     indexRecovery(folder, journal, batch.changes)
                     batch.changes.asReversed().forEach { tx ->
                         val target = Path.of(tx.target)
@@ -473,6 +492,8 @@ internal fun replaceTrees(
     keepPrevious: Boolean = true,
     afterCommit: Pair<Path, String>? = null,
     beforeMutation: () -> Unit = {},
+    promotionReport: Path? = null,
+    commitRemovals: Boolean = false,
 ) {
     Files.createDirectories(journals)
     val id = java.util.UUID.randomUUID().toString()
@@ -500,7 +521,13 @@ internal fun replaceTrees(
             atomic(
                 journal,
                 json.encodeToString(
-                    TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                    TransactionBatch(
+                        prepared,
+                        afterCommit?.first?.toString(),
+                        afterCommit?.second,
+                        promotionReport?.toString(),
+                        commitRemovals,
+                    )
                 ),
             )
             if (source != null) copyTree(source, staged!!)
@@ -509,7 +536,13 @@ internal fun replaceTrees(
         atomic(
             journal,
             json.encodeToString(
-                TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                TransactionBatch(
+                    prepared,
+                    afterCommit?.first?.toString(),
+                    afterCommit?.second,
+                    promotionReport?.toString(),
+                    commitRemovals,
+                )
             ),
         )
         DiskFaults.step("prepared")
@@ -524,7 +557,13 @@ internal fun replaceTrees(
             atomic(
                 journal,
                 json.encodeToString(
-                    TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                    TransactionBatch(
+                        prepared,
+                        afterCommit?.first?.toString(),
+                        afterCommit?.second,
+                        promotionReport?.toString(),
+                        commitRemovals,
+                    )
                 ),
             )
             DiskFaults.step("old-moved")
@@ -535,11 +574,18 @@ internal fun replaceTrees(
             atomic(
                 journal,
                 json.encodeToString(
-                    TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                    TransactionBatch(
+                        prepared,
+                        afterCommit?.first?.toString(),
+                        afterCommit?.second,
+                        promotionReport?.toString(),
+                        commitRemovals,
+                    )
                 ),
             )
             DiskFaults.step("promoted")
         }
+        reportPromotions(TransactionBatch(prepared, promotionReport = promotionReport?.toString()))
         afterCommit?.let { atomic(it.first, it.second) }
         DiskFaults.step("ownership-published")
         indexRecovery(journals, journal, prepared)
