@@ -27,7 +27,7 @@ The mock in `design/mock/` is the agreed design. Reproduce its look, behaviour, 
 - Builds: memory is tight. Gradle only through `tools/gradlew-locked` (two machine-wide build slots, no daemon). Never `./gradlew` directly.
 - Edit your own package and files. Small additions elsewhere are allowed where the brief says so (for example one line in `AppModel.perform`, a field in your view class, a factory registration). Do not edit `core/`: if the core lacks something, add a UI-side workaround marked `TODO(core)` and list it in the report. Another agent is changing the core's public API now (strings to enums, derived state); use the current API.
 - Never use a real game folder; the app runs in demo mode.
-- Commit in small commits with clear messages (author `clankagent` / `327495124+clankagent@users.noreply.github.com` if not set). Do not push, no tags, no GitHub activity. Nothing private in the repository.
+- Commit in small commits with clear messages (author `clankagent` / `327495124+clankagent@users.noreply.github.com` if not set). Do not push, no tags, no GitHub activity. Nothing private in the repository: no absolute local paths, machine names or account names in committed files (reports included).
 - Readable code (official Kotlin style, one statement per line).
 
 ## Report
