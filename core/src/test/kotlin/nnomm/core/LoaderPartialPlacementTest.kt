@@ -14,6 +14,185 @@ import nnomm.core.store.AppStore
 import nnomm.core.store.loaderFailureHelp
 
 class LoaderPartialPlacementTest {
+    // Regression ports of the review probes: ownership publication must be retryable
+    // even after the file transaction and its journal are gone.
+    @Test
+    fun reviewOwnershipWriteDeniedLosesInstalledFiles() = runBlocking {
+        val f = fixture(false, null, orders[0])
+        val player = f.game.resolve("player.txt").apply { writeText("keep me") }
+        val permissions = Files.getPosixFilePermissions(f.home)
+        DiskFaults.step = {
+            if (it == "journal-deleted")
+                Files.setPosixFilePermissions(
+                    f.home,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("r-x------"),
+                )
+        }
+        try {
+            assertFailsWith<AccessDeniedException> { f.folder.installLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+            Files.setPosixFilePermissions(f.home, permissions)
+        }
+        assertNull(record(f).read())
+        assertTrue(f.folder.recoveryPending)
+        // Retry must recover even though BepInEx is already detected.
+        f.folder.installLoader(f.game.toString())
+        assertRecordedPlacements(f)
+        assertFalse(f.folder.recoveryPending)
+        f.folder.repairLoader(f.game.toString())
+        assertUninstallKeepsPlayer(f, player)
+    }
+
+    private class Crash : Error()
+
+    private suspend fun crashAfterTransaction(f: F) {
+        DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        assertNull(record(f).read())
+        assertTrue(f.folder.recoveryPending)
+        assertTrue(f.home.resolve("transactions").listDirectoryEntries("*.txn").isEmpty())
+    }
+
+    private suspend fun assertUninstallKeepsPlayer(f: F, player: Path) {
+        val owned = record(f).read().orEmpty()
+        f.folder.removeLoader(f.game.toString())
+        owned.forEach { assertFalse(f.game.resolve(it).exists(), it) }
+        assertEquals("keep me", player.readText())
+        assertTrue(f.game.resolve("NuclearOption.exe").exists())
+        assertTrue(record(f).read()!!.isEmpty())
+    }
+
+    @Test
+    fun reviewCrashAfterLoaderTransactionLosesOwnership() = runBlocking {
+        for (recovery in listOf("startup", "recover", "install", "repair", "uninstall")) {
+            val f = fixture(false, null, orders[0])
+            // Identical shipped bytes already owned by the player must not be claimed.
+            val player = f.game.resolve("winhttp.dll").apply { writeText("shipped proxy") }
+            crashAfterTransaction(f)
+            when (recovery) {
+                "startup" -> {
+                    val settings = nnomm.core.settings.defaultSettings()
+                    RealPersistence(f.home)
+                        .save(
+                            AppState(
+                                settings =
+                                    settings.copy(
+                                        general =
+                                            settings.general +
+                                                mapOf(
+                                                    "checkUpdates" to
+                                                        kotlinx.serialization.json.JsonPrimitive(
+                                                            "Only when I ask"
+                                                        ),
+                                                    "gamePath" to
+                                                        kotlinx.serialization.json.JsonPrimitive(
+                                                            f.game.toString()
+                                                        ),
+                                                )
+                                    )
+                            )
+                        )
+                    val runtime = RealRuntime.open(f.home)
+                    try {
+                        assertFalse(runtime.store.state.value.gameIoPending)
+                    } finally {
+                        runtime.shutdown()
+                    }
+                }
+                "recover" -> {
+                    f.folder.recoverPending()
+                    f.folder.recoverPending()
+                }
+                "install" -> f.folder.installLoader(f.game.toString())
+                "repair" -> f.folder.repairLoader(f.game.toString())
+            }
+            if (recovery != "uninstall") {
+                assertEquals(3, record(f).read()!!.size)
+                assertFalse("winhttp.dll" in record(f).read()!!)
+                assertFalse(f.folder.recoveryPending)
+            }
+            f.folder.removeLoader(f.game.toString())
+            for (relative in
+                listOf(
+                    "doorstop_config.ini",
+                    "BepInEx/core/BepInEx.dll",
+                    "BepInEx/core/Extra.dll",
+                )) assertFalse(f.game.resolve(relative).exists(), "$recovery: $relative")
+            assertEquals("shipped proxy", player.readText())
+            assertTrue(f.game.resolve("NuclearOption.exe").exists())
+            assertTrue(record(f).read()!!.isEmpty())
+        }
+    }
+
+    @Test
+    fun recoveryDoesNotClaimChangedOrMissingTargets() = runBlocking {
+        val f = fixture(false, null, orders[0])
+        crashAfterTransaction(f)
+        val player = f.game.resolve("winhttp.dll").apply { writeText("keep me") }
+        f.game.resolve("doorstop_config.ini").deleteExisting()
+        f.folder.recoverPending()
+        assertEquals(
+            setOf("BepInEx/core/BepInEx.dll", "BepInEx/core/Extra.dll"),
+            record(f).read()!!.toSet(),
+        )
+        assertUninstallKeepsPlayer(f, player)
+    }
+
+    @Test
+    fun recoverySettlesInterruptedTransactionsBeforeOwnership() = runBlocking {
+        for (stage in listOf("prepared", "promoted")) {
+            val f = fixture(false, null, orders[0])
+            val player = f.game.resolve("player.txt").apply { writeText("keep me") }
+            DiskFaults.step = { if (it == stage) throw Crash() }
+            try {
+                assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.step = {}
+            }
+            f.folder.recoverPending()
+            assertRecordedPlacements(f)
+            assertFalse(f.folder.recoveryPending)
+            assertUninstallKeepsPlayer(f, player)
+        }
+    }
+
+    @Test
+    fun interruptedRepairRecoversNewIniOwnershipAndKeepsAdoptedBinaries() = runBlocking {
+        val f = fixture(true, "[General]\ntarget_assembly=\n".toByteArray(), orders[0])
+        record(f).write(listOf("BepInEx/core/BepInEx.dll"))
+        DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        f.folder.removeLoader(f.game.toString())
+        assertFalse(f.game.resolve("doorstop_config.ini").exists())
+        assertFalse(f.game.resolve("BepInEx/core/BepInEx.dll").exists())
+        assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
+        assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
+    }
+
+    @Test
+    fun missingGameKeepsPendingOwnershipUntilItReturns() = runBlocking {
+        val f = fixture(false, null, orders[0])
+        crashAfterTransaction(f)
+        val parked = f.game.resolveSibling("parked-game")
+        Files.move(f.game, parked)
+        f.folder.recoverPending()
+        assertTrue(f.folder.recoveryPending)
+        assertFalse(f.game.exists())
+        Files.move(parked, f.game)
+        f.folder.recoverPending()
+        assertRecordedPlacements(f)
+        assertFalse(f.folder.recoveryPending)
+    }
+
     private val shipped =
         "[General]\nenabled=true\ntarget_assembly=BepInEx\\core\\BepInEx.Preloader.dll\n"
             .toByteArray()
