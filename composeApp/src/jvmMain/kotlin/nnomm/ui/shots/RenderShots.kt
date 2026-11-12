@@ -168,6 +168,42 @@ fun KitGallery() {
                             ProgressBar(.4f, Modifier.width(160.dp))
                             ProgressBar(.6f, Modifier.width(100.dp), neutral = true)
                         }
+
+                        GalleryRow {
+                            Label(
+                                highlightedText("Highlighted match", listOf(0, 1, 2, 3, 4)),
+                                maxLines = 1,
+                            )
+                            SplitButton(
+                                "Play",
+                                {},
+                                {},
+                                Modifier.width(140.dp),
+                                ButtonKind.Primary,
+                                play = true,
+                                icon = NnIcons.play,
+                            )
+                            SegmentedControl(
+                                emptyList(),
+                                selected,
+                                { selected = it },
+                                small = true,
+                                segments =
+                                    listOf(
+                                        Segment("Grid", NnIcons.grid, true),
+                                        Segment("List", NnIcons.list, true),
+                                    ),
+                            )
+                            TextField(
+                                text,
+                                { text = it },
+                                Modifier.width(180.dp),
+                                "Background field",
+                                bg = true,
+                                trailing = { Icon(NnIcons.search) },
+                            )
+                        }
+
                         Note(
                             "The saved list is available while you are offline.",
                             Modifier.fillMaxWidth(),
@@ -250,33 +286,5 @@ fun KitGallery() {
                 }
             }
         }
-    }
-    GalleryRow {
-        Label(highlightedText("Highlighted match", listOf(0, 1, 2, 3, 4)), maxLines = 1)
-        SplitButton(
-            "Play",
-            {},
-            {},
-            Modifier.width(140.dp),
-            ButtonKind.Primary,
-            play = true,
-            icon = NnIcons.play,
-        )
-        SegmentedControl(
-            emptyList(),
-            selected,
-            { selected = it },
-            small = true,
-            segments =
-                listOf(Segment("Grid", NnIcons.grid, true), Segment("List", NnIcons.list, true)),
-        )
-        TextField(
-            text,
-            { text = it },
-            Modifier.width(180.dp),
-            "Background field",
-            bg = true,
-            trailing = { Icon(NnIcons.search) },
-        )
     }
 }
