@@ -57,7 +57,12 @@ class RealPacks(
                             .associate { item ->
                                 item.id to safe(staging, "mods/${component(item.id)}").toString()
                             }
-                    PackPreview(document.pack, locals, document.settings, staging)
+                    PackPreview(
+                        document.pack,
+                        locals,
+                        document.settings?.let(::packSettings),
+                        staging,
+                    )
                 } else {
                     val list = staging.resolve("modlist.nomm.json")
                     require(list.isRegularFile()) { "Pack has no mod list" }
@@ -104,7 +109,9 @@ class RealPacks(
                             .encodeToString(
                                 PackDocument(
                                     pack = pack,
-                                    settings = if (pack.includeSettings) state.settings else null,
+                                    settings =
+                                        if (pack.includeSettings) packSettings(state.settings)
+                                        else null,
                                 )
                             )
                             .toByteArray()
@@ -177,9 +184,19 @@ class RealPacks(
     override suspend fun following(info: PackInfo): Pack? =
         withContext(Dispatchers.IO) {
             val url = info.followAddress ?: return@withContext null
-            val body = client.get(url).bodyAsText()
+            val body = client.get(checkedUrl(url)).boundedText()
             val document = json.decodeFromString<PackDocument>(body)
             require(document.format == "NNOMM/1")
             document.pack.takeIf { compareVersions(it.version, info.version) > 0 }
         }
+}
+
+/** Only mod behavior can be shared. Machine paths, sources and launch commands are private. */
+internal fun packSettings(settings: SettingsValues): SettingsValues {
+    val allowed =
+        setOf("ownSettingsP", "ownSettings", "prerelease", "autoDeps", "warnOld", "console")
+    return SettingsValues(
+        settings.general.filterKeys { it in allowed },
+        settings.overrides.mapValues { (_, values) -> values.filterKeys { it in allowed } },
+    )
 }

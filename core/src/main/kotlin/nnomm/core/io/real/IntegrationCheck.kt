@@ -9,7 +9,11 @@ import nnomm.core.model.*
 /** Explicit manual check, never wired into test. Network operation is GET only. */
 fun main(args: Array<String>) = runBlocking {
     val home = settingsHome()
-    require(home.toString().contains("nnomm-sandbox")) {
+    require(
+        home.startsWith(
+            Path.of(System.getProperty("user.home"), "nnomm-sandbox").toAbsolutePath().normalize()
+        )
+    ) {
         "Set NNOMM_HOME to the sandbox home for this check."
     }
     Files.createDirectories(home)

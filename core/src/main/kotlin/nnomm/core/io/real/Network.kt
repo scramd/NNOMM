@@ -41,7 +41,7 @@ class RealRegistry(
     private val client: HttpClient,
     home: Path,
     private val addresses: () -> List<String> = { listOf(DEFAULT_REGISTRY) },
-    notice: (String) -> Unit = {},
+    private val notice: (String) -> Unit = {},
 ) : Registry {
     private val file = JsonFile(home.resolve("registry.json"), SavedRegistry.serializer(), notice)
 
@@ -49,7 +49,21 @@ class RealRegistry(
         withContext(Dispatchers.IO) {
             val urls = addresses()
             require(urls.isNotEmpty()) { "No registry addresses are configured." }
-            urls.flatMap { decodeRegistry(client.get(it).bodyAsText()) }.distinctBy { it.id }
+            val loaded =
+                urls
+                    .sortedBy { if (it == DEFAULT_REGISTRY) 0 else 1 }
+                    .mapNotNull { url ->
+                        try {
+                            decodeRegistry(client.get(checkedUrl(url)).boundedText())
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            notice("Could not load registry $url; other sources remain available.")
+                            null
+                        }
+                    }
+            require(loaded.isNotEmpty()) { "No registry source could be loaded" }
+            loaded.flatten().distinctBy { it.id }
         }
 
     override suspend fun saved() =
@@ -60,24 +74,42 @@ class RealRegistry(
 }
 
 fun decodeRegistry(text: String): List<CatalogMod> =
-    json.parseToJsonElement(text).jsonArray.map { node ->
-        val obj = node.jsonObject
-        val normalized =
-            JsonObject(
-                obj.mapValues { (key, value) ->
-                    if (key == "isAiAssisted")
-                        JsonPrimitive((value as? JsonPrimitive)?.content.equals("true", true))
-                    else value
+    json.parseToJsonElement(text).jsonArray.mapNotNull { node ->
+        runCatching {
+                val obj = node.jsonObject
+                val normalized =
+                    JsonObject(
+                        obj.mapValues { (key, value) ->
+                            if (key == "isAiAssisted")
+                                JsonPrimitive(
+                                    (value as? JsonPrimitive)?.content.equals("true", true)
+                                )
+                            else if (key == "artifacts")
+                                JsonArray(
+                                    value.jsonArray.filter { artifact ->
+                                        runCatching {
+                                                json.decodeFromJsonElement<RegistryArtifact>(
+                                                    artifact
+                                                )
+                                            }
+                                            .isSuccess
+                                    }
+                                )
+                            else value
+                        }
+                    )
+                json.decodeFromJsonElement<RegistryEntry>(normalized).toCatalogMod().let { mod ->
+                    mod.copy(
+                        githubOwner =
+                            (obj["githubOwner"] as? JsonPrimitive)?.contentOrNull
+                                ?: mod.githubOwner,
+                        githubRepository =
+                            (obj["githubRepoName"] as? JsonPrimitive)?.contentOrNull
+                                ?: mod.githubRepository,
+                    )
                 }
-            )
-        json.decodeFromJsonElement<RegistryEntry>(normalized).toCatalogMod().let { mod ->
-            mod.copy(
-                githubOwner =
-                    (obj["githubOwner"] as? JsonPrimitive)?.contentOrNull ?: mod.githubOwner,
-                githubRepository =
-                    (obj["githubRepoName"] as? JsonPrimitive)?.contentOrNull ?: mod.githubRepository,
-            )
-        }
+            }
+            .getOrNull()
     }
 
 @Serializable private data class CachedMeta(val sizeKb: Long? = null, val dateMillis: Long? = null)
@@ -104,24 +136,31 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
                             return@withLock VersionMetadata(it.sizeKb, it.dateMillis)
                         }
                     val value =
-                        slots.withPermit {
-                            val response = client.head(requireNotNull(version.downloadUrl))
-                            CachedMeta(
-                                response.headers["Content-Length"]?.toLongOrNull()?.let {
-                                    (it + 1023) / 1024
-                                },
-                                response.headers["Last-Modified"]?.let {
-                                    runCatching {
-                                            ZonedDateTime.parse(
-                                                    it,
-                                                    DateTimeFormatter.RFC_1123_DATE_TIME,
-                                                )
-                                                .toInstant()
-                                                .toEpochMilli()
-                                        }
-                                        .getOrNull()
-                                },
-                            )
+                        try {
+                            slots.withPermit {
+                                val response =
+                                    client.head(checkedUrl(requireNotNull(version.downloadUrl)))
+                                CachedMeta(
+                                    response.headers["Content-Length"]?.toLongOrNull()?.let {
+                                        (it + 1023) / 1024
+                                    },
+                                    response.headers["Last-Modified"]?.let {
+                                        runCatching {
+                                                ZonedDateTime.parse(
+                                                        it,
+                                                        DateTimeFormatter.RFC_1123_DATE_TIME,
+                                                    )
+                                                    .toInstant()
+                                                    .toEpochMilli()
+                                            }
+                                            .getOrNull()
+                                    },
+                                )
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            CachedMeta()
                         }
                     mutex.withLock { file.write(file.read().orEmpty() + (key to value)) }
                     VersionMetadata(value.sizeKb, value.dateMillis)
@@ -149,7 +188,7 @@ class RealReleaseNotes(private val client: HttpClient, home: Path) : ReleaseNote
                 val cache = file.read().orEmpty()
                 if (key in loaded) return@withLock parseAtom(cache.getValue(key), mod)
                 try {
-                    val text = client.get("https://github.com/$key/releases.atom").bodyAsText()
+                    val text = client.get("https://github.com/$key/releases.atom").boundedText()
                     val notes =
                         parseAtom(text, mod) // Validate before replacing a usable cached feed.
                     file.write(cache + (key to text))
@@ -175,7 +214,12 @@ fun parseAtom(text: String, mod: CatalogMod): List<ReleaseNote> {
         }
     val doc = factory.newDocumentBuilder().parse(text.byteInputStream())
     fun tag(url: String?) =
-        url?.let { Regex("/releases/(?:download|tag)/([^/?#]+)").find(it)?.groupValues?.get(1) }
+        url?.let {
+            Regex("/releases/(?:download|tag)/([^/?#]+)").find(it)?.groupValues?.get(1)?.let { value
+                ->
+                java.net.URLDecoder.decode(value.replace("+", "%2B"), Charsets.UTF_8)
+            }
+        }
     val entries = doc.getElementsByTagName("entry")
     return (0 until entries.length).mapNotNull { index ->
         val entry = entries.item(index) as Element
@@ -185,8 +229,13 @@ fun parseAtom(text: String, mod: CatalogMod): List<ReleaseNote> {
                 tag((links.item(it) as Element).getAttribute("href"))
             } ?: return@mapNotNull null
         val version =
-            mod.versions.firstOrNull { tag(it.downloadUrl) == releaseTag }?.version
-                ?: return@mapNotNull null
+            mod.versions
+                .firstOrNull {
+                    tag(it.downloadUrl) == releaseTag ||
+                        (it.releaseTagPrefix != null &&
+                            releaseTag == it.releaseTagPrefix + it.version)
+                }
+                ?.version ?: return@mapNotNull null
         fun value(name: String) = entry.getElementsByTagName(name).item(0)?.textContent.orEmpty()
         val html = Jsoup.parseBodyFragment(value("content"))
         html.select("br").append("\n")
@@ -211,28 +260,39 @@ class RealDownloader(private val client: HttpClient, private val home: Path) : D
             val dir = Files.createTempDirectory(staging, "download-")
             val url = requireNotNull(version.downloadUrl)
             val name =
-                java.net.URI(url).path.substringAfterLast('/').trim().ifEmpty { "download.dll" }
+                version.fileName
+                    ?: java.net.URI(url).path.substringAfterLast('/').trim().ifEmpty { "download" }
             val path = safe(dir, name)
             try {
-                client.prepareGet(url).execute { response ->
-                    val channel = response.bodyAsChannel()
-                    val total = response.headers["Content-Length"]?.toLongOrNull()
-                    var received = 0L
-                    Files.newOutputStream(path).use { out ->
-                        val buffer = ByteArray(65536)
-                        while (true) {
-                            ensureActive()
-                            val n = channel.readAvailable(buffer)
-                            if (n < 0) break
-                            out.write(buffer, 0, n)
-                            received += n
-                            progress(
-                                if (total != null && total > 0)
-                                    (received * 100 / total).toInt().coerceIn(0, 99)
-                                else 0
-                            )
+                var lastPercent = -1
+                retryTransfer {
+                    client
+                        .prepareGet(checkedUrl(url)) {
+                            timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
                         }
-                    }
+                        .execute { response ->
+                            val channel = response.bodyAsChannel()
+                            val total = response.headers["Content-Length"]?.toLongOrNull()
+                            var received = 0L
+                            Files.newOutputStream(path).use { out ->
+                                val buffer = ByteArray(65536)
+                                while (true) {
+                                    ensureActive()
+                                    val n = channel.readAvailable(buffer)
+                                    if (n < 0) break
+                                    out.write(buffer, 0, n)
+                                    received += n
+                                    val percent =
+                                        if (total != null && total > 0)
+                                            (received * 100 / total).toInt().coerceIn(0, 99)
+                                        else 0
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        progress(percent)
+                                    }
+                                }
+                            }
+                        }
                 }
                 normalizedHash(version.hash)?.let { expected ->
                     require(expected.matches(Regex("[0-9a-f]{64}"))) {
@@ -242,10 +302,48 @@ class RealDownloader(private val client: HttpClient, private val home: Path) : D
                 }
                 ensureActive()
                 progress(100)
-                DownloadedFile(path.toString())
+                DownloadedFile(path.toString()) { deleteTree(dir) }
             } catch (e: Exception) {
                 deleteTree(dir)
                 throw e
             }
         }
+}
+
+internal fun checkedUrl(url: String): String {
+    val uri = java.net.URI(url)
+    require(
+        uri.scheme == "https" ||
+            (uri.scheme == "http" && uri.host in setOf("127.0.0.1", "localhost", "::1"))
+    ) {
+        "Use an HTTPS address"
+    }
+    return url
+}
+
+internal suspend fun HttpResponse.boundedText(): String {
+    val bytes = java.io.ByteArrayOutputStream()
+    val channel = bodyAsChannel()
+    val buffer = ByteArray(65536)
+    while (true) {
+        val n = channel.readAvailable(buffer)
+        if (n < 0) break
+        require(bytes.size() + n <= 16 * 1024 * 1024) { "Response exceeds 16 MiB" }
+        bytes.write(buffer, 0, n)
+    }
+    return bytes.toString(Charsets.UTF_8)
+}
+
+private suspend fun retryTransfer(block: suspend () -> Unit) {
+    repeat(3) { attempt ->
+        try {
+            block()
+            return
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (attempt == 2) throw e
+            delay(250L * (attempt + 1))
+        }
+    }
 }

@@ -53,10 +53,13 @@ fun settingHelp(d: SettingDefinition, s: AppState): String =
             else "NNOMM installs BepInEx when you turn on your first mod, and tells you."
         "cache" ->
             (s.storeUnusedMb?.let { "$it MB. " }.orEmpty() +
-                "Old versions that no profile uses. Clear removes only unused stored files.")
+                "Old versions and recovery copies. Clear keeps the last copy of every player file.")
         "gamePath" ->
-            s.game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it found here." }
-                ?: "Game version is unknown."
+            if (s.game.folderMissing) "Game folder not found."
+            else
+                s.game.version
+                    ?.takeUnless { it == "unknown" }
+                    ?.let { "Nuclear Option $it found here." } ?: "Game version is unknown."
         "store" ->
             "Each version of a mod is stored once here, also when several profiles use it. ${s.storeUsedMb} MB used."
         "appUpdate" -> "Version ${s.appVersion}."

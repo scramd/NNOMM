@@ -15,7 +15,11 @@ data class ImportRow(
 
 fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List<ImportRow> =
     pack.items.map { i ->
-        if (i.kind == PackKind.LOCAL)
+        if (
+            i.kind == PackKind.LOCAL ||
+                s.installed[i.id]?.source == ModSource.LOCAL ||
+                s.catalog.find { it.id == i.id }?.localFile != null
+        )
             return@map ImportRow(
                 PackKind.LOCAL,
                 i.id,

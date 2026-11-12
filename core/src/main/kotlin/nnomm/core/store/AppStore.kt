@@ -54,6 +54,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private val lock = Any()
     private var sequence = 0L
     private val slots = Semaphore(3)
+    private val metadataSlots = Semaphore(1)
     private val jobs = mutableMapOf<String, Job>()
     private val transfers = mutableMapOf<String, Deferred<Unit>>()
     private var appliedPlan: GamePlan = resolvedPlan(initial)
@@ -131,6 +132,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 }
             }
         }
+
+    internal suspend fun awaitDiskIdle() {
+        diskAwait {}
+    }
 
     suspend fun flush() {
         io.persistence?.save(state.value)
@@ -214,6 +219,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     private suspend fun prepareGameFolder(snapshot: AppState) {
         val folder = snapshot.game.folder ?: return
+        if (snapshot.game.folderMissing) return
         if (io.launcher.running.value || state.value.gameRunning) return
         if (onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
             io.gameFolder.installLoader(folder)
@@ -293,6 +299,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             val key = "$id/$requested/$p"
             if (jobs[key]?.isActive == true) return
             val x = s.mod(id)
+            val requestedFile =
+                x.versions
+                    .find { it.version == requested }
+                    ?.let { it.fileName ?: it.downloadUrl?.substringBefore('?') }
+                    .orEmpty()
+                    .lowercase()
+            if (requestedFile.endsWith(".rar")) {
+                toast("This version uses an archive format NNOMM cannot install yet.")
+                return
+            }
             val v = requested
             val d = Download(id, kind, p, v, quiet = quiet, withDependencies = with)
             change {
@@ -346,9 +362,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                                             }
                                                         }
                                                     }
-                                                diskAwait {
-                                                    ensureActive()
-                                                    io.modStore.put(id, v, file)
+                                                try {
+                                                    diskAwait {
+                                                        ensureActive()
+                                                        io.modStore.put(id, v, file)
+                                                    }
+                                                } finally {
+                                                    file.close()
                                                 }
                                             }
                                         }
@@ -457,7 +477,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                         undo = { uninstallSilently(listOf(id) + with) },
                                     )
                             }
-                            applyAndSave()
+                            applyAndSave(
+                                force =
+                                    kind in setOf(DownloadKind.REPAIR, DownloadKind.REPAIRPROBLEM)
+                            )
                         }
                     } catch (e: CancellationException) {
                         throw e
@@ -1011,6 +1034,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         var managed = info.mods
         val items = packUpdateItems(state.value, pack)
         items.forEach { i ->
+            if (
+                state.value.installed[i.id]?.source == ModSource.LOCAL ||
+                    state.value.catalog.find { it.id == i.id }?.localFile != null ||
+                    i.kind == PackKind.LOCAL
+            )
+                return@forEach
             when (i.kind) {
                 PackKind.ADD -> {
                     if (i.id in state.value.installed) setOn(listOf(i.id), true)
@@ -1198,7 +1227,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             metadataRequested.add("${mod.id}/${version.version}")
                     )
                         background {
-                            slots.withPermit {
+                            metadataSlots.withPermit {
                                 val key = "${mod.id}/${version.version}"
                                 change {
                                     it.copy(
@@ -1213,7 +1242,6 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                         throw e
                                     } catch (e: Exception) {
                                         io.logger.error("metadata", e)
-                                        metadataRequested.remove(key)
                                         change {
                                             it.copy(
                                                 metadataStatus =
@@ -1442,7 +1470,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             launcherObserver.cancel()
             refreshSchedule?.cancel()
             diskQueue.close()
-            withTimeout(10000) { diskWorker.join() }
+            diskWorker.join()
             flush()
             closed.complete(Unit)
         } catch (e: Exception) {
