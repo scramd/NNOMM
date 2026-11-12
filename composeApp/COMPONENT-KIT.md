@@ -141,7 +141,10 @@ Home/End and wheel scrolling. This is a manual responsiveness check, not an FPS 
 The app was closed after checking. RowSelection tests cover range anchoring, additive selection,
 toggling, filtering and key identity through sorting.
 
-Known limits: Chromium and Skia have different text rasterization. Highlighted Label draws grouped mark
+Known limits: the strip CSS specimen still has different description wrapping and slightly
+different card height. The cause has not been isolated; the bundled TTF and mock WOFF2 have
+matching ASCII advances and axis ranges. Theme/font-layout follow-up is required before claiming
+pixel equivalence. Chromium and Skia also have different text rasterization. Highlighted Label draws grouped mark
 backgrounds with the mock's 2 dp rounded corners. Profile initial/dot visibility is a page/shell
 choice (initial for the narrow rail, dot for the wide sidebar). Card footers remain page-owned slots.
 Remote image success/error rendering has not been exercised against the live registry in this pass.
