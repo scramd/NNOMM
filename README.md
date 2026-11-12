@@ -1,59 +1,30 @@
-# NOMM - Nuclear Option Mod Manager
+# NNOMM
 
-A Mod Manager for the Game Nuclear Option
+NNOMM (New Nuclear Option Mod Manager) is a desktop mod manager for Nuclear Option, built with Kotlin and Compose Desktop. It keeps installed mods in one store and lets each profile choose which mods and versions to use.
 
-# Features
-- Automatic BepInEx installation
-- Mod searching
-- Mod installing and updating
-- Mod conflict warnings
-- Mod automatic dependency resolution
-- Adding Mods from Files
-- Mod toggling
-- Mod Uninstalling
-- Modpack Sharing
-- Server List
-- Direct Server Connect
-- Automatic Server Modpack resolution
-- Customizable Theme
+NNOMM is a fork of [NOMM by Combat787](https://github.com/Combat787/NOMM), starting at version 5.5.0. The interface, interactions and settings are being rebuilt against the agreed mock in `design/mock/`. The mod registry is [NOMNOM by KopterBuzz](https://github.com/KopterBuzz/NOMNOM). Both credits are retained. NNOMM and the reused NOMM code are licensed under the [MIT licence](LICENSE).
 
+This version has no server list. The Servers page says “Coming later”. NNOMM never signs in to Steam or runs a Steam helper. It has its own settings directory and can be installed beside NOMM.
 
-## Installation
+## Development
 
-Download the appropriate file for your platform from the [Latest Release](https://github.com/Combat787/NOMM/releases/latest).
+Gradle needs a JDK to start and downloads the JetBrains JDK 25 toolchain. Use the build wrapper to limit concurrent builds:
 
-### Windows
-* **Portable:** `portable.exe`
-* **Installer:** `.msi`
+```sh
+tools/gradlew-locked :composeApp:jvmJar
+tools/gradlew-locked :composeApp:jvmTest
+tools/gradlew-locked :composeApp:renderShots
+tools/compare-shots
+```
 
-### Linux
-* **Debian:** `.deb`
-* **Fedora:** `.rpm`
-* **Standalone:** `.AppImage`
-* **Flatpak:** `.flatpak` *(Flatpak may or may not work)*
+To run, set `JAVA_HOME` to JetBrains JDK 25:
 
-To work NOMM retrieves a manifest from [NOMNOM](https://github.com/KopterBuzz/NOMNOM) to get the list of mods. To add your own mods go there.
+```sh
+tools/gradlew-locked :composeApp:run --args=--demo
+```
 
-## Credits
-- [RaylaValdez](https://github.com/RaylaValdez): `Server List Backend and NOSMR`
-- Shumatsu: `App Icon`
-- [Combat](https://github.com/Combat787): `The Rest`
+`NNOMM_DEMO=1` also enables demo mode. `--kit` opens the component gallery. Until real IO is integrated, `createStore(args)` also uses the demo store in real mode. Page and dialog implementations are still in progress.
 
-This is a Kotlin Multiplatform project targeting Desktop (JVM).
+Never use a real game installation for development. Use `NNOMM_HOME` for a sandbox settings directory and a sandbox game folder containing an empty `NuclearOption.exe`.
 
-### Build and Run Desktop (JVM) Application
-
-To build and run the development version of the desktop app, use the run configuration from the run widget
-in your IDE’s toolbar or run it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :composeApp:run
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :composeApp:run
-  ```
-
----
-
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+See `design/DESIGN.md`, `design/ARCHITECTURE.md`, `composeApp/COMPONENT-KIT.md` and `core/README.md` for the design and APIs. Windows-only verification is tracked in `design/WINDOWS-CHECKS.md`.

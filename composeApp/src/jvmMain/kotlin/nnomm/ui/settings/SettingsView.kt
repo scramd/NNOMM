@@ -1,4 +1,11 @@
 package nnomm.ui.settings
 
-/** Settings page view state: category, search, all profiles or one profile. Owned by the settings page; fields are Compose snapshot state. */
-class SettingsView
+import androidx.compose.runtime.*
+
+/** Snapshot view state, shared by mock addresses and the page. */
+class SettingsView {
+    var category by mutableStateOf("game")
+    var query by mutableStateOf("")
+    var scope by mutableStateOf("all")
+    var profileId by mutableStateOf("default")
+}
