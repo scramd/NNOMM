@@ -91,3 +91,8 @@ non-following deletion, home OS file locking (including installed/portable copie
 same-drive game recovery with home on C: and game on D:, and repeated recovery
 under file locks. Core uses NOFOLLOW basic attributes (`isOther`), symbolic-link detection and a
 canonical-parent/entry comparison for junctions reported as directories; native Windows junction coverage is not verified on Linux.
+
+## Final app acceptance fixes
+
+- Beta discovery uses `releases.atom`, including `-beta.1` tags, then the same metadata asset download paths as stable (`beta.yml` on Windows). Verify published beta metadata and installation from a packaged build; no release API token is needed.
+- Manual “Look now” bypasses the automatic-check “Never” preference for one check, returns unsupported-build feedback with a releases-page button, and never starts automatic installation. Startup unsupported/failure/current checks stay quiet.

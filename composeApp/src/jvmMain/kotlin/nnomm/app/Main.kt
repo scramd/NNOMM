@@ -238,10 +238,10 @@ fun main(args: Array<String>) {
         }
         val updates = remember { AppUpdates() }
         val isDemo = "--demo" in args || System.getenv("NNOMM_DEMO") == "1" || "--kit" in args
-        model?.checkAppUpdates = {
+        fun checkUpdates(manual: Boolean) {
             if (!isDemo)
                 scope.launch {
-                    updates.check(general["appUpdate"]?.content ?: "Tell me", general["channel"]?.content == "true",
+                    updates.check(general["appUpdate"]?.content ?: "Tell me", general["channel"]?.content == "true", manual = manual,
                         status = { message -> scope.launch { model?.ui?.updateStatus = message } },
                         beforeInstall = {
                             val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
@@ -250,8 +250,9 @@ fun main(args: Array<String>) {
                         })
                 }
         }
+        model?.checkAppUpdates = { checkUpdates(true) }
         model?.openAppReleases = { platform.openUrl(if (general["channel"]?.content == "true") "https://github.com/scramd/NNOMM/releases" else NNOMM_LATEST_RELEASE_URL) }
-        LaunchedEffect(model) { if (!isDemo) model?.checkAppUpdates?.invoke() }
+        LaunchedEffect(model) { if (!isDemo) checkUpdates(false) }
         val values = general
         val dark =
             when {

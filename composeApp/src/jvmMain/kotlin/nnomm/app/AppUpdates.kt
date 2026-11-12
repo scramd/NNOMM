@@ -8,17 +8,18 @@ import kotlinx.coroutines.withContext
 
 /** Optional updater work never blocks startup or mod management. */
 class AppUpdates {
-    suspend fun check(mode: String, testVersions: Boolean = false, status: (String) -> Unit, beforeInstall: suspend () -> Unit = {}) =
+    suspend fun check(mode: String, testVersions: Boolean = false, manual: Boolean = false, status: (String) -> Unit, beforeInstall: suspend () -> Unit = {}) =
         withContext(Dispatchers.IO) {
-            if (mode == "Never") return@withContext
-            val updater = createUpdater(testVersions)
+            if (mode == "Never" && !manual) return@withContext
             runCatching {
+                    val updater = createUpdater(testVersions)
                     if (!updater.isUpdateSupported()) {
+                        if (manual) status("Automatic updates are unavailable for this build. Open the releases page to get NNOMM.")
                         return@runCatching
                     }
                     when (val result = updater.checkForUpdates()) {
                         is UpdateResult.Available -> {
-                            if (mode != "By itself" || requiresManualWindowsUpdate()) {
+                            if (manual || mode != "By itself" || requiresManualWindowsUpdate()) {
                                 status(
                                     "An NNOMM update is available. Open About and updates to get it."
                                 )
@@ -31,10 +32,10 @@ class AppUpdates {
                             }
                         }
                         is UpdateResult.NotAvailable ->
-                            status("You have the newest version of NNOMM.")
-                        is UpdateResult.Error -> status("Could not check for NNOMM updates.")
+                            if (manual) status("You have the newest version of NNOMM.")
+                        is UpdateResult.Error -> if (manual) status("Could not check for NNOMM updates.")
                     }
                 }
-                .onFailure { status("Could not check for NNOMM updates.") }
+                .onFailure { if (manual) status("Could not check for NNOMM updates.") }
         }
 }
