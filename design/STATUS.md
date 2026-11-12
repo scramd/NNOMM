@@ -28,10 +28,14 @@ Every part was reviewed by an Opus agent and a Sol agent, then fixed, several ro
 
 - Flatpak uses `org.freedesktop.Platform` / `org.freedesktop.Sdk` 24.08.
   Nucleus 2.5.18's `FlatpakSettings.finishArgs` adds network, home and
-  `xdg-data/Steam` access to its defaults. Build and start the package with
-  `flatpak-builder`; no release or tag is needed. Check registry/download access,
-  game-folder selection and Steam libraries. Libraries outside home need a separate
-  filesystem grant. This package has not been built or run here.
+  `xdg-data/Steam` access to its defaults, plus an explicit grant for Flatpak Steam's
+  `~/.var/app/com.valvesoftware.Steam` library. Home access alone excludes
+  `~/.var/app`. Other libraries outside these grants need a separate filesystem grant.
+  Build and start the package with `flatpak-builder`; no release or tag is needed.
+  Check registry/download access, game-folder selection and both native and Flatpak
+  Steam libraries. Check process detection inside the sandbox: `ProcessHandle` may
+  not see `NuclearOption.exe`, so the close-the-game guards and the Play-without-mods
+  wait may not work. This package has not been built or run here.
 
 ## Closing small fixes
 
