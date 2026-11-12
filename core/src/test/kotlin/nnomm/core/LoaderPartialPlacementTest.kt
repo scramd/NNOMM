@@ -628,4 +628,145 @@ class LoaderPartialPlacementTest {
         f.folder.removeLoader(f.game.toString())
         assertEquals("different bytes", proxy.readText())
     }
+
+    @Test
+    fun reviewPreparedCrashMustNotClaimPlayerSuppliedFiles() = runBlocking {
+        val f = fixture(false, null, orders[0])
+        DiskFaults.step = { if (it == "prepared") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        assertTrue(orders[0].none { f.game.resolve(it).exists() })
+        // The player puts in the official loader after NNOMM crashed, before reopening it.
+        for (relative in orders[0]) {
+            val target = f.game.resolve(relative)
+            target.parent.createDirectories()
+            target.writeBytes(
+                when (relative) {
+                    "doorstop_config.ini" -> shipped
+                    "BepInEx/core/BepInEx.dll" -> dll
+                    "winhttp.dll" -> "shipped proxy".toByteArray()
+                    else -> "extra".toByteArray()
+                }
+            )
+        }
+        f.folder.recoverPending()
+        f.folder.removeLoader(f.game.toString())
+        assertTrue(
+            orders[0].all { f.game.resolve(it).exists() },
+            "Uninstall deleted files supplied by the player after a pre-promotion crash",
+        )
+    }
+
+    @Test
+    fun reviewUnreadablePromotionMustKeepRecoveryPending() = runBlocking {
+        val f = fixture(false, null, orders[0])
+        crashAfterTransaction(f)
+        val proxy = f.game.resolve("winhttp.dll")
+        val perms = Files.getPosixFilePermissions(proxy)
+        try {
+            Files.setPosixFilePermissions(
+                proxy,
+                java.nio.file.attribute.PosixFilePermissions.fromString("---------"),
+            )
+            f.folder.recoverPending()
+        } finally {
+            Files.setPosixFilePermissions(proxy, perms)
+        }
+        f.folder.recoverPending()
+        f.folder.removeLoader(f.game.toString())
+        assertFalse(proxy.exists(), "NNOMM lost ownership permanently on a transient read failure")
+    }
+
+    @Test
+    fun reviewForeignOwnershipThroughEveryLoaderAction() = runBlocking {
+        for (action in listOf("install", "repair", "removeEverything")) {
+            val f = fixture(false, null, orders[0])
+            DiskFaults.step = { if (it == "prepared") throw Crash() }
+            try {
+                assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.step = {}
+            }
+            for (relative in orders[0]) {
+                val target = f.game.resolve(relative)
+                target.parent.createDirectories()
+                target.writeBytes(
+                    when (relative) {
+                        "doorstop_config.ini" -> shipped
+                        "BepInEx/core/BepInEx.dll" -> dll
+                        "winhttp.dll" -> "shipped proxy".toByteArray()
+                        else -> "extra".toByteArray()
+                    }
+                )
+            }
+            if (action == "removeEverything") {
+                val app =
+                    AppStore(
+                        Demo.state()
+                            .copy(
+                                installed = emptyMap(),
+                                game = f.folder.inspect(f.game.toString()),
+                            ),
+                        Demo.io().copy(gameFolder = f.folder, persistence = null),
+                    )
+                try {
+                    app.removeEverything()
+                    withTimeout(5000) {
+                        while (
+                            app.state.value.toasts.none {
+                                it.text.contains("mod loader files were removed") ||
+                                    it.text.contains("Existing mod loader files were kept") ||
+                                    it.text.contains("Could not remove")
+                            }
+                        ) delay(10)
+                    }
+                } finally {
+                    app.shutdown()
+                }
+            } else {
+                if (action == "install") f.folder.installLoader(f.game.toString())
+                else f.folder.repairLoader(f.game.toString())
+            }
+            assertTrue(record(f).read().orEmpty().isEmpty())
+            assertTrue(orders[0].all { f.game.resolve(it).exists() })
+        }
+    }
+
+    @Test
+    fun reviewEveryPerFileCrashKeepsPreexistingPlayerFiles() = runBlocking {
+        for (phase in
+            listOf(
+                "prepared",
+                "old-rename-before-journal",
+                "old-moved",
+                "new-rename-before-journal",
+                "promoted",
+                "ownership-published",
+                "journal-deleted",
+            )) {
+            val counts =
+                if (phase in listOf("prepared", "ownership-published", "journal-deleted")) 1..1
+                else 1..3
+            for (at in counts) {
+                val f = fixture(false, null, orders[0])
+                val player = f.game.resolve("winhttp.dll").apply { writeText("shipped proxy") }
+                var count = 0
+                DiskFaults.step = { if (it == phase && ++count == at) throw Crash() }
+                try {
+                    assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+                } finally {
+                    DiskFaults.step = {}
+                }
+                f.folder.recoverPending()
+                f.folder.recoverPending()
+                assertFalse("winhttp.dll" in record(f).read().orEmpty(), "$phase/$at")
+                f.folder.removeLoader(f.game.toString())
+                assertEquals("shipped proxy", player.readText(), "$phase/$at")
+                assertTrue(f.game.resolve("NuclearOption.exe").exists())
+            }
+        }
+    }
 }

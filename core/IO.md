@@ -195,28 +195,44 @@ Before the batch, Install and Repair durably write a pending ownership record un
 canonical game path; the record also checks that full path. It lists only selected
 replacement targets and each staged source's SHA-256. Existing files that are not
 selected for replacement are never claimed, even when their bytes match the archive.
-After the batch, ownership publication keeps existing ownership and adds only targets
-whose current bytes match their pending hash. Repair claims an INI only when it
-creates a missing file, or keeps its existing ownership. Rewriting a player's existing INI never claims it: the pending record
-marks it unowned while still verifying its replacement bytes before success.
-Uninstall keeps that repaired INI beside the adopted binaries. Pending records
-from before this distinction retain their recorded ownership semantics. Only after
-the atomic ownership write succeeds is the pending record deleted. Publication failure leaves
-it available for retry, even after the file transaction's journal was deleted.
+Ownership requires durable promotion evidence as well as matching bytes. Loader batches
+ask `replaceTrees` to write a promotion report; its path is journaled and recovery
+replays it before deleting the journal. Other callers retain their existing commit
+and rollback behaviour. A prepared/refused batch claims nothing, even if the player
+later installs identical official files. A thrown loader call settles only its
+promoted entries. Journal failures touching this game folder block loader actions;
+unrelated home/store journals do not.
+
+After the batch, ownership publication keeps existing ownership and adds only promoted
+targets whose current bytes match their pending hash. Repair claims an INI only when
+it creates a missing file, or keeps its existing ownership. Rewriting a player's
+existing INI never claims it. Changed or missing targets add no ownership and fail
+the active operation before a success notice. Unreadable promoted targets stay in
+the pending record, unclaimed, and expose pending game IO until a later startup or
+loader action can verify them. Recovery needs neither the archive nor staging.
+Legacy pending records without promotion evidence cannot authorize new ownership.
+Only after the atomic ownership write succeeds is the pending record deleted.
+The archive's complete file list is stored in a companion ownership metadata file,
+before publishing newly owned names. `loaderComplete` checks those files independently
+of DLL detection. Play and mod preparation resume an owned incomplete installation;
+Install creates missing files only and preserves existing files, including edits.
+An adopted loader with no owned files retains the presence guard.
+
+Uninstall durably records its planned removals before mutation, and records promoted
+removals through the same journal evidence. Once a loader file has moved out, removal
+recovery commits that removal instead of restoring it over a player's reinstall.
+Ownership recovery only drops promoted removal entries; it never deletes game files.
+Entries whose removal never started remain owned for Retry. This distinction avoids
+leaving rolled-back NNOMM files unowned after a pre-promotion crash. A completed
+removal cannot later delete a player's reinstall, including after journal deletion.
+Remove all mods uses this same loader removal path.
+
 Startup with the game closed, game exit, and every loader Install, Repair and
-Uninstall recover file transactions before finishing pending ownership from disk.
-Install does this even when BepInEx is already present. If this home owns loader
-files, Install walks the archive again and places only missing files before reporting
-success. A detected DLL alone cannot complete a partial install. Existing files,
-including player edits, stay unchanged. A detected adopted loader with no owned
-files retains the presence guard and is left alone. The archive walk is alphabetical,
-with any INI replacement promoted first. Missing game folders and
-failed recovery keep the pending record and expose pending game IO. Repeated
-recovery is safe. Changed, missing or unreadable targets add no new ownership.
-During Install or Repair these mismatches fail with access/lock guidance before
-any success or "Replaced the damaged mod loader settings" notice. The batch still
-has per-file recovery, not global atomicity. Refusal before any promotion adds no
-ownership. Recovery never needs the original download or its staging folder.
+Uninstall recover file transactions before settling pending ownership and removals.
+Install does this even when BepInEx is already detected. Missing game folders or
+failed relevant recovery retain their pending records. Recovery is repeatable.
+The archive walk is alphabetical, with any INI replacement promoted first.
+The batch has per-file recovery, not global atomicity.
 While this folder has a pending restore, Repair skips the INI entirely
 (even if missing, unhealthy or unreadable), repairs the other eligible loader
 files, and asks the player to close programs using the folder and use Repair
