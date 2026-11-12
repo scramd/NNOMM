@@ -55,6 +55,7 @@ class UiState {
     var dragging by mutableStateOf(false)
     var dismissMenu: (() -> Unit)? = null
     var focusedField: FocusedField? by mutableStateOf(null)
+    var pageKeysEnabled by mutableStateOf(true)
     var downloadsOpen by mutableStateOf(false)
 
     val browse = BrowseView()

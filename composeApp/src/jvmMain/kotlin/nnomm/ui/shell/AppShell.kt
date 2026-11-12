@@ -9,21 +9,25 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draganddrop.*
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import nnomm.core.rules.*
 import nnomm.ui.*
 import nnomm.ui.browse.BrowsePage
@@ -35,7 +39,6 @@ import nnomm.ui.theme.*
 
 @Composable
 fun AppShell(model: AppModel) {
-    val state by model.store.state.collectAsState()
     val ui = model.ui
     val theme = LocalNnTheme.current
     val c = theme.colors
@@ -77,6 +80,7 @@ fun AppShell(model: AppModel) {
             Modifier.fillMaxSize()
                 .background(c.bg)
                 .focusRequester(rootFocus)
+                .onFocusChanged { ui.pageKeysEnabled = it.isFocused }
                 .focusable()
                 .dragAndDropTarget({ it.dragData() is DragData.FilesList }, dropTarget)
         ) {
@@ -98,14 +102,16 @@ fun AppShell(model: AppModel) {
 /** Place above the complete window, including its title bar. */
 @Composable
 fun AppLayers(model: AppModel) {
-    val state by model.store.state.collectAsState()
+    val toasts by
+        remember(model) { model.store.state.map { it.toasts }.distinctUntilChanged() }
+            .collectAsState(model.store.state.value.toasts)
     val ui = model.ui
     val theme = LocalNnTheme.current
     CompositionLocalProvider(
         LocalApp provides model,
         LocalShortcutHandler provides model::shortcut,
     ) {
-        Box(Modifier.fillMaxSize().onPreviewKeyEvent(model::shortcut)) {
+        Box(Modifier.fillMaxSize().onKeyEvent(model::shortcut)) {
             ui.overlay?.Content()
             if (ui.dragging || ui.overlayKind == "drop") DropLayer()
             Column(
@@ -124,7 +130,7 @@ fun AppLayers(model: AppModel) {
                         model.openAppReleases,
                     )
                 }
-                state.toasts.takeLast(if (ui.updateStatus == null) 3 else 2).forEach { toast ->
+                toasts.takeLast(if (ui.updateStatus == null) 3 else 2).forEach { toast ->
                     key(toast.id) {
                         var visible by remember { mutableStateOf(false) }
                         LaunchedEffect(Unit) { visible = true }
@@ -180,26 +186,28 @@ private fun PageContent(page: Page) {
 
 @Composable
 private fun PanelHost(ref: PanelRef?) {
+    val line = LocalNnTheme.current.colors.line
     val duration = LocalNnTheme.current.panelMillis
-    var last by remember { mutableStateOf(ref) }
-    if (ref != null) last = ref
-    AnimatedVisibility(
-        ref != null,
-        enter =
-            expandHorizontally(
-                tween(duration, easing = LinearOutSlowInEasing),
-                expandFrom = Alignment.End,
-            ) + slideInHorizontally(tween(duration)) { 24 },
-        exit = shrinkHorizontally(tween(duration), shrinkTowards = Alignment.End),
+    if (ref == null) return
+    // Reserve the panel width immediately; animate its paint, never table measurement.
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val offset by animateDpAsState(if (entered) 0.dp else 24.dp, tween(duration))
+    Box(
+        Modifier.width(400.dp)
+            .fillMaxHeight()
+            .offset(x = if (duration == 0) 0.dp else offset)
+            .background(LocalNnTheme.current.colors.side)
+            .drawBehind {
+                drawLine(
+                    line,
+                    androidx.compose.ui.geometry.Offset.Zero,
+                    androidx.compose.ui.geometry.Offset(0f, size.height),
+                    1.dp.toPx(),
+                )
+            }
     ) {
-        Box(
-            Modifier.width(400.dp)
-                .fillMaxHeight()
-                .shadow(16.dp)
-                .background(LocalNnTheme.current.colors.bg)
-        ) {
-            last?.let { ModPanel(it) }
-        }
+        ModPanel(ref)
     }
 }
 
@@ -256,7 +264,20 @@ private fun Nav(
 
 @Composable
 private fun Sidebar(model: AppModel, narrow: Boolean) {
-    val s by model.store.state.collectAsState()
+    val s by
+        remember(model) {
+                model.store.state
+                    .map {
+                        it.copy(
+                            toasts = emptyList(),
+                            downloads = emptyList(),
+                            releaseNotes = emptyMap(),
+                            notesStatus = emptyMap(),
+                        )
+                    }
+                    .distinctUntilChanged()
+            }
+            .collectAsState(model.store.state.value)
     val ui = model.ui
     val c = LocalNnTheme.current.colors
     var menu by remember { mutableStateOf<String?>(null) }
@@ -313,74 +334,99 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
                 if (!narrow) Label("Profiles", Modifier.weight(1f), size = 12f, color = c.text3)
                 IconButton(NnIcons.plus, "New profile", { model.openOverlay("newprofile") })
             }
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 s.profiles.forEach { profile ->
                     Box {
                         val density = androidx.compose.ui.platform.LocalDensity.current
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .height(32.dp)
-                                .onPointerEvent(PointerEventType.Press) { event ->
-                                    if (event.buttons.isSecondaryPressed) {
-                                        contextPoint =
-                                            with(density) {
-                                                event.changes.first().position.let {
-                                                    DpOffset(it.x.toDp(), it.y.toDp())
-                                                }
+                        Tooltip(
+                            "${profile.name}${if (profile.id == s.profileId) " (in use)" else ""}. Right-click for more."
+                        ) {
+                            control(
+                                Modifier.fillMaxWidth(),
+                                onClick = { model.useProfile(profile.id) },
+                            ) { rowModifier, hover, _ ->
+                                Row(
+                                    rowModifier
+                                        .height(32.dp)
+                                        .background(
+                                            if (hover) c.raise else Color.Transparent,
+                                            RoundedCornerShape(6.dp),
+                                        )
+                                        .onPointerEvent(PointerEventType.Press) { event ->
+                                            if (event.buttons.isSecondaryPressed) {
+                                                contextPoint =
+                                                    with(density) {
+                                                        event.changes.first().position.let {
+                                                            DpOffset(it.x.toDp(), it.y.toDp())
+                                                        }
+                                                    }
+                                                open(profile.id)
                                             }
-                                        open(profile.id)
+                                        }
+                                        .padding(horizontal = if (narrow) 0.dp else 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    if (narrow)
+                                        Box(
+                                            Modifier.size(24.dp)
+                                                .background(
+                                                    if (profile.id == s.profileId) c.onFill
+                                                    else Color.Transparent,
+                                                    RoundedCornerShape(50),
+                                                )
+                                                .border(1.5.dp, c.line2, RoundedCornerShape(50)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Label(
+                                                profile.name.take(1).uppercase(),
+                                                color =
+                                                    if (profile.id == s.profileId) c.on
+                                                    else c.text2,
+                                                size = 11.5f,
+                                            )
+                                        }
+                                    else {
+                                        Box(
+                                            Modifier.size(16.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Box(
+                                                Modifier.size(10.dp)
+                                                    .background(
+                                                        if (profile.id == s.profileId) c.on
+                                                        else Color.Transparent,
+                                                        RoundedCornerShape(50),
+                                                    )
+                                                    .border(
+                                                        1.5.dp,
+                                                        if (profile.id == s.profileId) c.on
+                                                        else c.text3,
+                                                        RoundedCornerShape(50),
+                                                    )
+                                            )
+                                        }
+                                        Label(
+                                            profile.name,
+                                            Modifier.weight(1f),
+                                            color =
+                                                if (profile.id == s.profileId) c.text else c.text2,
+                                        )
+                                        Label(
+                                            if (profile.pack?.nextVersion != null) "update"
+                                            else onCount(s, profile.id).toString(),
+                                            size = 11.5f,
+                                            weight =
+                                                if (profile.pack?.nextVersion != null) 600 else 400,
+                                            color =
+                                                if (profile.pack?.nextVersion != null) c.accentText
+                                                else c.text3,
+                                        )
                                     }
                                 }
-                                .clickable {
-                                    model.store.useProfile(profile.id)
-                                    ui.go(Page.Library)
-                                }
-                                .padding(horizontal = if (narrow) 0.dp else 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            if (narrow)
-                                Box(
-                                    Modifier.size(24.dp)
-                                        .background(
-                                            if (profile.id == s.profileId) c.onFill
-                                            else Color.Transparent,
-                                            RoundedCornerShape(50),
-                                        )
-                                        .border(1.dp, c.line2, RoundedCornerShape(50)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Label(profile.name.take(1), size = 11.5f)
-                                }
-                            else {
-                                Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-                                    Box(
-                                        Modifier.size(7.dp)
-                                            .background(
-                                                if (profile.id == s.profileId) c.on
-                                                else Color.Transparent,
-                                                RoundedCornerShape(50),
-                                            )
-                                            .border(
-                                                1.5.dp,
-                                                if (profile.id == s.profileId) c.on else c.text3,
-                                                RoundedCornerShape(50),
-                                            )
-                                    )
-                                }
-                                Label(
-                                    profile.name,
-                                    Modifier.weight(1f),
-                                    color = if (profile.id == s.profileId) c.text else c.text2,
-                                )
-                                Label(
-                                    if (profile.pack?.nextVersion != null) "update"
-                                    else onCount(s, profile.id).toString(),
-                                    size = 11.5f,
-                                    color =
-                                        if (profile.pack?.nextVersion != null) c.accentText
-                                        else c.text3,
-                                )
                             }
                         }
                         Menu(
@@ -394,160 +440,131 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
             }
         }
         if (s.settings.general["showProfiles"]?.content == "false") Spacer(Modifier.weight(1f))
-        if (s.downloads.isNotEmpty())
-            Box {
-                Column(
-                    Modifier.fillMaxWidth()
-                        .clickable { ui.downloadsOpen = !ui.downloadsOpen }
-                        .padding(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(NnIcons.download)
-                        if (!narrow)
-                            Label(
-                                s.downloads
-                                    .count { it.percent < 100 }
-                                    .let {
-                                        if (it == 0) "Downloads finished"
-                                        else "$it download${if (it == 1) "" else "s"}"
-                                    },
-                                size = 12f,
-                            )
-                    }
-                    val active = s.downloads.filter { it.percent < 100 }
-                    if (active.isNotEmpty())
-                        ProgressBar(active.map { it.percent }.average().toFloat() / 100)
-                }
-                AnchoredPopover(
-                    ui.downloadsOpen,
-                    { ui.downloadsOpen = false },
-                    offset = DpOffset(if (narrow) 46.dp else 216.dp, 0.dp),
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("Downloads", weight = 650)
-                        LinkButton("Clear finished", { model.store.clearFinished() })
-                    }
-                    s.downloads.asReversed().forEach { d ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Label(
-                                s.catalog.find { it.id == d.id }?.name ?: d.id,
-                                Modifier.weight(1f),
-                            )
-                            Label(
-                                if (d.percent >= 100)
-                                    if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated" else "Installed"
-                                else "${d.percent}%",
-                                size = 12f,
-                                color = c.text3,
-                            )
-                            if (d.percent < 100)
-                                IconButton(
-                                    NnIcons.x,
-                                    "Cancel",
-                                    { model.store.cancelDownload(d.id) },
-                                )
-                        }
-                        if (d.percent < 100) ProgressBar(d.percent / 100f)
-                    }
-                }
-            }
+        DownloadQueue(model, narrow)
         Column(
             Modifier.fillMaxWidth()
                 .padding(vertical = 4.dp)
-                .background(c.bg, RoundedCornerShape(9.dp))
-                .border(1.dp, c.line, RoundedCornerShape(9.dp))
-                .padding(if (narrow) 3.dp else 9.dp),
+                .then(
+                    if (narrow) Modifier
+                    else
+                        Modifier.background(c.bg, RoundedCornerShape(9.dp))
+                            .border(1.dp, c.line, RoundedCornerShape(9.dp))
+                            .padding(9.dp)
+                ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!narrow) {
-                Box {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { open("playwith") },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Label(s.profile().name, Modifier.weight(1f), weight = 600)
-                        Icon(NnIcons.chevd)
-                    }
-                    Menu(
-                        menu == "playwith",
-                        dismiss,
-                        listOf(MenuEntry.Heading("Play with")) +
-                            s.profiles.map { p ->
-                                MenuEntry.Item(
-                                    p.name,
-                                    hint = "${onCount(s, p.id)} mods",
-                                    icon =
-                                        if (p.id == s.profileId) NnIcons.check else NnIcons.minus,
-                                    action = {
-                                        model.store.useProfile(p.id)
-                                        ui.go(Page.Library)
-                                    },
-                                )
-                            } +
-                            listOf(
-                                MenuEntry.Separator,
-                                MenuEntry.Item(
-                                    "New profile",
-                                    icon = NnIcons.plus,
-                                    action = { model.openOverlay("newprofile") },
+                if (s.settings.bool("showProfiles"))
+                    Box {
+                        Tooltip("Change profile") {
+                            Row(
+                                Modifier.fillMaxWidth().clickable { open("playwith") },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Label(s.profile().name, Modifier.padding(end = 5.dp), weight = 600)
+                                Icon(NnIcons.chevd)
+                            }
+                        }
+                        Menu(
+                            menu == "playwith",
+                            dismiss,
+                            listOf(MenuEntry.Heading("Play with")) +
+                                s.profiles.map { p ->
+                                    MenuEntry.Item(
+                                        p.name,
+                                        hint = "${onCount(s, p.id)} mods",
+                                        icon =
+                                            if (p.id == s.profileId) NnIcons.check
+                                            else NnIcons.minus,
+                                        action = { model.useProfile(p.id) },
+                                    )
+                                } +
+                                listOf(
+                                    MenuEntry.Separator,
+                                    MenuEntry.Item(
+                                        "New profile",
+                                        icon = NnIcons.plus,
+                                        action = { model.openOverlay("newprofile") },
+                                    ),
                                 ),
-                            ),
-                    )
-                }
-                Label("${onCount(s)} of ${s.installed.size} mods on", size = 12f, color = c.text2)
+                        )
+                    }
+                Label(
+                    "${onCount(s)} of ${s.installed.size} mods on",
+                    Modifier.offset(y = (-5).dp).padding(bottom = 0.dp),
+                    size = 12f,
+                    color = c.text2,
+                )
             }
-            if (s.gameRunning)
-                Label(if (narrow) "▶" else "Game is running", color = c.on, size = 12f)
+            if (s.gameRunning || s.gameStarting)
+                Tooltip(if (s.gameRunning) "Game is running" else "Starting Nuclear Option…") {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .height(34.dp)
+                            .border(1.dp, c.on, RoundedCornerShape(6.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement =
+                            Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
+                    ) {
+                        Box(Modifier.size(6.dp).background(c.on, RoundedCornerShape(50)))
+                        if (!narrow)
+                            Label(
+                                if (s.gameRunning) "Game is running" else "Starting…",
+                                color = c.on,
+                                weight = 600,
+                            )
+                    }
+                }
             else
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
                     Box(Modifier.weight(1f)) {
-                        control(Modifier.fillMaxWidth(), onClick = { model.store.play() }) {
-                            m,
-                            hover,
-                            _ ->
-                            Row(
-                                m.height(34.dp)
-                                    .background(
-                                        c.accent,
-                                        RoundedCornerShape(
-                                            topStart = 6.dp,
-                                            bottomStart = 6.dp,
-                                            topEnd = if (narrow) 6.dp else 0.dp,
-                                            bottomEnd = if (narrow) 6.dp else 0.dp,
+                        Tooltip("Start Nuclear Option (Ctrl Enter)") {
+                            control(Modifier.fillMaxWidth(), onClick = { model.store.play() }) {
+                                m,
+                                hover,
+                                _ ->
+                                Row(
+                                    m.height(34.dp)
+                                        .background(
+                                            if (hover) c.accent.copy(alpha = .85f) else c.accent,
+                                            RoundedCornerShape(
+                                                topStart = 6.dp,
+                                                bottomStart = 6.dp,
+                                                topEnd = if (narrow) 6.dp else 0.dp,
+                                                bottomEnd = if (narrow) 6.dp else 0.dp,
+                                            ),
                                         ),
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement =
-                                    Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                            ) {
-                                Icon(NnIcons.play, color = c.accentInk)
-                                if (!narrow)
-                                    Label(
-                                        "Play",
-                                        color = c.accentInk,
-                                        size = 14f,
-                                        width = 112f,
-                                        weight = 600,
-                                    )
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement =
+                                        Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                                ) {
+                                    Icon(NnIcons.play, color = c.accentInk)
+                                    if (!narrow)
+                                        Label(
+                                            "Play",
+                                            color = c.accentInk,
+                                            size = 14f,
+                                            width = 112f,
+                                            weight = 600,
+                                        )
+                                }
                             }
                         }
                     }
                     if (!narrow)
                         Box {
-                            control(Modifier, onClick = { open("play") }) { m, _, _ ->
-                                Box(
-                                    m.size(30.dp, 34.dp)
-                                        .background(
-                                            c.accent,
-                                            RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp),
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(NnIcons.chevd, color = c.accentInk)
+                            Tooltip("More ways to start") {
+                                control(Modifier, onClick = { open("play") }) { m, _, _ ->
+                                    Box(
+                                        m.size(30.dp, 34.dp)
+                                            .background(
+                                                c.accent,
+                                                RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp),
+                                            ),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(NnIcons.chevd, color = c.accentInk)
+                                    }
                                 }
                             }
                             Menu(
@@ -564,9 +581,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
                                         "Open the game folder",
                                         icon = NnIcons.folder,
                                         action = {
-                                            s.game.folder?.let {
-                                                model.platform.openFolder(java.io.File(it))
-                                            }
+                                            s.game.folder?.let { model.openPath(java.io.File(it)) }
                                         },
                                     ),
                                     MenuEntry.Item(
@@ -574,7 +589,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
                                         icon = NnIcons.file,
                                         action = {
                                             s.game.folder?.let {
-                                                model.platform.openFolder(
+                                                model.openPath(
                                                     java.io.File(it, "BepInEx/LogOutput.log")
                                                 )
                                             }
@@ -589,10 +604,98 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
     }
 }
 
+@Composable
+private fun DownloadQueue(model: AppModel, narrow: Boolean) {
+    val s by
+        remember(model) {
+                model.store.state.map { it.copy(toasts = emptyList()) }.distinctUntilChanged()
+            }
+            .collectAsState(model.store.state.value)
+    val ui = model.ui
+    val c = LocalNnTheme.current.colors
+    if (s.downloads.isNotEmpty() || ui.downloadsOpen)
+        Box {
+            Column(
+                Modifier.fillMaxWidth()
+                    .clickable { ui.downloadsOpen = !ui.downloadsOpen }
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(NnIcons.download)
+                    if (!narrow)
+                        Label(
+                            s.downloads
+                                .count { it.percent < 100 }
+                                .let {
+                                    if (it == 0) "Downloads finished"
+                                    else "$it download${if (it == 1) "" else "s"}"
+                                },
+                            size = 12f,
+                        )
+                }
+                val active = s.downloads.filter { it.percent < 100 }
+                if (active.isNotEmpty())
+                    ProgressBar(active.map { it.percent }.average().toFloat() / 100)
+            }
+            AnchoredPopover(
+                ui.downloadsOpen,
+                { ui.downloadsOpen = false },
+                offset = DpOffset(if (narrow) 46.dp else 216.dp, 0.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Label("Downloads", weight = 650)
+                    LinkButton("Clear finished", { model.store.clearFinished() })
+                }
+                if (s.downloads.isEmpty()) Label("No downloads.", color = c.text3)
+                s.downloads.asReversed().forEach { d ->
+                    val source = remember(d.id) { MutableInteractionSource() }
+                    val hovered by source.collectIsHoveredAsState()
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .hoverable(source)
+                            .background(
+                                if (hovered) c.raise2 else Color.Transparent,
+                                RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 9.dp, vertical = 7.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ModTile(d.id, s.mod(d.id).name, s.mod(d.id).demoPicture, TileSize.Small)
+                        Label(s.catalog.find { it.id == d.id }?.name ?: d.id, Modifier.weight(1f))
+                        Label(
+                            if (d.percent >= 100)
+                                if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated"
+                                else "Installed"
+                            else "${d.percent}%",
+                            size = 12f,
+                            color = c.text3,
+                        )
+                        if (d.percent < 100)
+                            IconButton(
+                                NnIcons.x,
+                                "Cancel",
+                                { model.store.cancelDownload(d.id) },
+                                small = true,
+                            )
+                    }
+                    if (d.percent < 100) ProgressBar(d.percent / 100f)
+                }
+            }
+        }
+}
+
 private fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildList {
     val s = model.store.state.value
     if (id != s.profileId)
-        add(MenuEntry.Item("Use this profile", action = { model.store.useProfile(id) }))
+        add(
+            MenuEntry.Item(
+                "Use this profile",
+                icon = NnIcons.check,
+                action = { model.useProfile(id) },
+            )
+        )
     fun layer(kind: String) {
         model.ui.overlayProfileId = id
         model.openOverlay(kind)
@@ -613,7 +716,7 @@ private fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildLi
             "Share as a modpack",
             icon = NnIcons.share,
             action = {
-                model.store.useProfile(id)
+                model.useProfile(id)
                 layer("share")
             },
         )
@@ -634,8 +737,9 @@ private fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildLi
         add(
             MenuEntry.Item(
                 "See what changes in $it",
+                icon = NnIcons.box,
                 action = {
-                    model.store.useProfile(id)
+                    model.useProfile(id)
                     layer("packupdate")
                 },
             )
@@ -683,7 +787,8 @@ fun DropLayer() {
             Label("Drop to install", size = 24f, weight = 650, width = 114f)
             Label(
                 "Mod files (.dll, .zip) go into your Library. If the file is a mod from the registry, NNOMM recognises it and can update it later. A modpack (.nommpack) opens a preview first.",
-                Modifier.widthIn(max = 680.dp).padding(horizontal = 16.dp),
+                Modifier.padding(horizontal = 16.dp),
+                textAlign = TextAlign.Center,
                 color = c.text2,
             )
         }

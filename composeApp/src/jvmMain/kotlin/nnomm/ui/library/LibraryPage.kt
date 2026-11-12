@@ -38,7 +38,14 @@ fun LibraryPage() {
                 .distinctUntilChanged()
         }
     val s by stateFlow.collectAsState(model.store.state.value)
-    val filter = LibraryFilter(view.filter, view.query, nnomm.core.model.LibrarySort.entries.firstOrNull { it.name.equals(view.sort, true) } ?: nnomm.core.model.LibrarySort.NAME, if (view.descending) -1 else 1)
+    val filter =
+        LibraryFilter(
+            view.filter,
+            view.query,
+            nnomm.core.model.LibrarySort.entries.firstOrNull { it.name.equals(view.sort, true) }
+                ?: nnomm.core.model.LibrarySort.NAME,
+            if (view.descending) -1 else 1,
+        )
     val ids = remember(s, filter) { libList(s, filter) }
     val counts = remember(s) { libCounts(s) }
     var previousInstalled by remember { mutableStateOf(s.installed.keys) }
@@ -47,13 +54,23 @@ fun LibraryPage() {
         if (model.ui.panel?.modId in removed) model.ui.panel = null
         previousInstalled = s.installed.keys
     }
-    val selection = remember {
-        RowSelection<String>().apply {
-            selectAll(view.selection.toList())
-            view.anchorId?.let(::activate)
-            view.focusedId?.let(::focus)
+    var selectionProfile by remember { mutableStateOf(s.profileId) }
+    LaunchedEffect(s.profileId) {
+        if (selectionProfile != s.profileId) {
+            view.selection = emptySet()
+            view.focusedId = null
+            view.anchorId = null
+            selectionProfile = s.profileId
         }
     }
+    val selection =
+        remember(s.profileId) {
+            RowSelection<String>().apply {
+                selectAll(view.selection.toList())
+                view.anchorId?.let(::activate)
+                view.focusedId?.let(::focus)
+            }
+        }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val search = remember { FocusRequester() }
@@ -83,7 +100,7 @@ fun LibraryPage() {
         selection.retain((currentIds - picked).toSet())
         if (next != null && next !in picked) selection.focus(next)
     }
-    DisposableEffect(model) {
+    DisposableEffect(model, selection) {
         val keys =
             model.registerKeys(Page.Library) { event ->
                 val rows = currentIds
@@ -92,10 +109,13 @@ fun LibraryPage() {
                 when {
                     (event.isCtrlPressed || event.isMetaPressed) && event.key == Key.A ->
                         selection.selectAll(rows)
-                    event.key == Key.DirectionDown || event.key == Key.DirectionUp -> {
+                    event.key in
+                        listOf(Key.DirectionDown, Key.DirectionUp, Key.MoveHome, Key.MoveEnd) -> {
                         if (rows.isEmpty()) return@registerKeys false
                         val next =
-                            if (index < 0) 0
+                            if (event.key == Key.MoveHome) 0
+                            else if (event.key == Key.MoveEnd) rows.lastIndex
+                            else if (index < 0) 0
                             else
                                 (index + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(
                                     rows.indices
@@ -202,13 +222,7 @@ fun LibraryPage() {
                             },
                             kind = ButtonKind.Strong,
                         )
-                        Button(
-                            "Import a modpack",
-                            {
-                                model.ui.importMode = "new"
-                                model.openOverlay("import")
-                            },
-                        )
+                        Button("Import a modpack", { model.importPack() })
                     }
                 }
             } else {
@@ -227,7 +241,15 @@ fun LibraryPage() {
                             "prob" to "Problems",
                         )
                         .forEach { (key, title) ->
-                            Chip(title, counts[key], view.filter == key, { view.filter = key })
+                            Chip(
+                                title,
+                                counts[key],
+                                view.filter == key,
+                                {
+                                    view.selection = emptySet()
+                                    view.filter = key
+                                },
+                            )
                         }
                     Spacer(Modifier.weight(1f))
                     TextField(
@@ -244,7 +266,13 @@ fun LibraryPage() {
                     )
                 }
                 s.trouble
-                    ?.takeIf { it.phase in listOf(nnomm.core.model.TroublePhase.TEST, nnomm.core.model.TroublePhase.BASE) }
+                    ?.takeIf {
+                        it.phase in
+                            listOf(
+                                nnomm.core.model.TroublePhase.TEST,
+                                nnomm.core.model.TroublePhase.BASE,
+                            )
+                    }
                     ?.let {
                         Note(
                             "You are looking for a broken mod. ${it.off.size} mods are off for the test. NNOMM turns them on again at the end.",
@@ -464,7 +492,8 @@ private fun LibraryCell(
                                 "The author made this version for game ${mod.newestRelease?.gameVersion}. It may still work."
                             else "${problem.text}. Click for ways to fix it."
                         ) {
-                            if ((problem.kind == nnomm.core.model.ProblemKind.INFO)) Badge(problem.text)
+                            if ((problem.kind == nnomm.core.model.ProblemKind.INFO))
+                                Badge(problem.text)
                             else
                                 LibraryMenu({
                                     listOf(MenuEntry.Heading(problem.text)) +
@@ -477,7 +506,8 @@ private fun LibraryCell(
                                 }) { open ->
                                     Badge(
                                         problem.text,
-                                        if (problem.kind == nnomm.core.model.ProblemKind.DANGER) BadgeKind.Danger
+                                        if (problem.kind == nnomm.core.model.ProblemKind.DANGER)
+                                            BadgeKind.Danger
                                         else BadgeKind.Warn,
                                         NnIcons.alert,
                                         open,
@@ -621,7 +651,10 @@ private fun LibraryEmpty(
     action: @Composable () -> Unit,
 ) {
     val c = LocalNnTheme.current.colors
-    Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.TopCenter) {
+    Box(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 68.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
         Column(
             Modifier.widthIn(max = 380.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

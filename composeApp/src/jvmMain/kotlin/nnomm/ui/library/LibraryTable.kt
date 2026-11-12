@@ -3,14 +3,17 @@
 package nnomm.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import nnomm.ui.LocalApp
 import nnomm.ui.kit.*
 import nnomm.ui.theme.LocalNnTheme
 
@@ -27,9 +30,16 @@ internal fun LibraryTable(
     cell: @Composable (String, String) -> Unit,
     footer: @Composable () -> Unit,
 ) {
+    val model = LocalApp.current
+    val focus = remember { FocusRequester() }
     val c = LocalNnTheme.current.colors
     LaunchedEffect(keys) { selection.retain(keys.toSet()) }
-    BoxWithConstraints(modifier) {
+    BoxWithConstraints(
+        modifier
+            .focusRequester(focus)
+            .onFocusChanged { model.ui.pageKeysEnabled = it.isFocused }
+            .focusable()
+    ) {
         val narrow = maxWidth <= 800.dp
         LazyList(Modifier.fillMaxSize(), state) {
             stickyHeader {
@@ -52,6 +62,7 @@ internal fun LibraryTable(
                     key == selection.focused,
                     isOff(key),
                     onSelect = { shift, ctrl ->
+                        focus.requestFocus()
                         if (shift || ctrl) selection.select(keys, key, shift, ctrl = true)
                         else {
                             selection.activate(key)

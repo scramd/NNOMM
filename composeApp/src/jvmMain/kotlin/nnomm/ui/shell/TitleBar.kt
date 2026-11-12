@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.unit.dp
 import nnomm.ui.kit.*
 import nnomm.ui.theme.*
@@ -53,7 +54,11 @@ fun TitleBar(
                     KeyCap("Ctrl K")
                 }
             }
-            if (windowWidth > 940.dp) Spacer(Modifier.weight(1f).fillMaxHeight().then(dragModifier))
+            Spacer(
+                (if (windowWidth > 940.dp) Modifier.weight(1f) else Modifier.width(32.dp))
+                    .fillMaxHeight()
+                    .then(dragModifier)
+            )
             Row {
                 listOf(
                         Triple(NnIcons.minus, "Minimize", onMinimize),
@@ -62,7 +67,9 @@ fun TitleBar(
                     )
                     .forEach { (icon, description, action) ->
                         Box(
-                            Modifier.size(44.dp, 38.dp).clickable(onClick = action),
+                            Modifier.size(44.dp, 38.dp)
+                                .focusProperties { canFocus = false }
+                                .clickable(onClick = action),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(icon, color = c.text2, description = description)

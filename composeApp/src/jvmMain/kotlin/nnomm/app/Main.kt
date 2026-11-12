@@ -19,6 +19,8 @@ import java.awt.dnd.*
 import java.io.File
 import java.util.Properties
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import nnomm.core.demo.demoStore
 import nnomm.core.store.AppStore
 import nnomm.ui.*
@@ -122,7 +124,8 @@ fun main(args: Array<String>) {
                 if (!store.state.value.firstStart.complete) openOverlay("first")
             }
         }
-        val storeState by model.store.state.collectAsState()
+        val generalFlow = remember(model) { model.store.state.map { it.settings.general }.distinctUntilChanged() }
+        val general by generalFlow.collectAsState(model.store.state.value.settings.general)
         val scope = rememberCoroutineScope()
         DisposableEffect(Unit) {
             onDispose {
@@ -163,7 +166,7 @@ fun main(args: Array<String>) {
         model.checkAppUpdates = {
             if (!isDemo)
                 scope.launch {
-                    updates.check(storeState.settings.general["appUpdate"]?.content ?: "Tell me") {
+                    updates.check(general["appUpdate"]?.content ?: "Tell me") {
                         message ->
                         scope.launch { model.ui.updateStatus = message }
                     }
@@ -171,7 +174,7 @@ fun main(args: Array<String>) {
         }
         model.openAppReleases = { platform.openUrl(NNOMM_LATEST_RELEASE_URL) }
         LaunchedEffect(Unit) { if (!isDemo) model.checkAppUpdates() }
-        val values = storeState.settings.general
+        val values = general
         val dark =
             when {
                 "--light" in args -> false
@@ -194,7 +197,12 @@ fun main(args: Array<String>) {
                 state = state,
                 minimumSize = DpSize(720.dp, 560.dp),
                 onCloseRequest = saveAndExit,
-                onPreviewKeyEvent = model::shortcut,
+                onPreviewKeyEvent = { event ->
+                    if (System.getenv("NNOMM_LOG_KEYS") == "1") System.err.println("NNOMM key=${event.key} type=${event.type} utf16=${event.utf16CodePoint} native=${event.nativeKeyEvent}")
+                    model.suppressHandledCharacter(event) ||
+                        ((event.isCtrlPressed || event.isMetaPressed) && event.key == Key.Enter && model.shortcut(event))
+                },
+                onKeyEvent = model::shortcut,
             ) {
                 val win = nucleusWindow
                 val drag = Modifier.windowDragArea(window = checkNotNull(win.unsafe.taoWindow))
@@ -202,7 +210,7 @@ fun main(args: Array<String>) {
                 val maximized = state.placement == WindowPlacement.Maximized
                 val focusMode = remember { nnomm.ui.kit.FocusMode() }
                 CompositionLocalProvider(nnomm.ui.kit.LocalFocusMode provides focusMode) {
-                Box(Modifier.fillMaxSize().then(Modifier.windowInputMode(focusMode))) {
+                Box(Modifier.fillMaxSize().onKeyEvent(model::shortcut).then(Modifier.windowInputMode(focusMode))) {
                     WindowScaffold(
                         modifier =
                             Modifier.fillMaxSize()

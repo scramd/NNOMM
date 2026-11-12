@@ -77,7 +77,7 @@ fun mockStore(address: String): AppStore {
             s.copy(
                 downloads =
                     listOf(
-                        Download(id, nnomm.core.model.DownloadKind.UPDATE, s.profileId, s.mod(id).newestRelease!!.version, 42)
+                        Download(id, nnomm.core.model.DownloadKind.UPDATE, s.profileId, s.mod(id).newestRelease!!.version, 78)
                     )
             )
     }

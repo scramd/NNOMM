@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.InternalComposeUiApi::class)
+
 package nnomm.ui
 
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -85,6 +87,7 @@ class AppModel(
         ui.overlay = null
         ui.overlayKind = null
         ui.dragging = false
+        ui.importFile = null
     }
 
     fun acceptFiles(files: List<File>) {
@@ -93,16 +96,46 @@ class AppModel(
             val name = file.name.lowercase()
             when {
                 name.endsWith(".nommpack") || name.endsWith(".nomm.json") -> {
+                    ui.importMode = "new"
                     ui.importFile = file
                     openOverlay("import")
                 }
                 file.extension.lowercase() in listOf("dll", "zip", "7z") ->
                     store.addLocal(file.absolutePath)
+                else -> notify("NNOMM cannot use ${file.name}")
             }
         }
     }
 
-    fun shortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+    private var handledCharacter: Int? = null
+
+    /**
+     * Windows can emit a physical key and then its character; X11 Tao emits only the character for
+     * these keys. Do not run a command twice or insert its slash.
+     */
+    fun suppressHandledCharacter(event: KeyEvent): Boolean {
+        if (event.type == KeyEventType.KeyUp) handledCharacter = null
+        if (event.type != KeyEventType.Unknown || event.utf16CodePoint != handledCharacter)
+            return false
+        handledCharacter = null
+        return true
+    }
+
+    fun shortcut(raw: KeyEvent): Boolean {
+        val handled = dispatchShortcut(shortcutEvent(raw))
+        if (handled && raw.type == KeyEventType.KeyDown) {
+            handledCharacter =
+                when (raw.key) {
+                    Key.Spacebar -> 32
+                    Key.Slash -> 47
+                    else -> null
+                }
+        }
+        return handled
+    }
+
+    private fun dispatchShortcut(event: KeyEvent): Boolean {
+
         if (event.type != KeyEventType.KeyDown) return false
         val ctrl = event.isCtrlPressed || event.isMetaPressed
         val typing = ui.focusedField != null
@@ -139,11 +172,65 @@ class AppModel(
             }
             event.key == Key.Slash && !typing && ui.overlay == null ->
                 searchFocus[ui.page]?.invoke() ?: return false
-            ui.overlay == null && !typing && ui.dismissMenu == null ->
+            ui.overlay == null && !typing && ui.dismissMenu == null && ui.pageKeysEnabled ->
                 return pageKeys[ui.page]?.invoke(event) ?: false
             else -> return false
         }
         return true
+    }
+
+    fun notify(message: String) {
+        ui.updateStatus = message
+    }
+
+    fun useProfile(id: String) {
+        ui.library.selection = emptySet()
+        ui.library.anchorId = null
+        ui.library.focusedId = null
+        store.useProfile(id)
+        ui.go(Page.Library)
+    }
+
+    fun importPack() {
+        ui.importFile = null
+        ui.importMode = "new"
+        scope.launch { nnomm.ui.dialogs.choosePackFor(this@AppModel) }
+    }
+
+    fun replaceLocal(id: String) {
+        scope.launch {
+            platform
+                .chooseFiles("Replace with a newer file", listOf("dll", "zip", "7z"), false)
+                .firstOrNull()
+                ?.let { store.replaceLocal(id, it.absolutePath) }
+        }
+    }
+
+    fun openPath(path: File?) {
+        if (store.io.modStore !is nnomm.core.io.real.RealModStore) {
+            notify("This does nothing in the mock.")
+            return
+        }
+        scope.launch {
+            val exists = withContext(Dispatchers.IO) { path?.exists() == true }
+            if (!exists) notify("${path?.name ?: "The file or folder"} was not found.")
+            else
+                runCatching { platform.openFolder(path!!) }
+                    .onFailure { notify("Could not open ${path?.name}.") }
+        }
+    }
+
+    fun openModFolder(id: String) {
+        val disk = store.io.modStore as? nnomm.core.io.real.RealModStore
+        val version = nnomm.core.rules.verOf(store.state.value, id)
+        openPath(if (disk != null && version != null) disk.version(id, version).toFile() else null)
+    }
+
+    fun openModSettings(id: String) {
+        // TODO(core): expose the BepInEx GUID/config ownership for each mod.
+        if (store.io.modStore !is nnomm.core.io.real.RealModStore)
+            notify("This does nothing in the mock.")
+        else notify("No settings file is known for ${store.state.value.mod(id).name}.")
     }
 
     fun showServers() = store.state.value.settings.general["showServers"]?.content != "false"
@@ -172,18 +259,15 @@ class AppModel(
                         },
                     )
                 }
-            ActionKind.NAVIGATE -> Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
+            ActionKind.NAVIGATE ->
+                Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
             ActionKind.OPENSETTINGS -> {
                 ui.go(Page.Settings)
                 ui.settings.category = action.id ?: "game"
                 ui.settings.scope = "all"
                 ui.settings.query = ""
             }
-            ActionKind.USEPROFILE ->
-                action.id?.let {
-                    store.useProfile(it)
-                    ui.go(Page.Library)
-                }
+            ActionKind.USEPROFILE -> action.id?.let { useProfile(it) }
             ActionKind.INSTALL -> action.id?.let(store::install)
             ActionKind.UPDATE -> action.id?.let(store::update)
             ActionKind.REPAIR,
@@ -196,6 +280,7 @@ class AppModel(
             ActionKind.LOOKFORUPDATES -> store.lookForUpdates()
             ActionKind.LIBRARYFILTER -> {
                 ui.go(Page.Library)
+                ui.library.selection = emptySet()
                 ui.library.filter = action.id ?: action.value ?: "all"
             }
             ActionKind.ADDFILE ->
@@ -208,9 +293,9 @@ class AppModel(
                         )
                     )
                 }
-            ActionKind.OPENGAMEFOLDER -> store.state.value.game.folder?.let { platform.openFolder(File(it)) }
+            ActionKind.OPENGAMEFOLDER -> openPath(store.state.value.game.folder?.let(::File))
             ActionKind.NEWPROFILE -> openOverlay("newprofile")
-            ActionKind.IMPORT -> scope.launch { nnomm.ui.dialogs.choosePackFor(this@AppModel) }
+            ActionKind.IMPORT -> importPack()
             ActionKind.SHARE,
             ActionKind.TROUBLE -> openOverlay(action.kind.name.lowercase())
             else -> Unit
@@ -219,3 +304,27 @@ class AppModel(
 }
 
 val LocalApp = staticCompositionLocalOf<AppModel> { error("No AppModel provided") }
+
+/**
+ * Tao sends character input separately with an unknown key/type on X11. Interpret only the two page
+ * commands; never turn arbitrary typed text into physical key presses.
+ */
+internal fun shortcutEvent(event: KeyEvent): KeyEvent {
+    if (event.type == KeyEventType.KeyUp) return event
+    val key =
+        when (event.utf16CodePoint) {
+            32 -> Key.Spacebar
+            47 -> Key.Slash
+            else -> return event
+        }
+    if (event.key.nativeKeyCode != 0) return event
+    return KeyEvent(
+        key,
+        KeyEventType.KeyDown,
+        event.utf16CodePoint,
+        isCtrlPressed = event.isCtrlPressed,
+        isMetaPressed = event.isMetaPressed,
+        isAltPressed = event.isAltPressed,
+        isShiftPressed = event.isShiftPressed,
+    )
+}
