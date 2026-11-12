@@ -130,14 +130,21 @@ official source later fails. Failed HEAD metadata is retried after five minutes.
 Doorstop 4 reads `enabled` (default true) and `target_assembly` (default
 `Doorstop.dll`) from the first case-insensitive `[General]` section. Sectionless
 keys do not count. Headers with inner spaces or a trailing comment count; the
-section name ends at the last `]`. A missing target DLL disables Doorstop itself.
+section name ends at the last `]`. A line starting with `[` without a closing
+`]` is a key line, not a section boundary. Only spaces and tabs are trimmed.
+A missing target DLL disables Doorstop itself. A present enabled value is on only
+when it equals `true` (case-insensitive, after trimming spaces/tabs and removing
+matched quotes). Other present values, including empty and numeric values, are off;
+a missing key or a key without `=` defaults to true.
 These rules were checked read-only against UnityDoorstop v4.0.0/v4.3.0
 `src/windows/config.c`, v4.3.0 `entrypoint.c`, and Wine's `dlls/kernel32/profile.c`.
 Native Windows behaviour remains a platform check.
 
 The line editor splits only CRLF, LF and CR, preserving individual line endings.
 Byte 0x85 in a comment is ordinary data. UTF-16 LE/BE files with a BOM are decoded
-and re-encoded with the same BOM and byte order. Other files use ISO-8859-1 as a
+and re-encoded with the same BOM and byte order. Malformed UTF-16 (odd length or
+unpaired surrogates) is refused before editing or replacing loader files; the
+message asks the player to restore a valid copy. Other files use ISO-8859-1 as a
 byte-preserving mapping, including UTF-8 and its optional BOM.
 
 Play without mods changes the first `[General]` and, if present, the first
@@ -148,10 +155,18 @@ bytes are saved durably as base64 in `doorstop-restore.json` before mutation.
 Restoration waits for observed exit; startup while the game runs defers it. Startup
 with the game closed, a failed edit, or a failed launch restores the exact bytes.
 Legacy records containing only `text` still restore using the previous byte mapping.
+Restore failure never stops startup or leaves the launcher marked running after
+exit. The durable record stays pending; NNOMM retries every three seconds while
+the game is closed, at startup and before the next Play. Play refuses to continue
+if that retry fails. One notice per unresolved failure asks the player to close
+programs using the game folder. A deleted game folder is never recreated: its
+restore record is cleared. Restore writes never create parent directories.
+An edit failure retains its original cause and attaches any failed rollback as a
+suppressed exception; Play uses loader access, lock or free-space guidance.
 
 Loader Repair accepts only detected BepInEx 5.4.23.4. Unknown/different versions
-are refused. A config is healthy if its first `[General]` has `target_assembly`;
-missing `enabled` is healthy and left alone. An explicitly false key in a healthy
+are refused. A config is healthy if its first `[General]` has a nonempty `target_assembly`;
+missing `enabled` is healthy and left alone. A present enabled value other than true in a healthy
 file is set true unless a without-mods restore is pending for this game folder.
 An unhealthy file is replaced with the shipped default, with the original kept
 in transaction recovery and a result notice explaining that. A currently unreadable
@@ -318,7 +333,7 @@ exception messages remain in logs, not Play toasts.
 
 Repair changes existing loader files only when this home recorded ownership.
 For detected BepInEx 5.4.23.4, it also repairs Doorstop as described above:
-a missing enabled key alone is healthy, an ineffective target configuration is
+a missing enabled key alone is healthy, an empty or ineffective target configuration is
 replaced with the shipped default and retained in recovery, and unreadable files
 are left alone. Adopted loader binaries and other unowned files stay unchanged.
 Other loader versions require their original installer; Repair offers

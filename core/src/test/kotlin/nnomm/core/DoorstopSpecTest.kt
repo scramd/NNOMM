@@ -330,11 +330,116 @@ class DoorstopSpecTest {
         val f = fixture(original, locked = true)
         val failure =
             assertFailsWith<DoorstopSettingsFailure> { f.folder.repairLoader(f.game.toString()) }
-        assertTrue(loaderFailureHelp(failure).contains("Close programs"))
+        assertTrue(loaderFailureHelp(failure).contains("close programs", true))
         assertFalse(loaderFailureHelp(failure).contains("Repair"))
         assertContentEquals(original, f.game.resolve("doorstop_config.ini").readBytes())
         assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
         assertTrue(f.notices.none { "shipped defaults" in it })
+    }
+
+    // Assertions ported from doorstop2/ZReviewProbeTest; no print-only probes.
+    @Test
+    fun repairAllDisabledValuesAndEmptyTargets() = runBlocking {
+        for (value in
+            listOf(
+                "false",
+                "FALSE",
+                " false ",
+                "\"false\"",
+                "'false'",
+                "0",
+                "1",
+                "no",
+                "yes",
+                "off",
+                "",
+                "true ;x",
+                "false ; comment",
+                "'true\"",
+            )) {
+            val f = fixture(bytes("[General]\nenabled=$value\ntarget_assembly=x\n"))
+            f.folder.repairLoader(f.game.toString())
+            assertContentEquals(
+                bytes("[General]\nenabled= true\ntarget_assembly=x\n"),
+                f.game.resolve("doorstop_config.ini").readBytes(),
+                value,
+            )
+        }
+        for (value in listOf("", " \t", "\"\"", "''")) {
+            val original = bytes("[General]\nenabled=true\ntarget_assembly=$value\n")
+            val f = fixture(original)
+            f.folder.repairLoader(f.game.toString())
+            assertContentEquals(shipped, f.game.resolve("doorstop_config.ini").readBytes())
+            assertTrue(
+                Files.walk(f.game.resolve(".nnomm/recovery")).use { paths ->
+                    paths.anyMatch { it.isRegularFile() && it.readBytes().contentEquals(original) }
+                }
+            )
+        }
+        for (line in
+            listOf(
+                "enabled",
+                "enabled=true",
+                "enabled=TRUE",
+                "enabled='true'",
+                "enabled=\"true\"",
+            )) {
+            val original = bytes("[General]\n$line\ntarget_assembly=x\n")
+            val f = fixture(original)
+            f.folder.repairLoader(f.game.toString())
+            assertContentEquals(original, f.game.resolve("doorstop_config.ini").readBytes())
+        }
+    }
+
+    @Test
+    fun wineWhitespaceAndUnmatchedBracketProbes() {
+        val original = bytes("[General]\n[oops\nenabled=true\ntarget_assembly=x\n")
+        assertTrue(DoorstopIni.read(original).healthy)
+        assertContentEquals(
+            bytes("[General]\n[oops\nenabled= false\ntarget_assembly=x\n"),
+            DoorstopIni.read(original).setEnabled(false),
+        )
+        for (space in listOf('\u00a0', '\u001c', '\u001d', '\u001e', '\u001f')) {
+            assertFalse(DoorstopIni.read(bytes("[$space" + "General]\ntarget_assembly=x")).healthy)
+            assertFalse(
+                DoorstopIni.read(bytes("[General]\n$space" + "enabled=false")).explicitlyDisabled
+            )
+            assertTrue(DoorstopIni.read(bytes("[General]\nenabled=true$space")).explicitlyDisabled)
+        }
+    }
+
+    @Test
+    fun malformedUtf16RefusesRepairAndLaunchWithoutChangingBytes() = runBlocking {
+        for (le in listOf(true, false)) {
+            val prefix = utf16("[General]\nenabled=false\ntarget_assembly=x\n# ", le)
+            val malformed =
+                listOf(
+                    prefix + byteArrayOf(0x41),
+                    prefix +
+                        if (le) byteArrayOf(0, 0xd8.toByte()) else byteArrayOf(0xd8.toByte(), 0),
+                )
+            for (original in malformed) {
+                val f = fixture(original)
+                val failure =
+                    assertFailsWith<DoorstopSettingsFailure> {
+                        f.folder.repairLoader(f.game.toString())
+                    }
+                assertTrue(loaderFailureHelp(failure).contains("invalid UTF-16"))
+                assertContentEquals(original, f.game.resolve("doorstop_config.ini").readBytes())
+                assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
+                val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                try {
+                    val launcher = RealGameLauncher(f.home, scope, detect = { false })
+                    assertFailsWith<DoorstopSettingsFailure> {
+                        launcher.start(AppState(game = GameInfo(f.game.toString())), true)
+                    }
+                    assertContentEquals(original, f.game.resolve("doorstop_config.ini").readBytes())
+                    assertFalse(launcher.running.value)
+                } finally {
+                    scope.cancel()
+                }
+            }
+        }
     }
 
     @Test

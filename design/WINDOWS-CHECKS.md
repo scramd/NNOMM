@@ -162,3 +162,12 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 | Check on real Windows | Expected result |
 | --- | --- |
 | Play without mods and Repair with UTF-8 BOM, UTF-16 LE/BE BOM, `[General] ; comment` and `[ General ]` headers; include lone CR, byte 0x85 comments, duplicate General sections and missing enabled. Hold the INI open with a sharing lock during Repair. | Doorstop uses the first General section. Play disables effective keys and restores exact original bytes after exit/restart/failure, with BOM first and original line endings. Healthy Repair preserves encoding and unrelated bytes; missing enabled alone stays unchanged, explicit false becomes true unless restore is pending. Unhealthy Repair uses shipped defaults and keeps original bytes in recovery. A locked read fails with close-programs guidance and leaves every loader file unchanged. |
+
+## Doorstop2 restore and value handling
+
+| Check on real Windows | Expected result |
+| --- | --- |
+| Repair pinned 5.4.23.4 with enabled=0, 1, no, yes, off, empty, quoted false and inline comments; also missing enabled and enabled without equals. Try empty and quoted-empty target_assembly. | Every present value other than true is repaired to true unless this folder has a pending restore. Missing/no-equals enabled stays unchanged. Empty targets receive shipped defaults and exact originals remain in recovery with a notice. |
+| Lock the INI or deny writes during Play without mods and again during restore after game exit. Keep the lock through NNOMM restart, then release it. | Startup still opens, running clears on exit, saved bytes remain pending, and one close-programs notice appears. Automatic retry restores exact bytes after release without another game transition. Play retries first and remains usable after recovery. An edit failure gives access/lock guidance, preserving the initial cause in logs. |
+| Delete a sandbox game folder while its restore record is pending. | Restart clears the record without recreating the folder. |
+| Use unmatched bracket lines, NBSP/control whitespace, and odd-length or unpaired-surrogate UTF-16 in the sandbox INI. | Windows profile API behaviour agrees with parser rules; malformed UTF-16 is refused with valid-copy guidance and no loader files change. |

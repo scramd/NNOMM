@@ -76,26 +76,49 @@ class RealGameLauncher(
     private val scope: CoroutineScope,
     private val fakeCommand: List<String>? = null,
     private val detect: () -> Boolean = ::gameProcessRunning,
+    private val notice: (String) -> Unit = {},
+    private val writeDoorstop: (Path, ByteArray) -> Unit = { path, bytes ->
+        atomic(path, String(bytes, DoorstopIni.charset), DoorstopIni.charset, createParents = false)
+    },
 ) : GameLauncher {
     private val flow = MutableStateFlow(detect())
     override val running = flow.asStateFlow()
     private val mutex = Mutex()
     private var launched: Process? = null
     private var pending = false
+    private var restoreNoticeShown = false
 
     init {
-        if (!detect()) restoreDoorstop()
+        if (!flow.value) tryRestoreDoorstop()
         scope.launch {
             while (isActive) {
-                if (!pending) {
-                    val now = detect() || launched?.isAlive == true
-                    if (flow.value && !now) mutex.withLock { restoreDoorstop() }
-                    flow.value = now
+                mutex.withLock {
+                    if (!pending) {
+                        val now = detect() || launched?.isAlive == true
+                        if (!now) tryRestoreDoorstop()
+                        flow.value = now
+                    }
                 }
                 delay(3000)
             }
         }
     }
+
+    // Every caller can finish its state transition even when a file remains locked.
+    private fun tryRestoreDoorstop(): Exception? =
+        try {
+            restoreDoorstop()
+            restoreNoticeShown = false
+            null
+        } catch (e: Exception) {
+            if (!restoreNoticeShown) {
+                restoreNoticeShown = true
+                notice(
+                    "NNOMM could not turn the mods back on in doorstop_config.ini. Close programs that use the game folder; NNOMM tries again."
+                )
+            }
+            e
+        }
 
     private fun restoreDoorstop() {
         val saved =
@@ -106,10 +129,15 @@ class RealGameLauncher(
         val restore = saved.read() ?: return
         if (restore.isEmpty()) return
         val path = Path.of(restore.getValue("path"))
+        // A removed game folder must stay removed; never recreate it from this record.
+        if (Files.notExists(path.parent)) {
+            saved.write(emptyMap())
+            return
+        }
         val bytes =
             restore["bytes"]?.let { java.util.Base64.getDecoder().decode(it) }
                 ?: restore.getValue("text").toByteArray(DoorstopIni.charset)
-        atomic(path, String(bytes, DoorstopIni.charset), DoorstopIni.charset)
+        writeDoorstop(path, bytes)
         saved.write(emptyMap())
     }
 
@@ -121,37 +149,35 @@ class RealGameLauncher(
                 safe(game, "NuclearOption.exe")
                 // Recover an interrupted vanilla launch before deriving this launch mode.
                 val restoreFile = home.resolve("doorstop-restore.json")
-                if (restoreFile.exists()) {
-                    val saved =
-                        JsonFile(
-                                restoreFile,
-                                MapSerializer(String.serializer(), String.serializer()),
-                            )
-                            .read()
-                    if (!saved.isNullOrEmpty()) restoreDoorstop()
-                }
+                tryRestoreDoorstop()?.let { throw DoorstopSettingsFailure(it) }
                 val ini = safe(game, "doorstop_config.ini")
                 try {
                     if (withoutMods && ini.exists()) {
-                        val bytes =
-                            try {
-                                Files.readAllBytes(ini)
-                            } catch (e: java.io.IOException) {
-                                throw DoorstopSettingsFailure(e)
-                            }
-                        JsonFile(
-                                restoreFile,
-                                MapSerializer(String.serializer(), String.serializer()),
-                            )
-                            .write(
-                                mapOf(
-                                    "path" to ini.toString(),
-                                    "bytes" to java.util.Base64.getEncoder().encodeToString(bytes),
+                        try {
+                            val bytes =
+                                try {
+                                    Files.readAllBytes(ini)
+                                } catch (e: java.io.IOException) {
+                                    throw DoorstopSettingsFailure(e)
+                                }
+                            JsonFile(
+                                    restoreFile,
+                                    MapSerializer(String.serializer(), String.serializer()),
                                 )
-                            )
-                        val disabled =
-                            DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
-                        atomic(ini, String(disabled, DoorstopIni.charset), DoorstopIni.charset)
+                                .write(
+                                    mapOf(
+                                        "path" to ini.toString(),
+                                        "bytes" to
+                                            java.util.Base64.getEncoder().encodeToString(bytes),
+                                    )
+                                )
+                            val disabled =
+                                DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
+                            writeDoorstop(ini, disabled)
+                        } catch (e: Exception) {
+                            if (e is DoorstopSettingsFailure) throw e
+                            throw DoorstopSettingsFailure(e)
+                        }
                     }
                     val args =
                         state.settings.value("launchArgs", state.profileId)?.content.orEmpty()
@@ -195,7 +221,7 @@ class RealGameLauncher(
                                         !detect() &&
                                         (fakeCommand == null || launched?.isAlive != true)
                                 )
-                                    restoreDoorstop()
+                                    tryRestoreDoorstop()
                                 pending = false
                                 flow.value = false
                                 launched = null
@@ -203,7 +229,7 @@ class RealGameLauncher(
                         }
                     }
                 } catch (e: Exception) {
-                    if (withoutMods) restoreDoorstop()
+                    if (withoutMods) tryRestoreDoorstop()?.let { e.addSuppressed(it) }
                     pending = false
                     flow.value = false
                     throw e

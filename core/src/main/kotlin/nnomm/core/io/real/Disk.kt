@@ -77,9 +77,10 @@ internal fun atomic(
     path: Path,
     text: String,
     charset: java.nio.charset.Charset = StandardCharsets.UTF_8,
+    createParents: Boolean = true,
 ) {
     safe(path.parent, path.fileName.toString())
-    Files.createDirectories(path.parent)
+    if (createParents) Files.createDirectories(path.parent)
     val tmp = Files.createTempFile(path.parent, ".nnomm-", ".tmp")
     try {
         FileChannel.open(tmp, StandardOpenOption.WRITE).use { ch ->

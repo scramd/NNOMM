@@ -1034,7 +1034,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             "Some changes are pending. Retry or take over existing mods before Play."
                         else
                             when {
-                                e is DoorstopSettingsFailure -> loaderFailureHelp(e)
+                                generateSequence<Throwable>(e) { it.cause }
+                                    .take(12)
+                                    .any { it is DoorstopSettingsFailure } -> loaderFailureHelp(e)
                                 e.message == "Nuclear Option is already running." ->
                                     "Nuclear Option is already running."
                                 else -> "Check that the game is installed and try Play again."
