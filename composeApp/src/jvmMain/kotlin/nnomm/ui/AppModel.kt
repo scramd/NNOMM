@@ -191,6 +191,7 @@ class AppModel(
             "uninstall" -> action.id?.let { store.uninstall(listOf(it)) }
             "play" -> store.play()
             "lookForUpdates" -> store.lookForUpdates()
+            "libraryFilter" -> { ui.go(Page.Library); ui.library.filter = action.id ?: action.value ?: "all" }
             "addFile" ->
                 scope.launch {
                     acceptFiles(
