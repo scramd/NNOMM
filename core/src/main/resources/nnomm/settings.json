@@ -319,7 +319,7 @@
       "cat": "danger",
       "key": "dzAll",
       "label": "Remove all mods",
-      "help": "Registry mods leave every profile. Local, taken-over and unverified mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.",
+      "help": "Mods that can be downloaded again leave every profile. Other mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.",
       "type": "actions",
       "actions": [
         "Remove all mods"
