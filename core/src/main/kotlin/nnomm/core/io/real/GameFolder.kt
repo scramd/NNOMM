@@ -21,6 +21,7 @@ internal data class Placement(
     val generations: Map<String, String> = emptyMap(),
     val directories: Set<String> = emptySet(),
     val applied: Boolean = false,
+    val gameRoot: String? = null,
 )
 
 class RealGameFolder(
@@ -276,11 +277,14 @@ class RealGameFolder(
             notice,
         )
 
+    private fun adopted(game: Path): Placement? =
+        adoption(game).read()?.takeIf { it.gameRoot == game.toString() }
+
     private fun saveAdoption(game: Path, value: Placement) {
         Files.createDirectories(home.resolve("staging"))
         val staged = Files.createTempFile(home.resolve("staging"), "adoption-", ".json")
         try {
-            staged.writeText(json.encodeToString(value))
+            staged.writeText(json.encodeToString(value.copy(gameRoot = game.toString())))
             replaceTree(adoption(game).path, staged, home.resolve("transactions"))
         } finally {
             Files.deleteIfExists(staged)
@@ -299,23 +303,22 @@ class RealGameFolder(
                 recoverTransactions(home.resolve("transactions"))
                 val plugin = safe(game, "BepInEx/plugins")
                 val recorded = record(game).read()
-                val old = recorded ?: adoption(game).read() ?: Placement()
+                val old = recorded ?: adopted(game) ?: Placement()
                 // A fresh home cannot use an old ownership record as permission to remove files.
-                if (adoption(game).read() == null && recorded != null) {
+                if (adopted(game) == null && recorded != null) {
                     notice(
                         "Existing mods need takeover before changes can be applied. They were left unchanged."
                     )
                     return@withLock
                 }
-                if (recorded == null && adoption(game).read() != null && old.applied) {
+                if (recorded == null && adopted(game) != null && old.applied) {
                     notice("Ownership is missing. Take over existing mods before applying changes.")
                     return@withLock
                 }
-                if (adoption(game).read() == null) saveAdoption(game, old)
+                if (adopted(game) == null) saveAdoption(game, old)
                 val names =
-                    adoption(game).read()?.entries.orEmpty().entries.associate {
-                        it.value.id to it.key
-                    } + old.entries.entries.associate { it.value.id to it.key }
+                    adopted(game)?.entries.orEmpty().entries.associate { it.value.id to it.key } +
+                        old.entries.entries.associate { it.value.id to it.key }
                 fun parent(id: String, v: String) =
                     catalog().find { it.id == id }?.versions?.find { it.version == v }?.extends?.id
                 fun placement(id: String, v: String): String =
@@ -332,9 +335,7 @@ class RealGameFolder(
                                     id,
                                     v,
                                     (old.entries.values.find { it.id == id }
-                                            ?: adoption(game).read()?.entries?.values?.find {
-                                                it.id == id
-                                            })
+                                            ?: adopted(game)?.entries?.values?.find { it.id == id })
                                         ?.loose ?: false,
                                 )
                         }
@@ -617,9 +618,7 @@ class RealGameFolder(
                     record(game).write(updated)
                     saveAdoption(
                         game,
-                        updated.copy(
-                            entries = adoption(game).read()?.entries.orEmpty() + updated.entries
-                        ),
+                        updated.copy(entries = adopted(game)?.entries.orEmpty() + updated.entries),
                     )
                 }
             }

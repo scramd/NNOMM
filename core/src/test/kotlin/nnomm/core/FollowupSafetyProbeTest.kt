@@ -38,6 +38,23 @@ class FollowupSafetyProbeTest {
     }
 
     @Test
+    fun collidingFolderNamesCannotShareAdoptionAuthority() = runBlocking {
+        val h = temp()
+        val base = temp()
+        val a = base.resolve("Aa").createDirectories()
+        val b = base.resolve("BB")
+        a.resolve("NuclearOption.exe").writeText("")
+        val store = RealModStore(h)
+        payload(store, h, "m")
+        val folder = RealGameFolder(h, store, noNet, running = { false })
+        folder.apply(GamePlan(a.toString(), "default", mapOf("m" to "1"), false))
+        copyTree(a, b)
+        assertEquals(a.toString().hashCode(), b.toString().hashCode())
+        folder.apply(GamePlan(b.toString(), "default", emptyMap(), false))
+        assertTrue(b.resolve("BepInEx/plugins/m/mod.dll").exists())
+    }
+
+    @Test
     fun recoveryMustPreserveFilesWrittenAfterInterruptedPromotion() {
         val h = temp()
         val target = h.resolve("game/BepInEx").createDirectories()
