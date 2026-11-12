@@ -4,19 +4,20 @@ The state of the Kotlin build of NNOMM against the agreed mock. Written for a re
 
 ## Works now
 
-- `:core`: domain model, rules, `AppStore` with every action of the mock, settings, IO interfaces, the mock's data as demo data. 63 tests pass. Two reviews found blockers (real registry data crashes some rules, packs from real files install nothing, a setting change writes to the game folder, no saving of profiles and library, broken-mod test can loop); a fix round follows after the real IO is merged.
-- `:composeApp`: NNOMM identity (name, package, new Windows upgrade UUID, own settings folder, updater on scramd/NNOMM), Nucleus window with the own title bar, theme tokens for dark and light, Archivo variable font with its width axis, all mock icons, a first component kit, a headless render harness (`tools/gradlew-locked :composeApp:renderShots`, pictures in `composeApp/build/shots/`).
-- Builds: `tools/gradlew-locked` (two build slots, no Gradle daemon). A full build with tests and renders takes under a minute.
+- `:core`: domain model, rules, `AppStore` with every action of the mock, settings, demo data, and the real IO (registry, sizes and dates, release notes, downloads with hash check, mod store, game folder placement, first-start takeover, BepInEx install, launch through `steam://`, Play without mods through Doorstop, packs, saving). 74 tests pass. Read-only check against the real registry: 278 mods, 1327 versions.
+- `:composeApp`: NNOMM identity and icon, window with own title bar, theme, Archivo, icons, component kit (lazy table with selection, cards, grid, strip, highlighted text), shell (sidebar, Play box, profiles, downloads popover, panel host with slide, toasts, dialogs and menus layer, central keyboard, narrow layout, file drop and file arguments, Servers "Coming later"), shots of every mock address (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; pictures in `composeApp/build/shots/compare/`, mock left, app right).
+- Builds: `tools/gradlew-locked` (two build slots, no Gradle daemon).
 
 ## In progress
 
-- Real disk, network and game IO in `:core` (registry, sizes and dates, release notes, downloads, mod store, game folder, takeover, BepInEx, launch, packs, saving).
-- Kit completion: lazy lists and tables, cards, text truncation and highlights, control fixes from the kit reviews.
-- Shell: overlay layer and keyboard, dialogs, menus, toasts, sidebar, Play box, detail panel, narrow layout, drop, demo mode, shots by mock address, README and app icon.
+- Core fix round for the two core reviews (crashes on real data, packs, settings writing to the game folder, broken-mod test loop, performance, enums).
+- Pages in parallel: Library, Browse, mod panel, Settings, dialogs with command search and first start.
 
 ## Next
 
-- Core fix round (both reviews), then the pages in parallel: Library, Browse, mod panel, Settings, dialogs with command search and the first-start, empty, loading and offline states.
+- IO fix round for the two real-IO reviews (blockers: takeover moves and renames mods at the first apply, files that mods create are lost at a profile switch, hard links let a mod change the store copy, Repair does not reach the game copy, downloads over 120 s fail, a stale ownership record removes mods, crash windows in config swap, store replacement and loader repair, Clear races). Real mode stays on demo data until this is done.
+- Real mode wiring (`createStore`), then whole-app reviews (Opus and Sol) of every page with pictures, and fixes.
+- The workspace pin.
 
 ## Deviations from the mock
 
