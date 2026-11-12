@@ -74,6 +74,8 @@ suspend fun createStore(args: Array<String>): AppSession =
                 RealRuntime.open(
                     home,
                     fakeLauncher = fakeLauncher,
+                    // The version of this build, not the default of the first version.
+                    version = BuildKonfig.VERSION,
                     notice = { notices.trySend(it) },
                 )
             AppSession(runtime.store, runtime).also {
