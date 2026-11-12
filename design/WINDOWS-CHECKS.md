@@ -127,3 +127,10 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 - The removal row/button/confirmation now says “Remove all mods”; confirm the
   combined core completion toast and actual retained files agree with the help,
   including when a locked DLL prevents removal.
+
+## Closing pass
+
+- With a locked loader file, Remove all mods must keep the completed Library/mod removal, show partial success, and let Retry remove only the loader files owned by NNOMM. No folder must update only the Library; a running game must refuse removal with the close-game instruction.
+- Play without a folder must point to Settings. Failed loader preparation must have its own Retry and plain feedback, without paths or technical exception messages.
+- Replacement pack recovery files now use a readable date/time and a collision suffix beside the destination. Check FileKit replacement, repeated saves in the same minute, locked destinations and recovery-copy permissions.
+- Check serial background takeover verification alongside foreground downloads, and repeated taken-over mod version changes with player edits on NTFS. Stored payloads must not be duplicated into recovery parks.

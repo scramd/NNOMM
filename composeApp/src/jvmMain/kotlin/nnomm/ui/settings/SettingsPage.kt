@@ -59,7 +59,7 @@ fun SettingsPage() {
     val rows = playerSettings.filter {
         (if (personal) it.ov else !it.profileOnly) &&
             (it.cat != "servers" || it.key == "showServers") &&
-            (query.isEmpty() || "${it.label} ${it.help} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
+            (query.isEmpty() || "${it.label} ${settingHelp(it, state)} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
             (personal || query.isNotEmpty() || it.cat == view.category)
     }
     val storageVisible = rows.any { it.cat == "storage" }
@@ -216,12 +216,8 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                 var help = settingHelp(d, state)
                 if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}. Get updates from the releases page."
                 if (d.key == "loader" && model.isDemo) help = d.help
-                // TODO(core): expose scan progress/completion to distinguish a refresh of the
-                // last estimate from an idle estimate (including a failed initial scan).
-                if (d.key == "cache" && !model.isDemo && state.storeUnusedMb == null)
-                    help = "Calculating… " + help
                 if (help.isNotEmpty()) Box(Modifier.padding(top = 2.dp)) { Mark(help, query, true) }
-                if (query.isNotEmpty() && !"${d.label} ${d.help}".lowercase().contains(query)) {
+                if (query.isNotEmpty() && !"${d.label} ${help}".lowercase().contains(query)) {
                     d.options.firstOrNull { it.lowercase().contains(query) }?.let { Mark("Option: $it", query, true) }
                 }
             }
@@ -234,6 +230,7 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                     "text", "path" -> SettingField(value, { change(JsonPrimitive(it)) },
                         if (path) Modifier.weight(1f).widthIn(max = 620.dp) else Modifier.width(if (profile != null) 170.dp else 250.dp), d.placeholder.orEmpty(), enabled = enabled)
                 }
+                if (d.key == "cache" && state.storeScanStatus == LoadStatus.FAILED) Button("Retry", { model.store.refreshStoreUsage() })
                 d.actions.forEach { action -> Button(action, { performSettingAction(model, d, action) }, kind = if (d.danger) ButtonKind.Danger else ButtonKind.Default) }
                 if (profile != null && !d.profileOnly) Button(if (own) "Use the general setting" else "Change for this profile",
                     { if (own) model.store.ovreset(d.key, profile) else model.store.ovset(d.key, profile) },
