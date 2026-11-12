@@ -28,7 +28,7 @@ NNOMM has the agreed pages and real IO integration. It is still a development bu
 ## Deviations from the mock
 
 - Servers remains “Coming later”; server joining and the Steam helper are excluded from the first version.
-- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line; the final two-card strip is about four pixels taller than the mock.
+- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line and space below cards for the hover scrollbar; their section spacing can be slightly taller than the static mock.
 - Real packs can add optional settings and multiple bundled-file warnings, so their preview is taller than the single-file mock. Bundled files show readable payload names rather than internal content ids; the demo warning no longer repeats `.dll`.
 - Removal wording names the ownership boundary instead of promising a plain game. Stop following now performs the action instead of the mock's no-op.
 - The drop overlay uses native drops and omits mock-only simulation controls; its centered group sits slightly lower.
