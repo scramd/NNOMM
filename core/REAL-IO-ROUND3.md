@@ -1,6 +1,5 @@
 # Third real IO safety round
 
-Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-69801a61-a0491e1fce8966fb`.
 Branch: `t3/real-io-safety-round3`. Local commits only; no push, tags or GitHub
 activity. Implementation performed alone, as requested. `Packs.kt` and unrelated
 Compose work were left alone. Compose changes are one Retry dispatcher and the
