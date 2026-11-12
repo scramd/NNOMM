@@ -258,6 +258,8 @@ data class AppState(
     val notesStatus: Map<String, LoadStatus> = emptyMap(),
     val metadataStatus: Map<String, LoadStatus> = emptyMap(),
     val storeUnusedMb: Long? = null,
+    val storeScanStatus: LoadStatus = LoadStatus.IDLE,
+    val storeUsedBytes: Long = 0,
     val trouble: TroubleSession? = null,
     val firstStart: FirstStart = FirstStart(),
     val nowMillis: Long = 0,

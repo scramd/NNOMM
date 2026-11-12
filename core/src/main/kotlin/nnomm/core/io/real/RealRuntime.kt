@@ -125,6 +125,9 @@ private constructor(
                             { launcher.running.value || gameProcessRunning() },
                             notice,
                             backgroundScope = scope,
+                            backgroundReady = {
+                                current().downloads.none { it.status == DownloadStatus.ACTIVE }
+                            },
                             preferredVersions = {
                                 current().installed.mapValues { (_, mod) ->
                                     mod.profiles[current().profileId]?.version ?: mod.defaultVersion

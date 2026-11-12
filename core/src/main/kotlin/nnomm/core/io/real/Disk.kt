@@ -436,7 +436,7 @@ internal fun recoverTransactions(
                 } catch (e: Exception) {
                     if (notice == null) throw e
                     notice(
-                        "Recovery is pending for $journal: ${e.message}. Its files and journal are kept. Other files can still be changed. Restore unavailable storage, then Retry."
+                        "Some files still need recovery. Their recovery record and files are kept. Other files can still be changed. Restore unavailable storage, then Retry."
                     )
                 }
             }
@@ -647,7 +647,7 @@ internal fun cleanHomePreparation(home: Path) {
     Files.list(staging).use { paths ->
         paths
             .filter { path ->
-                listOf("player-", "edits-", "config-").any {
+                listOf("player-", "edits-", "config-", "learn-shipped-").any {
                     path.fileName.toString().startsWith(it)
                 }
             }

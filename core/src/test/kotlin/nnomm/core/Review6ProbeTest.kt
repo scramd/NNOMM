@@ -664,4 +664,371 @@ class Review6ProbeTest {
         assertEquals("player edit", foo.resolve("Foo.dll").readText())
         assertEquals("personal", foo.resolve("personal.json").readText())
     }
+
+    @Test
+    fun closingRemovalWhenLoaderRemovalFails() = runBlocking {
+        val home = temp()
+        val g = game()
+        val store = RealModStore(home)
+        payload(store, "reg", "1", mapOf("r.dll" to "r"), PayloadOrigin.REGISTRY_DOWNLOAD)
+        val f = RealGameFolder(home, store, noNet, running = { false })
+        f.apply(plan(g, mapOf("reg" to "1")))
+        val failLoader =
+            object : GameFolder by f {
+                override suspend fun removeLoader(folder: String) {
+                    error("Loader file is locked")
+                }
+            }
+        val a =
+            AppStore(
+                state(g, listOf("reg")),
+                Demo.io()
+                    .copy(
+                        modStore = store,
+                        gameFolder = failLoader,
+                        launcher = launcher(),
+                        persistence = null,
+                    ),
+            )
+        try {
+            a.removeEverything()
+            a.awaitDiskIdle()
+            println(
+                "CLOSING loader failure: installed=" +
+                    a.state.value.installed +
+                    " gameEntry=" +
+                    g.resolve("BepInEx/plugins/reg").exists() +
+                    " deferred=" +
+                    a.state.value.deferredModChange +
+                    " toasts=" +
+                    a.state.value.toasts.map { it.text }
+            )
+            assertTrue(
+                g.resolve("BepInEx/plugins/reg").exists() ||
+                    a.state.value.installed["reg"]?.profiles?.get("default")?.on != true ||
+                    a.state.value.deferredModChange,
+                "UI claims mod is on after it was removed, with no pending change",
+            )
+        } finally {
+            a.shutdown()
+        }
+    }
+
+    @Test
+    fun closingUnchangedTakeoverDoesNotParkStoreBytes() = runBlocking {
+        val home = temp()
+        val g = game()
+        val foo = g.resolve("BepInEx/plugins/Foo").createDirectories()
+        foo.resolve("meta.json").writeText("""{"id":"foo","artifact":{"version":"1"}}""")
+        foo.resolve("Foo.dll").writeText("one".repeat(700000))
+        val store = RealModStore(home)
+        val notices = mutableListOf<String>()
+        val folder =
+            RealGameFolder(home, store, noNet, running = { false }, notice = { notices += it })
+        folder.takeOver(g.toString())
+        payload(store, "foo", "2", mapOf("Foo.dll" to "two"))
+        for (v in listOf("1", "2", "1", "2")) {
+            folder.apply(plan(g, mapOf("foo" to v)))
+            assertTrue(folder.applySucceeded)
+        }
+        val parks = home.resolve("player-edits/default/foo")
+        if (parks.exists())
+            Files.list(parks).use { paths ->
+                assertTrue(paths.noneMatch { it.name.startsWith("1-") })
+            }
+        assertTrue(notices.none { it.contains("set aside") })
+        // A real player edit is retained once and restored with its original version.
+        folder.apply(plan(g, mapOf("foo" to "1")))
+        foo.resolve("personal.json").writeText("personal")
+        folder.apply(plan(g, mapOf("foo" to "2")))
+        val before = treeHash(parks)
+        folder.apply(plan(g, mapOf("foo" to "1")))
+        assertEquals("personal", foo.resolve("personal.json").readText())
+        folder.apply(plan(g, mapOf("foo" to "2")))
+        assertEquals(before, treeHash(parks))
+    }
+
+    @Test
+    fun closingVisibleMetadataBypassesBackgroundQueue() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val visible = CompletableDeferred<Unit>()
+        val mods =
+            (1..30).map {
+                CatalogMod(
+                    "m$it",
+                    "Mod $it",
+                    versions = listOf(ModVersion("1", downloadUrl = "https://example.invalid/$it")),
+                )
+            }
+        val meta =
+            object : MetaSource {
+                override suspend fun metadata(
+                    mod: CatalogMod,
+                    version: ModVersion,
+                ): VersionMetadata {
+                    if (mod.id == "m1") {
+                        started.complete(Unit)
+                        release.await()
+                    }
+                    if (mod.id == "m30") visible.complete(Unit)
+                    return VersionMetadata(sizeKb = null, dateMillis = 1)
+                }
+            }
+        val app =
+            AppStore(
+                AppState(catalog = mods, settings = defaultSettings()),
+                Demo.io().copy(meta = meta, persistence = null),
+            )
+        try {
+            withTimeout(5000) { started.await() }
+            app.loadMetadata(setOf("m30"))
+            withTimeout(5000) { visible.await() }
+        } finally {
+            release.complete(Unit)
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun closingShippedLearningIsSerialAndPreparationIsCleaned() = runBlocking {
+        val home = temp()
+        home
+            .resolve("staging/learn-shipped-abandoned")
+            .createDirectories()
+            .resolve("a")
+            .writeText("partial")
+        cleanHomePreparation(home)
+        assertFalse(home.resolve("staging/learn-shipped-abandoned").exists())
+        val g = game()
+        val mods =
+            (1..3).map {
+                CatalogMod(
+                    "m$it",
+                    "Mod $it",
+                    versions = listOf(ModVersion("1", hash = "a".repeat(64))),
+                )
+            }
+        mods.forEach { m ->
+            g.resolve("BepInEx/plugins/${m.id}").createDirectories().also {
+                it.resolve("meta.json").writeText("""{"id":"${m.id}","artifact":{"version":"1"}}""")
+                it.resolve("a.dll").writeText(m.id)
+            }
+        }
+        val count = java.util.concurrent.atomic.AtomicInteger()
+        val max = java.util.concurrent.atomic.AtomicInteger()
+        val done = java.util.concurrent.atomic.AtomicInteger()
+        val downloader =
+            object : Downloader {
+                override suspend fun download(
+                    mod: CatalogMod,
+                    version: ModVersion,
+                    progress: (Int) -> Unit,
+                ): DownloadedFile {
+                    val active = count.incrementAndGet()
+                    max.updateAndGet { maxOf(it, active) }
+                    try {
+                        delay(100)
+                        error("offline")
+                    } finally {
+                        count.decrementAndGet()
+                        done.incrementAndGet()
+                    }
+                }
+            }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val ready = java.util.concurrent.atomic.AtomicBoolean(false)
+        val folder =
+            RealGameFolder(
+                home,
+                RealModStore(home),
+                downloader,
+                catalog = { mods },
+                running = { false },
+                backgroundScope = scope,
+                backgroundReady = { ready.get() },
+            )
+        try {
+            folder.takeOver(g.toString())
+            delay(300)
+            assertEquals(0, count.get())
+            ready.set(true)
+            withTimeout(5000) { while (done.get() < 3) delay(10) }
+            assertEquals(1, max.get())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun closingPlayWithoutFolderAndLoaderFailureArePlain() = runBlocking {
+        val app =
+            AppStore(AppState(settings = defaultSettings()), Demo.io().copy(persistence = null))
+        try {
+            app.play()
+            assertEquals(
+                "Choose the game folder in Settings first.",
+                app.state.value.toasts.last().text,
+            )
+            assertFalse(app.state.value.gameStarting)
+        } finally {
+            app.shutdown()
+        }
+        val g = game()
+        val failure =
+            object : GameFolder by Demo.io().gameFolder {
+                override suspend fun installLoader(folder: String) {
+                    error("private /secret/path")
+                }
+            }
+        val other =
+            AppStore(
+                state(g, listOf("reg")).copy(game = GameInfo(g.toString())),
+                Demo.io().copy(gameFolder = failure, persistence = null),
+            )
+        try {
+            other.play()
+            withTimeout(5000) {
+                while (
+                    other.state.value.toasts.none {
+                        it.text.startsWith("Could not install the mod loader:")
+                    }
+                ) delay(10)
+            }
+            assertTrue(
+                other.state.value.toasts.any {
+                    it.text.startsWith("Could not install the mod loader:") && it.action == "Retry"
+                }
+            )
+            assertTrue(
+                other.state.value.toasts.none {
+                    it.text.contains("secret") || it.text.contains("take over")
+                }
+            )
+        } finally {
+            other.shutdown()
+        }
+    }
+
+    @Test
+    fun closingRemovalWithoutFolderIgnoresStaleApplyFlag() = runBlocking {
+        val g = game()
+        val refused =
+            object : GameFolder by Demo.io().gameFolder {
+                override val applySucceeded = false
+
+                override suspend fun apply(plan: GamePlan) {
+                    error("must not apply without folder")
+                }
+            }
+        val app =
+            AppStore(
+                state(g, listOf("reg")).copy(game = GameInfo()),
+                Demo.io()
+                    .copy(
+                        gameFolder = refused,
+                        persistence = null,
+                        modStore =
+                            object : ModStore by Demo.io().modStore {
+                                override suspend fun keepInLibrary(
+                                    id: String,
+                                    versions: Set<String>,
+                                ) = false
+                            },
+                    ),
+            )
+        try {
+            app.removeEverything()
+            app.awaitDiskIdle()
+            assertTrue(app.state.value.installed.isEmpty())
+            assertTrue(
+                app.state.value.toasts.any { it.text.contains("No game folder is selected") }
+            )
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun closingStorageFailureKeepsEstimateAndCanRetry() = runBlocking {
+        var fail = true
+        val store =
+            object : ModStore by Demo.io().modStore {
+                override suspend fun unusedBytes(state: AppState): Long {
+                    if (fail) error("scan failed")
+                    return 9 * 1024 * 1024
+                }
+            }
+        val app =
+            AppStore(
+                AppState(settings = defaultSettings(), storeUnusedMb = 7),
+                Demo.io().copy(modStore = store, persistence = null),
+            )
+        try {
+            app.refreshStoreUsage()
+            app.awaitDiskIdle()
+            assertEquals(LoadStatus.FAILED, app.state.value.storeScanStatus)
+            assertEquals(7L, app.state.value.storeUnusedMb)
+            fail = false
+            app.refreshStoreUsage()
+            app.awaitDiskIdle()
+            assertEquals(LoadStatus.READY, app.state.value.storeScanStatus)
+            assertEquals(9L, app.state.value.storeUnusedMb)
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun closingRemovalReportsGameStartingDuringApply() = runBlocking {
+        val g = game()
+        val launch =
+            object : GameLauncher {
+                override val running = MutableStateFlow(false)
+
+                override suspend fun start(state: AppState, withoutMods: Boolean) {}
+            }
+        val folder =
+            object : GameFolder by Demo.io().gameFolder {
+                override val applySucceeded = true
+
+                override suspend fun apply(plan: GamePlan) {
+                    launch.running.value = true
+                }
+            }
+        val app =
+            AppStore(
+                state(g, listOf("reg")),
+                Demo.io().copy(gameFolder = folder, launcher = launch, persistence = null),
+            )
+        try {
+            app.removeEverything()
+            app.awaitDiskIdle()
+            assertTrue(app.state.value.installed.containsKey("reg"))
+            assertTrue(
+                app.state.value.toasts.any {
+                    it.text.contains("Close Nuclear Option before removing mods.")
+                }
+            )
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun closingSearchUsesSharedRemovalNameAndComputedStorage() {
+        val state = AppState(settings = defaultSettings(), storeUsedBytes = 53 * 1024)
+        assertTrue(
+            nnomm.core.rules.palItems(state, "Remove all mods").any {
+                it.label == "Remove all mods"
+            }
+        )
+        val help =
+            nnomm.core.settings.settingHelp(
+                nnomm.core.settings.SETTINGS.first { it.key == "store" },
+                state,
+            )
+        assertTrue(help.contains("53\u00a0KB"))
+        assertFalse(help.contains("438"))
+    }
 }

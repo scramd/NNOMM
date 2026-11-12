@@ -36,8 +36,10 @@ class RealGameFolder(
     private val notice: (String) -> Unit = {},
     private val backgroundScope: CoroutineScope? = null,
     private val preferredVersions: () -> Map<String, String> = { emptyMap() },
+    private val backgroundReady: () -> Boolean = { true },
 ) : GameFolder {
     private val mutex = Mutex()
+    private val learningSlot = Semaphore(1)
     private val learning = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private fun displayName(id: String) = catalog().find { it.id == id }?.name ?: "this mod"
@@ -245,7 +247,7 @@ class RealGameFolder(
                                                     else store.version(recognized.id, v)
                                                 ) == treeHash(path)
                                             ) {
-                                                "${path.name} has different files from the stored version. Both copies have been kept."
+                                                "Files for ${recognized.name} differ from the stored version. The game files and stored files are unchanged."
                                             }
                                         recognized to
                                             InstalledMod(
@@ -367,16 +369,28 @@ class RealGameFolder(
                                 },
                     ),
                 )
+                var announcedLearning = false
                 found.forEach { (mod, installed) ->
                     val artifact = mod.versions.find { it.version == installed.defaultVersion }
                     if (
                         artifact != null &&
+                            !artifact.hash.isNullOrBlank() &&
                             store.unprovenTakeover(mod.id, artifact.version) &&
                             learning.add("${mod.id}/${artifact.version}")
                     ) {
+                        if (backgroundScope != null && !announcedLearning) {
+                            notice(
+                                "Checking original mod files in the background. Your copies stay unchanged."
+                            )
+                            announcedLearning = true
+                        }
                         backgroundScope?.launch {
                             try {
-                                store.learnShipped(mod, artifact, downloader)
+                                yield()
+                                learningSlot.withPermit {
+                                    while (!backgroundReady()) delay(250)
+                                    store.learnShipped(mod, artifact, downloader)
+                                }
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (_: Exception) {
@@ -486,6 +500,16 @@ class RealGameFolder(
                     }
                 }
                 val collisionNames = collisions.flatten().map { it.first.lowercase() }.toSet()
+                old.entries
+                    .filterKeys { it.lowercase() in collisionNames }
+                    .values
+                    .forEach { m ->
+                        if (m.id !in problemFlow.value)
+                            problem(
+                                m.id,
+                                "This mod is still in the game because other mods use the same game folder name. Turn off one of them and Retry.",
+                            )
+                    }
                 // Preserve existing colliding placements; unrelated entries can still proceed.
                 val wanted =
                     wantedPairs.filter { it.first.lowercase() !in collisionNames }.toMap() +
@@ -812,14 +836,8 @@ class RealGameFolder(
                                         "unknown-files-",
                                     )
                                 try {
-                                    if (
-                                        originalVersion != null &&
-                                            store.version(m.id, originalVersion).isDirectory()
-                                    )
-                                        copyTreeContents(
-                                            store.version(m.id, originalVersion),
-                                            recoveryStage,
-                                        )
+                                    val storedHashes =
+                                        originalVersion?.let { store.hashes(m.id, it) }.orEmpty()
                                     Files.walk(kept).use { files ->
                                         files
                                             .filter { it.isRegularFile() }
@@ -832,18 +850,44 @@ class RealGameFolder(
                                                             .toString()
                                                             .replace('\\', '/'),
                                                     )
-                                                if (to.exists()) deleteTree(to)
-                                                copyTree(file, to)
+                                                val relative =
+                                                    kept
+                                                        .relativize(file)
+                                                        .toString()
+                                                        .replace('\\', '/')
+                                                if (storedHashes[relative] != digest(file))
+                                                    copyTree(file, to)
                                             }
                                     }
-                                    replaceTree(saved, recoveryStage, home.resolve("transactions"))
+                                    val hasFiles =
+                                        Files.walk(recoveryStage).use { files ->
+                                            files.anyMatch { it.isRegularFile() }
+                                        }
+                                    if (hasFiles) {
+                                        val hash = treeHash(recoveryStage)
+                                        val existing =
+                                            if (saved.parent.isDirectory())
+                                                Files.list(saved.parent).use { paths ->
+                                                    paths.anyMatch {
+                                                        it.isDirectory() && treeHash(it) == hash
+                                                    }
+                                                }
+                                            else false
+                                        if (!existing) {
+                                            replaceTree(
+                                                saved,
+                                                recoveryStage,
+                                                home.resolve("transactions"),
+                                            )
+                                            notice(
+                                                "Saved files for ${displayName(m.id)} were set aside in recovery storage. The selected version uses its own files."
+                                            )
+                                        }
+                                    }
                                 } finally {
                                     deleteTree(recoveryStage)
                                 }
                                 deleteTree(kept)
-                                notice(
-                                    "Saved files for ${displayName(m.id)} were set aside in recovery storage. The selected version uses its own files."
-                                )
                             }
                             var collisionNoticed = false
                             if (next.isDirectory() && kept.isDirectory())

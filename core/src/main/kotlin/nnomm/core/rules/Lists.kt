@@ -78,12 +78,12 @@ fun problems(s: AppState, id: String): List<Problem> {
                 listOf(Problem(ProblemKind.DANGER, "missing", "File missing"))
             else
                 s.applyProblems[id]
-                    ?.takeIf { isOn(s, id) }
+                    ?.takeIf { isOn(s, id) || it.startsWith("This mod is still in the game") }
                     ?.let { listOf(Problem(ProblemKind.WARNING, "placement", it)) }
                     .orEmpty()
     return buildList {
         s.applyProblems[id]
-            ?.takeIf { isOn(s, id) }
+            ?.takeIf { isOn(s, id) || it.startsWith("This mod is still in the game") }
             ?.let { add(Problem(ProblemKind.WARNING, "placement", it)) }
         if (st.fileMissing) add(Problem(ProblemKind.DANGER, "missing", "File missing"))
         if (isOn(s, id)) {

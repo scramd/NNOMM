@@ -52,7 +52,13 @@ fun settingHelp(d: SettingDefinition, s: AppState): String =
                 "BepInEx ${s.game.loaderVersion?:"(version unknown)"}. Mods need it to run."
             else "NNOMM installs BepInEx when you turn on your first mod, and tells you."
         "cache" ->
-            (s.storeUnusedMb?.let { "$it\u00a0MB. " }.orEmpty() +
+            (when (s.storeScanStatus) {
+                LoadStatus.LOADING ->
+                    if (s.storeUnusedMb == null) "Calculating… " else "Refreshing… "
+                LoadStatus.FAILED -> "Could not calculate storage use. Retry. "
+                else -> ""
+            } +
+                s.storeUnusedMb?.let { "$it\u00a0MB. " }.orEmpty() +
                 "Old versions and recovery copies. Clear keeps the last copy of every player file.")
         "gamePath" ->
             if (s.game.folderMissing) "Game folder not found."
@@ -61,7 +67,7 @@ fun settingHelp(d: SettingDefinition, s: AppState): String =
                     ?.takeUnless { it == "unknown" }
                     ?.let { "Nuclear Option $it found here." } ?: "Game version is unknown."
         "store" ->
-            "Each version of a mod is stored once here, also when several profiles use it. ${s.storeUsedMb}\u00a0MB used."
+            "Each version of a mod is stored once here, also when several profiles use it. ${if (s.storeUsedMb > 0) "${s.storeUsedMb}\u00a0MB" else "${(s.storeUsedBytes + 1023) / 1024}\u00a0KB"} used."
         "appUpdate" -> "Version ${s.appVersion}."
         else -> d.help
     }

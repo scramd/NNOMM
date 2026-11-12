@@ -287,7 +287,7 @@
       "cat": "app",
       "key": "logs",
       "label": "Problem report",
-      "help": "A text with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.",
+      "help": "A report with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.",
       "type": "actions",
       "actions": [
         "Copy report",
@@ -318,11 +318,11 @@
     {
       "cat": "danger",
       "key": "dzAll",
-      "label": "Remove managed mods and NNOMM-installed loader files",
-      "help": "Removes managed mods and only loader files NNOMM installed. An adopted loader and your own files stay. NNOMM keeps your profiles and recovery copies.",
+      "label": "Remove all mods",
+      "help": "Registry mods leave every profile. Local, taken-over and unverified mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.",
       "type": "actions",
       "actions": [
-        "Remove everything"
+        "Remove all mods"
       ],
       "danger": true
     }
