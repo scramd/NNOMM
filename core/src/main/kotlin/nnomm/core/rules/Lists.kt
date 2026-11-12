@@ -78,10 +78,13 @@ fun problems(s: AppState, id: String): List<Problem> {
                 listOf(Problem(ProblemKind.DANGER, "missing", "File missing"))
             else
                 s.applyProblems[id]
+                    ?.takeIf { isOn(s, id) }
                     ?.let { listOf(Problem(ProblemKind.WARNING, "placement", it)) }
                     .orEmpty()
     return buildList {
-        s.applyProblems[id]?.let { add(Problem(ProblemKind.WARNING, "placement", it)) }
+        s.applyProblems[id]
+            ?.takeIf { isOn(s, id) }
+            ?.let { add(Problem(ProblemKind.WARNING, "placement", it)) }
         if (st.fileMissing) add(Problem(ProblemKind.DANGER, "missing", "File missing"))
         if (isOn(s, id)) {
             dependencyClosure(s, id, v.version).forEach {
@@ -347,6 +350,7 @@ data class FixItem(val label: String, val action: UiAction, val danger: Boolean 
 fun problemFixes(s: AppState, id: String, p: Problem): List<FixItem> {
     fun off(q: String) = FixItem("Turn off ${s.mod(q).name}", UiAction("turnOff", q))
     return when (p.key) {
+        "placement" -> listOf(FixItem("Retry", UiAction("retryApply", id)), off(id))
         "dep" ->
             listOf(
                 FixItem(

@@ -1,0 +1,186 @@
+package nnomm.core
+
+import java.nio.file.*
+import kotlin.io.path.*
+import kotlin.test.*
+import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonPrimitive
+import nnomm.core.demo.Demo
+import nnomm.core.io.*
+import nnomm.core.io.real.*
+import nnomm.core.model.*
+import nnomm.core.rules.*
+import nnomm.core.settings.defaultSettings
+import nnomm.core.store.AppStore
+
+class AcceptanceSafetyTest {
+    private val root = Files.createTempDirectory("safety-acceptance-")
+    private val noNet =
+        object : Downloader {
+            override suspend fun download(
+                mod: CatalogMod,
+                version: ModVersion,
+                progress: (Int) -> Unit,
+            ): DownloadedFile = error("no network")
+        }
+
+    @AfterTest
+    fun cleanup() {
+        DiskFaults.step = {}
+        deleteTree(root)
+    }
+
+    private fun game() =
+        root.resolve("game").createDirectories().also {
+            it.resolve("NuclearOption.exe").writeText("")
+        }
+
+    private fun settings() =
+        defaultSettings().let {
+            it.copy(
+                general =
+                    it.general +
+                        mapOf(
+                            "sources" to JsonPrimitive(""),
+                            "checkUpdates" to JsonPrimitive("Only when I ask"),
+                        )
+            )
+        }
+
+    @Test
+    fun firstApplyOwnershipSurvivesCrashBeforeAdoptionPublication() = runBlocking {
+        val g = game()
+        val home = root.resolve("home")
+        val store = RealModStore(home)
+        val source = root.resolve("payload").createDirectories()
+        source.resolve("a.dll").writeText("payload")
+        store.put("a", "1", DownloadedFile(source.toString()))
+        val f = RealGameFolder(home, store, noNet, running = { false })
+        DiskFaults.step = {
+            if (it == "promoted" && pendingTransactions(home.resolve("game-transactions")))
+                throw DiskCrash()
+        }
+        assertFails { f.apply(GamePlan(g.toString(), "default", mapOf("a" to "1"), false)) }
+        DiskFaults.step = {}
+        f.recoverPending()
+        f.apply(GamePlan(g.toString(), "default", emptyMap(), false))
+        assertTrue(f.applySucceeded)
+        assertFalse(g.resolve("BepInEx/plugins/a").exists())
+    }
+
+    @Test
+    fun explicitForeignTakeoverSupersedesForeignIdentities() = runBlocking {
+        val g = game()
+        val a = root.resolve("home-a")
+        val b = root.resolve("home-b")
+        val store = RealModStore(a)
+        val payload = root.resolve("payload").createDirectories()
+        payload.resolve("mod.dll").writeText("original")
+        store.put("registry-id", "1", DownloadedFile(payload.toString()))
+        RealGameFolder(a, store, noNet, running = { false })
+            .apply(GamePlan(g.toString(), "default", mapOf("registry-id" to "1"), false))
+        val fresh = RealGameFolder(b, RealModStore(b), noNet, running = { false })
+        fresh.apply(GamePlan(g.toString(), "default", emptyMap(), false))
+        assertFalse(fresh.applySucceeded)
+        val adopted = fresh.takeOver(g.toString()).single()
+        assertTrue(adopted.first.id.startsWith("local-"))
+        fresh.apply(GamePlan(g.toString(), "default", emptyMap(), false))
+        assertTrue(fresh.applySucceeded)
+        assertFalse(g.resolve("BepInEx/plugins/registry-id").exists())
+    }
+
+    @Test
+    fun guidedTestSessionSurvivesNormalClose() = runBlocking {
+        val p = RealPersistence(root)
+        val original = Demo.state().copy(settings = settings())
+        val app = AppStore(original, Demo.io().copy(persistence = p, settingsFile = p))
+        app.startBrokenModTest()
+        app.shutdown()
+        val loaded = p.load()!!
+        assertNotNull(loaded.trouble)
+        assertEquals(
+            original.installed.keys.filter { isOn(original, it) }.toSet(),
+            loaded.trouble!!.saved.toSet(),
+        )
+        val resumed = AppStore(loaded, Demo.io().copy(persistence = p, settingsFile = p))
+        resumed.stopBrokenModTest()
+        resumed.shutdown()
+        assertEquals(
+            original.installed.mapValues { it.value.profiles },
+            p.load()!!.installed.mapValues { it.value.profiles },
+        )
+    }
+
+    @Test
+    fun persistedGuidedTestSurvivesProcessHalt() = runBlocking {
+        val process =
+            ProcessBuilder(
+                    Path.of(System.getProperty("java.home"), "bin/java").toString(),
+                    "-cp",
+                    System.getProperty("java.class.path"),
+                    "nnomm.core.GuidedCrashWorker",
+                    root.toString(),
+                )
+                .redirectErrorStream(true)
+                .redirectOutput(root.resolve("worker.log").toFile())
+                .start()
+        assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals(23, process.exitValue())
+        val loaded = RealPersistence(root).load()!!
+        assertNotNull(loaded.trouble)
+        assertEquals(
+            loaded.trouble!!.saved.toSet(),
+            restoreTrouble(loaded)
+                .installed
+                .keys
+                .filter { isOn(restoreTrouble(loaded), it) }
+                .toSet(),
+        )
+    }
+
+    @Test
+    fun runtimeHomeLockRejectsSecondOpenAndReleasesAfterShutdown() = runBlocking {
+        RealPersistence(root).save(AppState(settings = settings()))
+        val first = RealRuntime.open(root)
+        try {
+            assertFails { RealRuntime.open(root) }
+        } finally {
+            first.shutdown()
+        }
+        RealRuntime.open(root).shutdown()
+    }
+
+    @Test
+    fun brokenJournalIsPendingAndDoesNotBlockOtherRecoveryOrStartup() = runBlocking {
+        val journals = root.resolve("transactions").createDirectories()
+        journals.resolve("broken.txn").writeText("not json")
+        val target = root.resolve("target").createDirectories()
+        target.resolve("old").writeText("old")
+        val source = root.resolve("source").createDirectories()
+        source.resolve("new").writeText("new")
+        DiskFaults.step = { if (it == "promoted") throw DiskCrash() }
+        assertFails { replaceTree(target, source, journals) }
+        DiskFaults.step = {}
+        val notes = mutableListOf<String>()
+        recoverTransactions(journals, notice = { notes += it })
+        assertEquals("new", target.resolve("new").readText())
+        assertTrue(notes.isNotEmpty())
+        RealPersistence(root).save(AppState(settings = settings()))
+        val app = RealRuntime.open(root, notice = { notes += it })
+        try {
+            assertTrue(app.store.state.value.gameIoPending)
+        } finally {
+            app.shutdown()
+        }
+    }
+}
+
+object GuidedCrashWorker {
+    @JvmStatic
+    fun main(args: Array<String>) = runBlocking {
+        val p = RealPersistence(Path.of(args[0]))
+        val next = startTrouble(Demo.state())
+        p.save(next)
+        Runtime.getRuntime().halt(23)
+    }
+}

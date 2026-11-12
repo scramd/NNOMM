@@ -53,6 +53,7 @@ enum class LibrarySort {
 
 @Serializable
 enum class ActionKind {
+    @SerialName("retryApply") RETRYAPPLY,
     @SerialName("play") PLAY,
     @SerialName("lookForUpdates") LOOKFORUPDATES,
     @SerialName("addFile") ADDFILE,

@@ -139,7 +139,7 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(definition.help + " You cannot undo this.")
+            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else " Loader files that NNOMM did not install stay in the game folder, including adopted BepInEx core files, winhttp.dll and doorstop_config.ini. Player config, logs, unknown files and recovery copies stay too.")
         }
     }
 }
