@@ -10,14 +10,16 @@ The state of the Kotlin build of NNOMM against the agreed mock. Written for a re
 
 ## In progress
 
-- Whole-app reviews (Opus and Sol, two areas each) with pictures and the running app.
-- IO fix round for the two real-IO reviews (copies instead of hard links, takeover keeps names, files that mods create are kept, crash-safe transactions, long downloads, stale records adopted, pack settings allow-list).
+- Real mode works in the sandbox (first start with takeover after confirmation, real registry, install from GitHub, switches, profiles, Undo, restart, offline; see `design/notes/real-mode-check.md`). Second safety round of the real IO: the game-folder apply changes one mod entry at a time instead of the whole BepInEx folder, recovery never deletes a game path, game writes wait while the game runs, Clear and Undo cannot race, add-ons wait for their parent. **Until this round is reviewed, do not point NNOMM at a real game folder.**
+- Polish: plain Space on every control with the Tao backend on Linux, "Open its settings file" (mod to BepInEx config mapping), small layout differences.
+
+## Done in review rounds
+
+- Whole-app reviews (Opus and Sol, two areas each) and their fix rounds: keyboard model (focused controls first, Space and `/` with Tao), import entry points, selection rules, panel motion and tabs, Play box and "Game is running", downloads popover, broken-mod test phases, pack import numbers, Settings actions wired to the core, command search, Share feedback, caret and focus in dialogs.
 
 ## Next
 
-- Fix rounds for the whole-app reviews and the lead's polish list (pack import demo data, demo dates, plain Space on Linux, Settings width, wiring the Settings actions to the fixed core).
-- Real mode: `createStore` uses the real runtime; first start with takeover; check against the sandbox game folder.
-- Final reviews, status, workspace pin.
+- Merge the IO safety round, then a final review round (whole app, and the real IO again), fixes, status and the workspace pin.
 
 ## Deviations from the mock
 
