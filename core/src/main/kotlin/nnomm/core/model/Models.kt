@@ -41,7 +41,15 @@ data class ModVersion(
     val fileName: String? = null,
     val releaseTagPrefix: String? = null,
     val releaseAssetName: String? = null,
-)
+) {
+    val unavailableReason: String?
+        get() {
+            val name = (fileName ?: downloadUrl?.substringBefore('?')).orEmpty().lowercase()
+            return if (name.endsWith(".rar"))
+                "This version uses an archive format NNOMM cannot install yet."
+            else null
+        }
+}
 
 @Serializable
 data class CatalogMod(
@@ -142,6 +150,7 @@ data class GameInfo(
     val version: String? = null,
     val loaderPresent: Boolean = false,
     val loaderVersion: String? = null,
+    val folderMissing: Boolean = false,
 )
 
 @Serializable
