@@ -6,7 +6,6 @@ import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.*
-import kotlinx.serialization.builtins.*
 import nnomm.core.io.*
 import nnomm.core.model.*
 
@@ -77,6 +76,7 @@ class RealGameLauncher(
     private val fakeCommand: List<String>? = null,
     private val detect: () -> Boolean = ::gameProcessRunning,
     private val notice: (String) -> Unit = {},
+    private val readDoorstop: (Path) -> ByteArray = { Files.readAllBytes(it) },
     private val writeDoorstop: (Path, ByteArray) -> Unit = { path, bytes ->
         atomic(path, String(bytes, DoorstopIni.charset), DoorstopIni.charset, createParents = false)
     },
@@ -104,78 +104,96 @@ class RealGameLauncher(
         }
     }
 
-    // Every caller can finish its state transition even when a file remains locked.
-    private fun tryRestoreDoorstop(): Exception? =
-        try {
-            restoreDoorstop()
-            restoreNoticeShown = false
-            null
-        } catch (e: Exception) {
-            if (!restoreNoticeShown) {
-                restoreNoticeShown = true
-                notice(
-                    "NNOMM could not turn the mods back on in doorstop_config.ini. Close programs that use the game folder; NNOMM tries again."
-                )
-            }
-            e
-        }
+    private val restores
+        get() = DoorstopRestores(home)
 
-    private fun restoreDoorstop() {
-        val saved =
-            JsonFile(
-                home.resolve("doorstop-restore.json"),
-                MapSerializer(String.serializer(), String.serializer()),
+    // Each folder can recover even if another library is absent or locked.
+    private fun tryRestoreDoorstop(): Exception? {
+        var failure: Exception? = null
+        var announce = false
+        try {
+            for (record in restores.records()) {
+                val game = Path.of(record.getValue("path")).parent
+                DoorstopLocks.locked(game) {
+                    val current = restores.read(game)
+                    if (current.isNotEmpty()) {
+                        try {
+                            restoreDoorstop(game, current)
+                        } catch (e: Exception) {
+                            failure = e
+                            // A refused atomic edit may not even allow a comparison read.
+                            // Do not claim mods were disabled without evidence of a change.
+                            if (restores.read(game)["changed"] != "false") announce = true
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            failure = e
+        }
+        if (failure == null) restoreNoticeShown = false
+        else if (announce && !restoreNoticeShown) {
+            restoreNoticeShown = true
+            notice(
+                "NNOMM could not turn the mods back on in doorstop_config.ini. Close programs that use the game folder; NNOMM tries again."
             )
-        val restore = saved.read() ?: return
-        if (restore.isEmpty()) return
+        }
+        return failure
+    }
+
+    private fun restoreDoorstop(game: Path, restore: Map<String, String>) {
         val path = Path.of(restore.getValue("path"))
-        // A missing library may be on an unmounted drive. Retain its restore record.
-        if (Files.notExists(path.parent)) return
+        if (Files.notExists(game)) return
         val bytes =
             restore["bytes"]?.let { java.util.Base64.getDecoder().decode(it) }
                 ?: restore.getValue("text").toByteArray(DoorstopIni.charset)
-        // A failed edit may have left the original intact (including a read-only file).
-        if (!Files.exists(path) || !Files.readAllBytes(path).contentEquals(bytes))
+        if (!Files.exists(path) || !readDoorstop(path).contentEquals(bytes)) {
+            if (restore["changed"] == "false") restores.write(game, restore + ("changed" to "true"))
             writeDoorstop(path, bytes)
-        saved.write(emptyMap())
+        }
+        restores.clear(game)
     }
 
     override suspend fun start(state: AppState, withoutMods: Boolean) =
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 require(!detect() && !flow.value) { "Nuclear Option is already running." }
-                val game = Path.of(requireNotNull(state.game.folder))
+                val game = Path.of(requireNotNull(state.game.folder)).toRealPath()
                 safe(game, "NuclearOption.exe")
                 // Recover an interrupted vanilla launch before deriving this launch mode.
-                val restoreFile = home.resolve("doorstop-restore.json")
                 tryRestoreDoorstop()?.let { throw DoorstopSettingsFailure(it) }
                 val ini = safe(game, "doorstop_config.ini")
                 try {
-                    if (withoutMods && ini.exists()) {
-                        try {
-                            val bytes =
-                                try {
-                                    Files.readAllBytes(ini)
-                                } catch (e: java.io.IOException) {
-                                    throw DoorstopSettingsFailure(e)
-                                }
-                            val disabled =
-                                DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
-                            JsonFile(
-                                    restoreFile,
-                                    MapSerializer(String.serializer(), String.serializer()),
-                                )
-                                .write(
+                    DoorstopLocks.locked(game) {
+                        if (withoutMods && ini.exists()) {
+                            try {
+                                val bytes =
+                                    try {
+                                        readDoorstop(ini)
+                                    } catch (e: java.io.IOException) {
+                                        throw DoorstopSettingsFailure(e)
+                                    }
+                                val disabled =
+                                    DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
+                                restores.write(
+                                    game,
                                     mapOf(
                                         "path" to ini.toString(),
                                         "bytes" to
                                             java.util.Base64.getEncoder().encodeToString(bytes),
-                                    )
+                                        "changed" to "false",
+                                    ),
                                 )
-                            writeDoorstop(ini, disabled)
-                        } catch (e: Exception) {
-                            if (e is DoorstopSettingsFailure) throw e
-                            throw DoorstopSettingsFailure(e)
+                                writeDoorstop(ini, disabled)
+                                restores.write(
+                                    game,
+                                    restores.read(game) +
+                                        ("changed" to (!bytes.contentEquals(disabled)).toString()),
+                                )
+                            } catch (e: Exception) {
+                                if (e is DoorstopSettingsFailure) throw e
+                                throw DoorstopSettingsFailure(e)
+                            }
                         }
                     }
                     val args =

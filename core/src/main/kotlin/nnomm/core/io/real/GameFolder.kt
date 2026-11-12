@@ -5,7 +5,6 @@ import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.*
 import kotlinx.serialization.*
-import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.*
 import nnomm.core.io.*
@@ -1278,102 +1277,82 @@ class RealGameFolder(
                 try {
                     unpack(downloaded, staging)
                     require(staging.resolve("BepInEx/core/BepInEx.dll").isRegularFile())
-                    val replacements = mutableListOf<Pair<Path, Path?>>()
-                    val owned = loaderRecord(game)
-                    val ownedNames = owned.read().orEmpty().toMutableList()
-                    Files.walk(staging).use { paths ->
-                        paths
-                            .filter { it.isRegularFile() }
-                            .forEach { src ->
-                                val relative = staging.relativize(src).toString().replace('\\', '/')
-                                require(
-                                    !relative.startsWith("BepInEx/plugins/") &&
-                                        !relative.startsWith("BepInEx/config/")
-                                )
-                                val dest = safe(game, relative)
-                                val wasOwned = relative in ownedNames
-                                if (!dest.exists()) ownedNames += relative
-                                if (
-                                    (!dest.exists() || (repair && wasOwned)) &&
-                                        !(relative == "doorstop_config.ini" && dest.exists())
-                                )
-                                    replacements += dest to src
-                            }
-                    }
-                    val doorstop = safe(game, "doorstop_config.ini")
-                    var replacedDoorstop = false
-                    if (repair && doorstop.exists()) {
-                        val config =
-                            try {
-                                // Strict decoding happens before any loader replacement is
-                                // committed.
-                                DoorstopIni.read(readDoorstop(doorstop))
-                            } catch (e: java.io.IOException) {
-                                throw DoorstopSettingsFailure(e)
-                            }
-                        val restore =
-                            JsonFile(
-                                    home.resolve("doorstop-restore.json"),
-                                    MapSerializer(String.serializer(), String.serializer()),
-                                )
-                                .read()
-                                .orEmpty()
-                        val pendingRestore =
-                            restore["path"]?.let {
-                                Path.of(it).toAbsolutePath().normalize() ==
-                                    doorstop.toAbsolutePath().normalize()
-                            } == true
-                        if (!config.healthy || (config.explicitlyDisabled && !pendingRestore)) {
-                            val restored = staging.resolve("restored-doorstop.ini")
-                            if (!config.healthy) {
-                                Files.copy(
-                                    staging.resolve("doorstop_config.ini"),
-                                    restored,
-                                    StandardCopyOption.REPLACE_EXISTING,
-                                )
-                                if (pendingRestore) {
-                                    // Publish the repaired restore bytes in the same journal,
-                                    // before the INI, so a retry cannot undo Repair.
-                                    val restoreStaged = staging.resolve("doorstop-restore.json")
-                                    restoreStaged.writeText(
-                                        json.encodeToString(
-                                            mapOf(
-                                                "path" to doorstop.toString(),
-                                                "bytes" to
-                                                    java.util.Base64.getEncoder()
-                                                        .encodeToString(
-                                                            Files.readAllBytes(restored)
-                                                        ),
-                                            )
-                                        )
+                    DoorstopLocks.locked(game) {
+                        val pendingRestore = DoorstopRestores(home).read(game).isNotEmpty()
+                        val replacements = mutableListOf<Pair<Path, Path?>>()
+                        val owned = loaderRecord(game)
+                        val ownedNames = owned.read().orEmpty().toMutableList()
+                        Files.walk(staging).use { paths ->
+                            paths
+                                .filter { it.isRegularFile() }
+                                .forEach { src ->
+                                    val relative =
+                                        staging.relativize(src).toString().replace('\\', '/')
+                                    require(
+                                        !relative.startsWith("BepInEx/plugins/") &&
+                                            !relative.startsWith("BepInEx/config/")
                                     )
-                                    replacements.add(
-                                        0,
-                                        home.resolve("doorstop-restore.json") to restoreStaged,
+                                    val dest = safe(game, relative)
+                                    val wasOwned = relative in ownedNames
+                                    if (
+                                        !dest.exists() &&
+                                            !(relative == "doorstop_config.ini" && pendingRestore)
                                     )
+                                        ownedNames += relative
+                                    if (
+                                        (!dest.exists() || (repair && wasOwned)) &&
+                                            !(relative == "doorstop_config.ini" &&
+                                                (dest.exists() || pendingRestore))
+                                    )
+                                        replacements += dest to src
                                 }
-                                replacedDoorstop = true
-                            } else Files.write(restored, config.setEnabled(true))
-                            replacements += doorstop to restored
                         }
-                    }
-                    val ownedStaged = staging.resolve("ownership.json")
-                    ownedStaged.writeText(json.encodeToString(ownedNames.distinct()))
-                    replacements +=
-                        home.resolve(
-                            "loader-${Integer.toHexString(game.toString().hashCode())}.json"
-                        ) to ownedStaged
-                    replaceTrees(
-                        replacements,
-                        home.resolve("transactions"),
-                        beforeMutation = {
-                            check(!running()) { "Game started; loader changes are pending" }
-                        },
-                    )
-                    if (replacedDoorstop)
-                        notice(
-                            "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
+                        val doorstop = safe(game, "doorstop_config.ini")
+                        var replacedDoorstop = false
+                        if (repair && !pendingRestore && doorstop.exists()) {
+                            val config =
+                                try {
+                                    // Strict decoding happens before any loader replacement is
+                                    // committed.
+                                    DoorstopIni.read(readDoorstop(doorstop))
+                                } catch (e: java.io.IOException) {
+                                    throw DoorstopSettingsFailure(e)
+                                }
+                            if (!config.healthy || config.explicitlyDisabled) {
+                                val restored = staging.resolve("restored-doorstop.ini")
+                                if (!config.healthy) {
+                                    Files.copy(
+                                        staging.resolve("doorstop_config.ini"),
+                                        restored,
+                                        StandardCopyOption.REPLACE_EXISTING,
+                                    )
+                                    replacedDoorstop = true
+                                } else Files.write(restored, config.setEnabled(true))
+                                replacements += doorstop to restored
+                            }
+                        }
+                        val ownedStaged = staging.resolve("ownership.json")
+                        ownedStaged.writeText(json.encodeToString(ownedNames.distinct()))
+                        replacements +=
+                            home.resolve(
+                                "loader-${Integer.toHexString(game.toString().hashCode())}.json"
+                            ) to ownedStaged
+                        replaceTrees(
+                            replacements,
+                            home.resolve("transactions"),
+                            beforeMutation = {
+                                check(!running()) { "Game started; loader changes are pending" }
+                            },
                         )
+                        if (replacedDoorstop)
+                            notice(
+                                "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
+                            )
+                        if (repair && pendingRestore)
+                            notice(
+                                "NNOMM is still putting back doorstop_config.ini from Play without mods. Close programs that use the game folder, then use Repair again."
+                            )
+                    }
                 } finally {
                     deleteTree(staging)
                     transfer.close()

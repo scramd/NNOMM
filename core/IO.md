@@ -154,34 +154,46 @@ bare key without `=`, is replaced. A missing key is added directly after its hea
 With neither section, `[General]` is inserted at the top after any BOM. Other sections
 and duplicate later sections stay unchanged. Decoding and construction of the
 disabled bytes finish before any restore record is written. The original bytes are saved durably as base64 in
-`doorstop-restore.json` before mutation.
+one record under `doorstop-restores/`, keyed by canonical game folder, before mutation.
+Legacy single `doorstop-restore.json` byte/text records migrate on first use;
+several folders can have pending restores without replacing each other.
 Restoration waits for observed exit; startup while the game runs defers it. Startup
 with the game closed, a failed edit, or a failed launch restores the exact bytes.
 Legacy records containing only `text` still restore using the previous byte mapping.
 Restore failure never stops startup or leaves the launcher marked running after
 exit. The durable record stays pending; NNOMM retries every three seconds while
 the game is closed, at startup and before the next Play. Play refuses to continue
-if that retry fails. One notice per unresolved failure asks the player to close
+if that retry fails. One notice per unresolved failure with evidence that the INI changed asks the player to close
 programs using the game folder. A missing game folder is never recreated: its
 restore record stays pending,
 without a write, until the folder returns. This also covers unmounted Steam
-libraries. A later Play without mods can replace that pending record. Restore
+libraries. Play in another folder retains the missing folder's record. Restore
 writes never create parent directories. If the current INI already equals the
 saved bytes, the record is cleared without rewriting the INI. Thus a refused
 write that left the original intact does not block normal Play.
-An edit failure retains its original cause and attaches any failed rollback as a
+If a refused edit also prevents reading the INI, retain the record silently until
+a comparison is possible. Never claim that mods were turned off without evidence
+of changed bytes. An edit failure retains its original cause and attaches any failed rollback as a
 suppressed exception; Play uses loader access, lock or free-space guidance.
 
 Loader Repair accepts only detected BepInEx 5.4.23.4. Unknown/different versions
 are refused. A config is healthy if its first `[General]` has a nonempty `target_assembly`;
 missing `enabled` is healthy and left alone. A present enabled value other than true in a healthy
 file is set true unless a without-mods restore is pending for this game folder.
-An unhealthy file is replaced with the shipped default, with the original kept
-in transaction recovery and a result notice explaining that. If this folder has
-a pending restore, its saved bytes are changed to the shipped repaired bytes
-in the same journal, before the INI replacement, so a retry cannot undo Repair.
-A currently unreadable or locked file fails before any replacement, with instructions to close programs
-using it. Adopted binaries and other unowned loader files remain unchanged.
+Without a pending restore, an unhealthy file is replaced with the shipped default,
+with the exact current INI kept in transaction recovery under `.nnomm/recovery`
+in the game folder and a result notice explaining that. Without a pending restore, a currently unreadable
+or locked file fails before any replacement, with instructions to close programs
+using it. While this folder has a pending restore, Repair skips the INI entirely
+(even if missing, unhealthy or unreadable), repairs the other eligible loader
+files, and asks the player to close programs using the folder and use Repair
+again. It does not change the pending original bytes or claim to have repaired
+the INI. Those original bytes remain in the private restore record until restore
+succeeds; they are not a new game recovery copy. Repair and restore share a
+per-canonical-game-folder lock covering the pending check through Repair's
+commit, and restore's record read, INI write and record clear. An in-flight
+restore finishes before Repair checks the record. Adopted binaries and other
+unowned loader files remain unchanged.
 The pinned archive SHA-256 is
 `f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
 

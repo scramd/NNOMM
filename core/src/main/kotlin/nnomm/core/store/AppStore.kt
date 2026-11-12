@@ -1550,7 +1550,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 io.gameFolder.repairLoader(folder)
                 val game = io.gameFolder.inspect(folder)
                 change { it.copy(game = game) }
-                toast("Repaired the mod loader.")
+                toast("Mod loader Repair finished.")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 io.logger.error("repair loader", e)

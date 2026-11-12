@@ -77,12 +77,7 @@ class DoorstopSpecTest {
                     )
                 launcher.start(AppState(game = GameInfo(game.toString())), true)
                 assertFalse(ini.readBytes().contentEquals(original), name)
-                val record =
-                    JsonFile(
-                            home.resolve("doorstop-restore.json"),
-                            MapSerializer(String.serializer(), String.serializer()),
-                        )
-                        .read()!!
+                val record = DoorstopRestores(home).read(game)
                 assertContentEquals(
                     original,
                     Base64.getDecoder().decode(record.getValue("bytes")),
@@ -476,40 +471,177 @@ class DoorstopSpecTest {
     }
 
     @Test
-    fun repairReplacesPendingUnhealthyRestoreWithRepairedBytes() = runBlocking {
+    fun repairDefersPendingUnhealthyRestoreForBytesAndLegacyText() = runBlocking {
         for (legacy in listOf(false, true)) {
             val original = bytes("[General]\nenabled=false\ntarget_assembly=\n")
             val f = fixture(original)
             val ini = f.game.resolve("doorstop_config.ini")
-            val saved =
-                JsonFile(
+            JsonFile(
                     f.home.resolve("doorstop-restore.json"),
                     MapSerializer(String.serializer(), String.serializer()),
                 )
-            saved.write(
-                mapOf("path" to ini.toString()) +
-                    if (legacy) mapOf("text" to String(original, DoorstopIni.charset))
-                    else mapOf("bytes" to Base64.getEncoder().encodeToString(original))
-            )
+                .write(
+                    mapOf("path" to ini.toString()) +
+                        if (legacy) mapOf("text" to String(original, DoorstopIni.charset))
+                        else mapOf("bytes" to Base64.getEncoder().encodeToString(original))
+                )
             f.folder.repairLoader(f.game.toString())
-            assertContentEquals(shipped, ini.readBytes())
-            assertContentEquals(
-                shipped,
-                Base64.getDecoder().decode(saved.read()!!.getValue("bytes")),
-            )
+            assertContentEquals(original, ini.readBytes())
+            assertTrue(DoorstopRestores(f.home).read(f.game).isNotEmpty())
+            assertTrue(f.notices.any { "use Repair again" in it })
+            assertFalse(f.notices.any { "shipped defaults" in it })
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             try {
                 RealGameLauncher(f.home, scope, detect = { false })
+                assertContentEquals(original, ini.readBytes())
+                assertTrue(DoorstopRestores(f.home).read(f.game).isEmpty())
+                f.folder.repairLoader(f.game.toString())
                 assertContentEquals(shipped, ini.readBytes())
-                assertTrue(saved.read().isNullOrEmpty())
+                assertTrue(
+                    Files.walk(f.game.resolve(".nnomm/recovery")).use { paths ->
+                        paths.anyMatch {
+                            it.isRegularFile() && it.readBytes().contentEquals(original)
+                        }
+                    }
+                )
             } finally {
                 scope.coroutineContext[Job]!!.cancelAndJoin()
             }
+        }
+    }
+
+    @Test
+    fun repairLockedMoveLeavesPendingIniAndRecordUntouched() = runBlocking {
+        for (pending in listOf(false, true)) {
+            val original = bytes("[General]\nenabled=false\ntarget_assembly=\n")
+            val f = fixture(original)
+            val ini = f.game.resolve("doorstop_config.ini")
+            val record =
+                mapOf(
+                    "path" to ini.toString(),
+                    "bytes" to Base64.getEncoder().encodeToString(original),
+                )
+            if (pending) {
+                DoorstopRestores(f.home).write(f.game, record)
+                JsonFile(
+                        f.home.resolve(
+                            "loader-${Integer.toHexString(f.game.toString().hashCode())}.json"
+                        ),
+                        ListSerializer(String.serializer()),
+                    )
+                    .write(listOf("winhttp.dll"))
+            }
+            var iniMoveAttempts = 0
+            DiskFaults.beforeMove = {
+                if (it == ini) {
+                    iniMoveAttempts++
+                    throw AccessDeniedException(it.toString())
+                }
+            }
+            try {
+                if (pending) f.folder.repairLoader(f.game.toString())
+                else
+                    assertFailsWith<AccessDeniedException> {
+                        f.folder.repairLoader(f.game.toString())
+                    }
+            } finally {
+                DiskFaults.beforeMove = {}
+            }
+            assertEquals(if (pending) 0 else 1, iniMoveAttempts)
+            assertContentEquals(original, ini.readBytes())
+            assertFalse(f.notices.any { "shipped defaults" in it })
+            if (pending) {
+                assertEquals("shipped proxy", f.game.resolve("winhttp.dll").readText())
+                assertEquals(record, DoorstopRestores(f.home).read(f.game))
+                assertTrue(f.notices.any { "use Repair again" in it })
+            }
+        }
+    }
+
+    @Test
+    fun pendingRestoreSkipsMissingUnreadableAndMalformedIni() = runBlocking {
+        for (kind in listOf("missing", "locked", "malformed")) {
+            val original =
+                if (kind == "malformed") byteArrayOf(0xff.toByte(), 0xfe.toByte(), 0x41)
+                else bytes("player original")
+            val f = fixture(original, locked = kind == "locked")
+            val ini = f.game.resolve("doorstop_config.ini")
+            if (kind == "missing") Files.delete(ini)
+            val record =
+                mapOf(
+                    "path" to ini.toString(),
+                    "bytes" to Base64.getEncoder().encodeToString(original),
+                )
+            DoorstopRestores(f.home).write(f.game, record)
+            f.folder.repairLoader(f.game.toString())
+            assertEquals(record, DoorstopRestores(f.home).read(f.game))
+            if (kind == "missing") assertFalse(ini.exists())
+            else assertContentEquals(original, ini.readBytes())
+            assertTrue(f.notices.any { "use Repair again" in it })
+            assertFalse(f.notices.any { "shipped defaults" in it })
+        }
+    }
+
+    @Test
+    fun inFlightRestoreAndRepairShareWholeSequenceLock() = runBlocking {
+        val original = bytes("[General]\nenabled=false\ntarget_assembly=\n")
+        val restored = bytes("[General]\nenabled=true\ntarget_assembly=\n")
+        val f = fixture(original)
+        val ini = f.game.resolve("doorstop_config.ini")
+        DoorstopRestores(f.home)
+            .write(
+                f.game,
+                mapOf(
+                    "path" to ini.toString(),
+                    "bytes" to Base64.getEncoder().encodeToString(restored),
+                ),
+            )
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val contended = java.util.concurrent.CountDownLatch(1)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        DoorstopLocks.contended = { contended.countDown() }
+        try {
+            val startup =
+                async(Dispatchers.IO) {
+                    RealGameLauncher(
+                        f.home,
+                        scope,
+                        detect = { false },
+                        writeDoorstop = { path, data ->
+                            entered.countDown()
+                            check(release.await(20, java.util.concurrent.TimeUnit.SECONDS))
+                            Files.write(path, data)
+                        },
+                    )
+                }
             assertTrue(
-                Files.walk(f.game.resolve(".nnomm/recovery")).use { paths ->
-                    paths.anyMatch { it.isRegularFile() && it.readBytes().contentEquals(original) }
+                withContext(Dispatchers.IO) {
+                    entered.await(10, java.util.concurrent.TimeUnit.SECONDS)
                 }
             )
+            val repair = async(Dispatchers.IO) { f.folder.repairLoader(f.game.toString()) }
+            assertTrue(
+                withContext(Dispatchers.IO) {
+                    contended.await(10, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            )
+            assertFalse(repair.isCompleted)
+            assertContentEquals(original, ini.readBytes())
+            release.countDown()
+            startup.await()
+            repair.await()
+            assertContentEquals(shipped, ini.readBytes())
+            assertTrue(DoorstopRestores(f.home).read(f.game).isEmpty())
+            assertTrue(
+                Files.walk(f.game.resolve(".nnomm/recovery")).use { paths ->
+                    paths.anyMatch { it.isRegularFile() && it.readBytes().contentEquals(restored) }
+                }
+            )
+        } finally {
+            release.countDown()
+            DoorstopLocks.contended = {}
+            scope.coroutineContext[Job]!!.cancelAndJoin()
         }
     }
 
