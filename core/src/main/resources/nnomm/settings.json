@@ -1,0 +1,426 @@
+{
+  "settings": [
+    {
+      "cat": "game",
+      "key": "gamePath",
+      "label": "Game folder",
+      "help": "Nuclear Option 0.34.6 found here.",
+      "type": "path",
+      "val": "D:\\SteamLibrary\\steamapps\\common\\Nuclear Option",
+      "actions": [
+        "Find again",
+        "Choose folder"
+      ]
+    },
+    {
+      "cat": "game",
+      "key": "launchArgs",
+      "label": "Start options",
+      "help": "Extra options for the game, for example -screen-fullscreen 0.",
+      "type": "text",
+      "val": "",
+      "placeholder": "none",
+      "ov": true
+    },
+    {
+      "cat": "game",
+      "key": "onLaunch",
+      "label": "When the game starts",
+      "type": "select",
+      "val": "Keep NNOMM open",
+      "options": [
+        "Keep NNOMM open",
+        "Minimise NNOMM",
+        "Close NNOMM"
+      ],
+      "ov": true
+    },
+    {
+      "cat": "game",
+      "key": "loader",
+      "label": "Mod loader",
+      "help": "BepInEx 5.4.23.4, installed by NNOMM. Mods cannot run without it. NNOMM installs it when you turn on your first mod, and tells you.",
+      "type": "actions",
+      "actions": [
+        "Repair"
+      ]
+    },
+    {
+      "cat": "game",
+      "key": "console",
+      "label": "Show the mod log window while the game runs",
+      "help": "A text window with messages from mods. Useful when a mod fails.",
+      "type": "toggle",
+      "val": false,
+      "ov": true
+    },
+    {
+      "cat": "mods",
+      "key": "checkUpdates",
+      "label": "Read the registry for new mods and updates",
+      "type": "select",
+      "val": "When NNOMM starts",
+      "options": [
+        "When NNOMM starts",
+        "Every hour while NNOMM is open",
+        "Only when I ask"
+      ]
+    },
+    {
+      "cat": "mods",
+      "key": "onUpdate",
+      "label": "When a mod has an update",
+      "type": "select",
+      "val": "Tell me",
+      "options": [
+        "Tell me",
+        "Update by itself"
+      ],
+      "ov": true
+    },
+    {
+      "cat": "mods",
+      "key": "prerelease",
+      "label": "Offer test versions of mods",
+      "help": "Authors mark some versions as pre-release. They can be unstable.",
+      "type": "toggle",
+      "val": false
+    },
+    {
+      "cat": "mods",
+      "key": "keepOld",
+      "label": "Keep the version before an update",
+      "help": "You can go back to it from the mod page.",
+      "type": "select",
+      "val": "1 version",
+      "options": [
+        "None",
+        "1 version",
+        "3 versions"
+      ]
+    },
+    {
+      "cat": "mods",
+      "key": "autoDeps",
+      "label": "Install mods that a mod needs",
+      "help": "For example Blueprinter for add-on aircraft.",
+      "type": "toggle",
+      "val": true
+    },
+    {
+      "cat": "mods",
+      "key": "warnOld",
+      "label": "Mark mods made for an older game version",
+      "help": "A mark is not proof that the mod is broken.",
+      "type": "toggle",
+      "val": true
+    },
+    {
+      "cat": "profiles",
+      "key": "showProfiles",
+      "label": "Show profiles in the sidebar",
+      "help": "With this off NNOMM uses the Default profile and you have one mod list.",
+      "type": "toggle",
+      "val": true
+    },
+    {
+      "cat": "profiles",
+      "key": "ownSettings",
+      "label": "New profiles keep their own mod settings",
+      "help": "Mod settings are the values you change with F1 in the game. With this off all profiles share them.",
+      "type": "toggle",
+      "val": false
+    },
+    {
+      "cat": "profiles",
+      "key": "newFrom",
+      "label": "A new profile starts",
+      "type": "select",
+      "val": "With all mods off",
+      "options": [
+        "With all mods off",
+        "As a copy of the current profile"
+      ]
+    },
+    {
+      "cat": "profiles",
+      "key": "ownSettingsP",
+      "label": "This profile keeps its own mod settings",
+      "type": "toggle",
+      "val": false,
+      "ov": true,
+      "profileOnly": true
+    },
+    {
+      "cat": "browse",
+      "key": "sources",
+      "label": "Registries",
+      "help": "NNOMM reads the mods you can install from these addresses.",
+      "type": "sources"
+    },
+    {
+      "cat": "browse",
+      "key": "hideServer",
+      "label": "Hide mods that are only for servers",
+      "type": "toggle",
+      "val": true
+    },
+    {
+      "cat": "servers",
+      "key": "showServers",
+      "label": "Show Servers in the sidebar",
+      "help": "Turn this off if you do not use the server list.",
+      "type": "toggle",
+      "val": true
+    },
+    {
+      "cat": "storage",
+      "key": "store",
+      "label": "Where NNOMM keeps mod files",
+      "help": "Each version of a mod is stored once here, also when several profiles use it. 438 MB used.",
+      "type": "path",
+      "val": "C:\\Users\\you\\AppData\\Roaming\\NNOMM\\mods",
+      "actions": [
+        "Move",
+        "Open"
+      ]
+    },
+    {
+      "cat": "storage",
+      "key": "cache",
+      "label": "Downloaded files that are no longer in use",
+      "help": "212 MB. Old versions that no profile uses.",
+      "type": "actions",
+      "actions": [
+        "Clear"
+      ]
+    },
+    {
+      "cat": "look",
+      "key": "theme",
+      "label": "Theme",
+      "type": "select",
+      "val": "Dark",
+      "options": [
+        "Same as Windows",
+        "Dark",
+        "Light"
+      ]
+    },
+    {
+      "cat": "look",
+      "key": "density",
+      "label": "Row height in lists",
+      "type": "select",
+      "val": "Compact",
+      "options": [
+        "Compact",
+        "Comfortable"
+      ]
+    },
+    {
+      "cat": "look",
+      "key": "textSize",
+      "label": "Text size",
+      "type": "select",
+      "val": "100%",
+      "options": [
+        "90%",
+        "100%",
+        "110%",
+        "125%"
+      ]
+    },
+    {
+      "cat": "look",
+      "key": "motion",
+      "label": "Animations",
+      "type": "select",
+      "val": "Same as Windows",
+      "options": [
+        "Same as Windows",
+        "On",
+        "Off"
+      ]
+    },
+    {
+      "cat": "look",
+      "key": "startPage",
+      "label": "NNOMM opens on",
+      "type": "select",
+      "val": "The page I used last",
+      "options": [
+        "The page I used last",
+        "Browse",
+        "Library"
+      ]
+    },
+    {
+      "cat": "keys",
+      "key": "keys",
+      "type": "keys"
+    },
+    {
+      "cat": "app",
+      "key": "appUpdate",
+      "label": "Update NNOMM",
+      "help": "Version 0.1.0. You have the newest version.",
+      "type": "select",
+      "val": "Tell me",
+      "options": [
+        "By itself",
+        "Tell me",
+        "Never"
+      ],
+      "actions": [
+        "Look now"
+      ]
+    },
+    {
+      "cat": "app",
+      "key": "channel",
+      "label": "Get test versions of NNOMM",
+      "type": "toggle",
+      "val": false
+    },
+    {
+      "cat": "app",
+      "key": "logs",
+      "label": "Problem report",
+      "help": "A text file with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.",
+      "type": "actions",
+      "actions": [
+        "Copy report",
+        "Open log folder"
+      ]
+    },
+    {
+      "cat": "app",
+      "key": "credits",
+      "label": "About",
+      "help": "NNOMM is a fork of NOMM by Combat787 (MIT licence). The mod list is NOMNOM by KopterBuzz.",
+      "type": "actions",
+      "actions": [
+        "Licences"
+      ]
+    },
+    {
+      "cat": "danger",
+      "key": "dzSettings",
+      "label": "Reset all NNOMM settings",
+      "help": "Mods and profiles stay.",
+      "type": "actions",
+      "actions": [
+        "Reset settings"
+      ],
+      "danger": true
+    },
+    {
+      "cat": "danger",
+      "key": "dzAll",
+      "label": "Remove all mods and the mod loader",
+      "help": "The game goes back to its plain state. NNOMM keeps your profiles, so you can install everything again.",
+      "type": "actions",
+      "actions": [
+        "Remove everything"
+      ],
+      "danger": true
+    }
+  ],
+  "categories": [
+    [
+      "game",
+      "Game"
+    ],
+    [
+      "mods",
+      "Mods and updates"
+    ],
+    [
+      "profiles",
+      "Profiles"
+    ],
+    [
+      "browse",
+      "Registry"
+    ],
+    [
+      "servers",
+      "Servers"
+    ],
+    [
+      "storage",
+      "Storage"
+    ],
+    [
+      "look",
+      "Appearance"
+    ],
+    [
+      "keys",
+      "Keyboard"
+    ],
+    [
+      "app",
+      "About and updates"
+    ],
+    [
+      "danger",
+      "Danger zone"
+    ]
+  ],
+  "keys": [
+    [
+      "Search or run a command",
+      "Ctrl K"
+    ],
+    [
+      "Start the game",
+      "Ctrl Enter"
+    ],
+    [
+      "Find on this page",
+      "/"
+    ],
+    [
+      "Move in a list",
+      "Up, Down"
+    ],
+    [
+      "Turn the mod on or off",
+      "Space"
+    ],
+    [
+      "Open details",
+      "Enter"
+    ],
+    [
+      "Select a range",
+      "Shift click"
+    ],
+    [
+      "Select all",
+      "Ctrl A"
+    ],
+    [
+      "Remove the selected mods",
+      "Delete"
+    ],
+    [
+      "Undo",
+      "Ctrl Z"
+    ],
+    [
+      "Close a panel or window",
+      "Esc"
+    ],
+    [
+      "Browse, Library, Servers",
+      "Ctrl 1, 2, 3"
+    ],
+    [
+      "Settings",
+      "Ctrl ,"
+    ]
+  ]
+}

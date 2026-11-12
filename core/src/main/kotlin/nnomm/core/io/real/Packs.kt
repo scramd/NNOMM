@@ -53,7 +53,7 @@ class RealPacks(
                     require(document.format == "NNOMM/1") { "Unsupported NNOMM pack format" }
                     val locals =
                         document.pack.items
-                            .filter { it.kind == "local" }
+                            .filter { it.kind == PackKind.LOCAL }
                             .associate { item ->
                                 item.id to safe(staging, "mods/${component(item.id)}").toString()
                             }
@@ -83,8 +83,8 @@ class RealPacks(
                 name.substringBeforeLast('.'),
                 "",
                 "1.0",
-                refs.map { PackItem("ver", it.id, it.version) } +
-                    locals.keys.map { PackItem("local", it) },
+                refs.map { PackItem(PackKind.VER, it.id, it.version) } +
+                    locals.keys.map { PackItem(PackKind.LOCAL, it) },
             ),
             locals,
             null,
@@ -130,7 +130,7 @@ class RealPacks(
                         config?.let { add(it, "config") }
                     }
                     pack.items
-                        .filter { it.kind == "local" }
+                        .filter { it.kind == PackKind.LOCAL }
                         .forEach { item ->
                             add(
                                 mods.version(item.id, requireNotNull(item.version)),

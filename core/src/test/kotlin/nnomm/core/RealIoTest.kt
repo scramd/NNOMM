@@ -337,7 +337,7 @@ class RealIoTest {
         val client = networkClient("test")
         try {
             val packs = RealPacks(home, RealModStore(home), client)
-            val pack = Pack("Friends", "A", "1", listOf(PackItem("ver", "test", "1")))
+            val pack = Pack("Friends", "A", "1", listOf(PackItem(PackKind.VER, "test", "1")))
             val path = home.resolve("friends.nommpack")
             packs.write(path, pack, AppState())
             packs.read(path).use { assertEquals(pack, it.pack) }
@@ -347,5 +347,65 @@ class RealIoTest {
         } finally {
             client.close()
         }
+    }
+
+    @Test
+    fun movingStoreKeepsOriginalAndUsesDestination() = runBlocking {
+        val home = temp()
+        val store = RealModStore(home)
+        val input = home.resolve("payload.dll")
+        input.writeText("payload")
+        store.put("m", "1", DownloadedFile(input.toString()))
+        val original = store.version("m", "1")
+        val target = home.resolve("moved")
+        store.moveTo(target.toString())
+        assertTrue(original.resolve("payload.dll").exists())
+        assertEquals(target.resolve("m/1"), store.version("m", "1"))
+        assertEquals("payload", store.version("m", "1").resolve("payload.dll").readText())
+        assertTrue(input.exists())
+    }
+
+    @Test
+    fun loaderRemovalPreservesUnownedFilesAndRecovery() = runBlocking {
+        val home = temp()
+        Files.createDirectories(home.resolve("staging"))
+        val game = home.resolve("game")
+        Files.createDirectories(game)
+        game.resolve("NuclearOption.exe").writeText("")
+        game.resolve("doorstop_config.ini").writeText("player settings")
+        val archive = home.resolve("staging/download/loader.zip")
+        Files.createDirectories(archive.parent)
+        ZipOutputStream(Files.newOutputStream(archive)).use { zip ->
+            for ((name, text) in
+                mapOf(
+                    "BepInEx/core/BepInEx.dll" to "loader",
+                    "doorstop_config.ini" to "upstream defaults",
+                    "winhttp.dll" to "proxy",
+                )) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(text.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        val dl =
+            object : Downloader {
+                override suspend fun download(
+                    mod: CatalogMod,
+                    version: ModVersion,
+                    progress: (Int) -> Unit,
+                ) = DownloadedFile(archive.toString())
+            }
+        val folder = RealGameFolder(home, RealModStore(home), dl, running = { false })
+        folder.installLoader(game.toString())
+        assertTrue(game.resolve("BepInEx/core/BepInEx.dll").exists())
+        folder.removeLoader(game.toString())
+        assertFalse(game.resolve("BepInEx/core/BepInEx.dll").exists())
+        assertFalse(game.resolve("winhttp.dll").exists())
+        assertEquals("player settings", game.resolve("doorstop_config.ini").readText())
+        assertTrue(
+            Files.walk(home.resolve("recovery")).use { paths ->
+                paths.anyMatch { it.fileName.toString() == "BepInEx.dll" }
+            }
+        )
     }
 }
