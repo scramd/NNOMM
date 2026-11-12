@@ -159,6 +159,7 @@ data class GameInfo(
     val loaderResumeAllowed: Boolean = true,
     val changedLoaderBinaries: List<String> = emptyList(),
     val foreignLoaderBinaries: List<String> = emptyList(),
+    val loaderRecoveryPending: Boolean = false,
 )
 
 @Serializable

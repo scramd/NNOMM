@@ -497,11 +497,20 @@ Present changed or relinquished loader binaries (`winhttp.dll` and files under
 DLL is absent, those binaries block Install, mod actions that need installation,
 and Play before launch. Unowned binaries use the same block, with a notice naming
 another loader's files rather than claiming the player changed them. Install never
-mixes the pinned archive into a foreign loader. With the detection DLL present,
+mixes the pinned archive into a foreign loader. Pending loader placement names are
+known during inspection, but grant no ownership or permission to change files.
+While this folder has pending loader recovery, Play, mod actions and Retry let
+Install recover first, before applying changed/foreign binary guards. Failed
+recovery keeps its recovery guidance; after recovery the guards apply normally.
+Recovery in another game folder does not bypass these guards.
+With the detection DLL present,
 a loader that cannot resume is used as-is: mods apply and Play launches. If it is
 incomplete with changed binaries, preparation gives one non-blocking notice per
 canonical game folder per app session naming the files and suggesting restoration
 of BepInEx 5.4.23.4 if mods do not load. It does not announce an installation.
+A present loader that allows resume still gets its missing files when extra
+unknown core files exist. Install leaves those extra files unchanged and announces
+installation only after its completeness check succeeds.
 An edited or foreign INI alone does not block Install and is never overwritten.
 Repair offers Install without the detection DLL only if all remaining loader files
 (the INI, winhttp.dll and files under BepInEx/core) are unchanged and owned by this

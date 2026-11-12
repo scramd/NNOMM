@@ -9,6 +9,8 @@ import nnomm.core.io.*
 import nnomm.core.io.real.*
 
 class LoaderEditedConfigRegressionTest {
+    private class Crash : Error()
+
     private val shipped =
         "[General]\nenabled=true\ntarget_assembly=BepInEx\\core\\BepInEx.Preloader.dll\n"
             .toByteArray()
@@ -17,6 +19,7 @@ class LoaderEditedConfigRegressionTest {
     private val data =
         mapOf(
             ".doorstop_version" to "4.3.0".toByteArray(),
+            "BepInEx/core/0Harmony.dll" to "harmony".toByteArray(),
             "BepInEx/core/BepInEx.dll" to dll,
             "BepInEx/core/Extra.dll" to "extra".toByteArray(),
             "changelog.txt" to "log".toByteArray(),
@@ -78,6 +81,128 @@ class LoaderEditedConfigRegressionTest {
 
     private fun restart(f: F) =
         F(f.home, f.game, folder(f.home, f.home.resolve("loader.zip"), f.notices), f.notices)
+
+    private suspend fun interruptedInstallWithPendingRecovery(): F {
+        val f = fixture()
+        var promoted = 0
+        DiskFaults.step = { if (it == "promoted" && ++promoted == 3) throw Crash() }
+        assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+        DiskFaults.step = {}
+        assertTrue(f.game.resolve("BepInEx/core/0Harmony.dll").exists())
+        assertFalse(f.game.resolve("BepInEx/core/BepInEx.dll").exists())
+        val r = restart(f)
+        DiskFaults.step = {
+            if (it == "recovery-staged-deleted") throw java.io.IOException("locked by scanner")
+        }
+        r.folder.recoverPending()
+        DiskFaults.step = {}
+        assertTrue(r.folder.recoveryPending)
+        return r
+    }
+
+    @Test
+    fun pendingInstallRecoveryAllowsPlayToRecoverInstallAndLaunch() = runBlocking {
+        val f = interruptedInstallWithPendingRecovery()
+        val info = f.folder.inspect(f.game.toString())
+        assertTrue(info.loaderRecoveryPending)
+        assertTrue(info.foreignLoaderBinaries.isEmpty())
+        val otherGame = f.home.resolve("other-game").createDirectories()
+        otherGame.resolve("NuclearOption.exe").writeText("")
+        assertFalse(f.folder.inspect(otherGame.toString()).loaderRecoveryPending)
+        var launched = false
+        val app = app(f) { launched = true }
+        try {
+            app.setOn(listOf(app.state.value.installed.keys.first()), true)
+            app.awaitDiskIdle()
+            app.play()
+            withTimeout(10000) { while (!launched) delay(10) }
+            app.awaitDiskIdle()
+            assertFalse(f.folder.recoveryPending)
+            assertTrue(f.folder.inspect(f.game.toString()).loaderComplete)
+            assertTrue(f.folder.inspect(f.game.toString()).loaderPresent)
+            assertFalse(app.state.value.toasts.any { it.text.contains("another loader's files") })
+            assertTrue(app.state.value.toasts.any { it.text.contains("Installed the mod loader") })
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun pendingRecoveryTakesPriorityOverForeignGuardAndRetryRechecksIt() = runBlocking {
+        val f = interruptedInstallWithPendingRecovery()
+        val foreign = f.game.resolve("BepInEx/core/PlayerPatcher.dll")
+        foreign.writeText("player added")
+        var launched = false
+        val app = app(f) { launched = true }
+        try {
+            DiskFaults.step = {
+                if (it == "recovery-staged-deleted") throw java.io.IOException("locked by scanner")
+            }
+            app.play()
+            withTimeout(10000) {
+                while (
+                    app.state.value.toasts.none { it.text.contains("still need recovery") }
+                ) delay(10)
+            }
+            app.awaitDiskIdle()
+            assertFalse(launched)
+            assertTrue(f.folder.recoveryPending)
+            assertFalse(app.state.value.toasts.any { it.text.contains("another loader's files") })
+            DiskFaults.step = {}
+            val recoveryRetry = app.state.value.toasts.last { it.action == "Retry" }
+            app.runToast(recoveryRetry.id)
+            withTimeout(10000) {
+                while (
+                    app.state.value.toasts.none { it.text.contains("another loader's files") }
+                ) delay(10)
+            }
+            app.awaitDiskIdle()
+            assertFalse(f.folder.recoveryPending)
+            assertFalse(launched)
+            assertEquals("player added", foreign.readText())
+            assertFalse(f.game.resolve("BepInEx/core/BepInEx.dll").exists())
+            foreign.deleteExisting()
+            app.runToast(app.state.value.toasts.last { it.action == "Retry" }.id)
+            withTimeout(10000) { while (!launched) delay(10) }
+            app.awaitDiskIdle()
+            assertTrue(f.folder.inspect(f.game.toString()).loaderComplete)
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun presentIncompleteLoaderResumesBesideExtraCoreFile() = runBlocking {
+        val f = fixture()
+        f.folder.installLoader(f.game.toString())
+        f.game.resolve("BepInEx/core/0Harmony.dll").deleteExisting()
+        val extra = f.game.resolve("BepInEx/core/PlayerPatcher.dll")
+        extra.writeText("player added")
+        val info = f.folder.inspect(f.game.toString())
+        assertTrue(info.loaderPresent)
+        assertFalse(info.loaderComplete)
+        assertTrue(info.loaderResumeAllowed)
+        assertEquals(listOf("BepInEx/core/PlayerPatcher.dll"), info.foreignLoaderBinaries)
+        f.notices.clear()
+        var launched = false
+        val app = app(f) { launched = true }
+        try {
+            app.retryApply()
+            app.awaitDiskIdle()
+            app.play()
+            withTimeout(10000) { while (!launched) delay(10) }
+            app.awaitDiskIdle()
+            assertContentEquals(
+                data.getValue("BepInEx/core/0Harmony.dll"),
+                f.game.resolve("BepInEx/core/0Harmony.dll").readBytes(),
+            )
+            assertTrue(f.folder.inspect(f.game.toString()).loaderComplete)
+            assertEquals("player added", extra.readText())
+            assertTrue(app.state.value.toasts.any { it.text.contains("Installed the mod loader") })
+        } finally {
+            app.shutdown()
+        }
+    }
 
     // V2 side effect: a player-edited INI (relinquished) plus a deleted BepInEx folder.
     @Test
