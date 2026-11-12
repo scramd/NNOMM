@@ -181,6 +181,7 @@ class AppModel(
                     store.useProfile(it)
                     ui.go(Page.Library)
                 }
+            "tag" -> action.id?.let { ui.page = Page.Browse; ui.browse.tags = ui.browse.tags + it }
             "install" -> action.id?.let(store::install)
             "update" -> action.id?.let(store::update)
             "repair",
