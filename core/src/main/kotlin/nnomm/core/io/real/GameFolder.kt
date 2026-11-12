@@ -215,7 +215,10 @@ class RealGameFolder(
                 else null
             val archive = loaderArchive(game).read().orEmpty()
             val hashes = ownedHashes(game)
-            val complete = hashes.isEmpty() || archive.all { safe(game, it).isRegularFile() }
+            // An install with a pending record is unfinished even before its archive list exists.
+            val complete =
+                !pendingLoaderRecord(game).exists() &&
+                    (hashes.isEmpty() || archive.all { safe(game, it).isRegularFile() })
             val resumeAllowed =
                 hashes.isNotEmpty() &&
                     loaderVersion == "5.4.23.4" &&
@@ -1629,7 +1632,7 @@ class RealGameFolder(
                         }
                         if (info.foreignLoaderBinaries.isNotEmpty())
                             throw LoaderInstallBlocked(info.foreignLoaderBinaries, foreign = true)
-                    } else if (!info.loaderResumeAllowed) return@guarded
+                    } else if (!info.loaderResumeAllowed || info.loaderComplete) return@guarded
                 }
                 val existingVersion = info.loaderVersion
                 val changedOwned =

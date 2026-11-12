@@ -653,5 +653,4 @@ class LoaderEditedConfigRegressionTest {
             app.shutdown()
         }
     }
-
 }
