@@ -9,7 +9,6 @@ import kotlinx.serialization.builtins.serializer
 import nnomm.core.io.*
 import nnomm.core.model.*
 import nnomm.core.rules.compareVersions
-import org.apache.commons.compress.archivers.sevenz.SevenZFile
 
 internal suspend fun unpack(file: Path, target: Path) {
     Files.createDirectories(target)
@@ -124,30 +123,7 @@ internal suspend fun unpack(file: Path, target: Path) {
                     }
                 }
         }
-        "7z" ->
-            SevenZFile.builder().setPath(file).get().use { archive ->
-                var count = 0
-                while (true) {
-                    currentCoroutineContext().ensureActive()
-                    val entry = archive.nextEntry ?: break
-                    require(++count <= 100_000)
-                    val dest = destination(entry.name.replace('\\', '/'))
-                    if (entry.isDirectory) Files.createDirectories(dest)
-                    else {
-                        Files.createDirectories(dest.parent)
-                        Files.newOutputStream(dest, StandardOpenOption.CREATE_NEW).use { out ->
-                            val buf = ByteArray(65536)
-                            while (true) {
-                                currentCoroutineContext().ensureActive()
-                                val n = archive.read(buf)
-                                if (n < 0) break
-                                budget(n)
-                                out.write(buf, 0, n)
-                            }
-                        }
-                    }
-                }
-            }
+        "7z" -> unpackSevenZip(file, ::destination, ::budget)
         "dll",
         "nobp" -> Files.copy(file, safe(target, file.fileName.toString()))
         else -> error("Unsupported mod file: ${file.fileName}")

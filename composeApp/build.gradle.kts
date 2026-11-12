@@ -73,8 +73,6 @@ kotlin {
 
 
 
-            implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
-            implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
             implementation("org.slf4j:slf4j-simple:2.0.17")
         }
 
@@ -93,6 +91,19 @@ buildkonfig {
 
 nucleus.application {
     mainClass = "nnomm.app.MainKt"
+    // Package and run with the toolchain JDK. The default is JAVA_HOME, and an older JDK
+    // there gives an app that cannot load its own classes.
+    javaHome =
+        javaToolchains
+            .launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(25))
+                vendor.set(JvmVendorSpec.JETBRAINS)
+            }
+            .get()
+            .metadata
+            .installationPath
+            .asFile
+            .absolutePath
     jvmArgs += listOf(
         "--enable-native-access=ALL-UNNAMED",
     )

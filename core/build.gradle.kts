@@ -20,6 +20,8 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.core.compress)
     implementation(libs.core.xz)
+    implementation(libs.core.sevenzip)
+    runtimeOnly(libs.core.sevenzip.platforms)
     implementation(libs.core.jsoup)
     testImplementation(kotlin("test"))
     testImplementation(libs.core.coroutines.test)
