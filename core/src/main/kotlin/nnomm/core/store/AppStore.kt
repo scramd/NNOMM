@@ -287,7 +287,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private val incompleteLoaderNotices = mutableSetOf<String>()
 
     private fun installBlock(game: GameInfo): LoaderInstallBlocked? =
-        if (game.loaderPresent) null
+        if (game.loaderPresent || game.loaderRecoveryPending) null
         else if (game.changedLoaderBinaries.isNotEmpty())
             LoaderInstallBlocked(game.changedLoaderBinaries)
         else if (game.foreignLoaderBinaries.isNotEmpty())
@@ -306,7 +306,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             if (
                 modAction &&
                     onCount(snapshot) > 0 &&
-                    (snapshot.game.changedLoaderBinaries.isNotEmpty() ||
+                    (snapshot.game.loaderRecoveryPending ||
+                        snapshot.game.changedLoaderBinaries.isNotEmpty() ||
                         snapshot.game.foreignLoaderBinaries.isNotEmpty())
             )
                 io.gameFolder.inspect(folder).also { game -> change { it.copy(game = game) } }
@@ -329,7 +330,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         if (
             modAction &&
                 onCount(snapshot) > 0 &&
-                (!beforeInstall.loaderPresent ||
+                (beforeInstall.loaderRecoveryPending ||
+                    !beforeInstall.loaderPresent ||
                     (!beforeInstall.loaderComplete && beforeInstall.loaderResumeAllowed))
         ) {
             try {
@@ -365,6 +367,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     resolvedPlan(state.value) == appliedPlan &&
                     (!queuedLoaderRequest ||
                         (state.value.game.loaderPresent &&
+                            !state.value.game.loaderRecoveryPending &&
                             (state.value.game.loaderComplete ||
                                 !state.value.game.loaderResumeAllowed)) ||
                         onCount(state.value) == 0)
@@ -1064,7 +1067,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         !withoutMods &&
                             (resolvedPlan(state.value) != appliedPlan ||
                                 (onCount(state.value) > 0 &&
-                                    (!state.value.game.loaderPresent ||
+                                    (state.value.game.loaderRecoveryPending ||
+                                        !state.value.game.loaderPresent ||
                                         (!state.value.game.loaderComplete &&
                                             state.value.game.loaderResumeAllowed))))
                     )

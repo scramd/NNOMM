@@ -234,6 +234,15 @@ class RealGameFolder(
                 loaderResumeAllowed = resumeAllowed,
                 changedLoaderBinaries = changedLoaderBinaries(game),
                 foreignLoaderBinaries = foreignLoaderBinaries(game),
+                loaderRecoveryPending =
+                    pendingLoaderRecord(game).exists() ||
+                        removalRecord(game).exists() ||
+                        pendingTouches(home.resolve("transactions"), game) ||
+                        pendingTouches(
+                            home.resolve("game-transactions"),
+                            game,
+                            unknownBlocks = true,
+                        ),
             )
         }
 
@@ -1346,7 +1355,20 @@ class RealGameFolder(
 
     private fun foreignLoaderBinaries(game: Path): List<String> {
         val ownership = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
-        val known = ownership?.hashes.orEmpty().keys + ownership?.relinquished.orEmpty()
+        val pending =
+            pendingLoaderRecord(game)
+                .takeIf { it.exists() }
+                ?.let { path ->
+                    runCatching { json.decodeFromString<PendingLoaderOwnership>(path.readText()) }
+                        .getOrNull()
+                        ?.takeIf { it.gameRoot == game.toString() }
+                }
+        // Pending placement names are ours to verify during recovery, not foreign files.
+        // This classification grants no mutation authority; recovery still checks bytes.
+        val known =
+            ownership?.hashes.orEmpty().keys +
+                ownership?.relinquished.orEmpty() +
+                pending?.hashes.orEmpty().keys
         return loaderFiles(game).filter { isLoaderBinary(it) && it !in known }
     }
 
@@ -1595,7 +1617,7 @@ class RealGameFolder(
                 val recorded = ownedHashes(game)
                 val verified = verifiedOwnership(game)
                 writeOwnership(game, verified)
-                // A present loader can be used as-is, but cannot be mixed with our archive.
+                // Only a verified resumable present loader can receive missing files.
                 if (!repair) {
                     if (!info.loaderPresent) {
                         if (info.changedLoaderBinaries.isNotEmpty()) {
@@ -1607,8 +1629,7 @@ class RealGameFolder(
                         }
                         if (info.foreignLoaderBinaries.isNotEmpty())
                             throw LoaderInstallBlocked(info.foreignLoaderBinaries, foreign = true)
-                    } else if (!info.loaderResumeAllowed || info.foreignLoaderBinaries.isNotEmpty())
-                        return@guarded
+                    } else if (!info.loaderResumeAllowed) return@guarded
                 }
                 val existingVersion = info.loaderVersion
                 val changedOwned =
