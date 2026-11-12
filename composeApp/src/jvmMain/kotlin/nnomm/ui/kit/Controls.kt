@@ -55,6 +55,7 @@ internal fun control(
     onClick: () -> Unit,
     content: @Composable (Modifier, Boolean, Boolean) -> Unit,
 ) {
+    val space = remember { ControlSpaceKey() }
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val pressed by source.collectIsPressedAsState()
@@ -79,6 +80,12 @@ internal fun control(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()),
                     )
                 }
+            }
+            .onPreviewKeyEvent { event ->
+                if (enabled && focused && space.typedActivation(event)) {
+                    onClick()
+                    true
+                } else space.consumeDuplicate
             }
             .clickable(
                 source,
@@ -856,5 +863,25 @@ fun ScrollArea(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
                 .padding(horizontal = 2.dp),
             style = LocalScrollbarStyle.current.copy(hoverColor = LocalNnTheme.current.colors.line2),
         )
+    }
+}
+
+/** Let clickable handle physical keys; Tao on X11 supplies only a typed Space. */
+internal class ControlSpaceKey {
+    private var physicalSpace = false
+    var consumeDuplicate = false
+        private set
+
+    fun typedActivation(event: KeyEvent): Boolean {
+        consumeDuplicate = false
+        if (event.key == Key.Spacebar) {
+            if (event.type == KeyEventType.KeyDown) physicalSpace = true
+            if (event.type == KeyEventType.KeyUp) physicalSpace = false
+        }
+        val typed = event.type == KeyEventType.Unknown &&
+            event.key.nativeKeyCode == 0 && event.utf16CodePoint == 32 &&
+            !event.isCtrlPressed && !event.isMetaPressed && !event.isAltPressed
+        consumeDuplicate = typed && physicalSpace
+        return typed && !physicalSpace
     }
 }
