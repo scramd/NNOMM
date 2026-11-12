@@ -14,7 +14,7 @@ NNOMM has the agreed pages and real IO integration. It is still a development bu
 
 ## Remaining work
 
-- Integrate and review the separate final core fixes for game-exit apply authorization, takeover preservation, Clear retention and registry freshness. Do not treat this UI/updater pass as proof that those fixes are complete.
+- Review the integrated final core fixes for game-exit apply authorization, takeover preservation, Clear retention and registry freshness. Those changes are present; this acceptance pass does not replace their independent safety review.
 - Independent Opus and Sol review of the final combined code and pictures. This implementation pass runs alone, so it does not supply those reviews.
 - Run the Windows checks below on packaged builds, then perform the final sandbox acceptance pass on the integrated branch.
 - Offline pack imports can add selected bundled files to the Library before the core rejects profile creation with “Needs a connection”. The current core requires a connection for pack import, including local-only packs; this remains a follow-up.
@@ -28,7 +28,7 @@ NNOMM has the agreed pages and real IO integration. It is still a development bu
 ## Deviations from the mock
 
 - Servers remains “Coming later”; server joining and the Steam helper are excluded from the first version.
-- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line; the final two-card strip is about four pixels taller than the mock.
+- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line and space below cards for the hover scrollbar; their section spacing can be slightly taller than the static mock.
 - Real packs can add optional settings and multiple bundled-file warnings, so their preview is taller than the single-file mock. Bundled files show readable payload names rather than internal content ids; the demo warning no longer repeats `.dll`.
 - Removal wording names the ownership boundary instead of promising a plain game. Stop following now performs the action instead of the mock's no-op.
 - The drop overlay uses native drops and omits mock-only simulation controls; its centered group sits slightly lower.
@@ -45,3 +45,23 @@ NNOMM has the agreed pages and real IO integration. It is still a development bu
 ## Reproduce checks
 
 Use JetBrains JDK 25 and `tools/gradlew-locked` for builds. Run `:core:test :composeApp:jvmTest`, then `:composeApp:renderShots` and `tools/compare-shots`. Compare images are under `composeApp/build/shots/compare/`. Run real-mode checks with an isolated settings home and a temporary sandbox game copy; use a separate virtual display when other agents use the desktop. Reports must distinguish exercised behavior from remaining Windows and independent-review work.
+
+## Final acceptance implementation (O1–O5, O7–O12)
+
+- Browse New and First release use the oldest registry version's date, fetched through the single-slot metadata queue and retained in the permanent successful HEAD cache. Unknown first dates stay out of New and show Unknown in the panel.
+- Remove everything keeps local, taken-over and unknown-origin stored mods in the Library, off in every profile. Their stored copies stay. Confirmation and completion say this explicitly; only registry-download-only entries leave the Library.
+- Linux file, folder and save choosers use Swing's event thread from an IO coroutine, avoiding the GTK save implementation. Windows retains FileKit.
+- Card tag rows place only whole chips. Strip scrollbars appear during hover or scrolling with room below the cards.
+- Empty pack authors omit the by phrase in previews and update notices. Release notes omit feed headings and Full Changelog links; release dates use relative wording.
+- Library size counts installed stored versions, excluding hidden/recovery copies. Storage settings still report total disk use. Disk actions refresh both totals; a usage-read failure does not fail the action.
+- Registry tags use sentence case, preserving HUD, UI, QoL, VR, AI, PvP, PvE, FPS, ATC and AWACS. Filter order follows current counts.
+- Zero-update checks say All mods are up to date. Zero-download imports omit the download count. Singular years, registry freshness, report takeover labels, report help, non-breaking storage units and demo-mode notices use player wording. Runtime startup discards transient downloads; an opened empty queue says No downloads.
+- The sandbox launcher is explicitly marked development-only and remains inert without its environment variable and isolated-home guard. Acceptance notes contain no temporary absolute path.
+
+### Decisions for this pass
+
+- First-start heading with a selected folder: “Check your game”. With no folder, or a missing folder: “Game folder not found”, including the game row. This avoids claiming automatic discovery after a hand-picked folder.
+- Unknown stored provenance is retained in the Library by Remove everything, because a registry identity does not prove that its stored bytes can be downloaded again.
+- Feed section headings are omitted rather than restyled. Notes retain the actual release text and relative dates.
+
+These are deliberate wording and behavior deviations from the older mock where it promises removal of every mod, shows mock-only notices or empty author phrases, or keeps a fixed tag-filter order. Existing font shaping/wrapping differences remain. Independent Opus/Sol review and Windows checks remain the lead's work; this implementation agent works alone.

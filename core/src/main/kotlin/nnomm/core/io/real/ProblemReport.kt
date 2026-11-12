@@ -20,7 +20,7 @@ fun problemReport(state: AppState): String = buildString {
         .sortedBy { state.mod(it).name }
         .forEach { id ->
             appendLine(
-                "${state.mod(id).name} ${verOf(state, id)}: ${if (isOn(state, id)) "on" else "off"}"
+                "${state.mod(id).name} ${verOf(state, id).let { if (it == "takeover") "From game folder" else it }}: ${if (isOn(state, id)) "on" else "off"}"
             )
             problems(state, id).forEach { appendLine("  ${it.text}") }
         }

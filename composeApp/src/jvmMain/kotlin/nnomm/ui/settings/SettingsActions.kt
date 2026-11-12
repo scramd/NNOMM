@@ -34,7 +34,7 @@ internal fun performSettingAction(model: AppModel, definition: SettingDefinition
     }
     val state = model.store.state.value
     if (model.isDemo && action !in listOf("Licences")) {
-        model.store.toast("This does nothing in the mock.")
+        model.store.toast("This does nothing in demo mode.")
         return
     }
     when (action) {
@@ -91,7 +91,7 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Switch(source in sources, { on ->
                     if (model.isDemo) {
-                        model.store.toast("This does nothing in the mock.")
+                        model.store.toast("This does nothing in demo mode.")
                     } else {
                         val next = if (on) sources + source else sources - source
                         model.store.setSetting("sources", JsonPrimitive(next.joinToString("\n")))
@@ -103,16 +103,16 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 }
                 if (source == nomnom) {
                     val minutes = state.connection.readAtMillis?.let { ((state.nowMillis - it) / 60000).coerceAtLeast(0) }
-                    Label("${state.catalog.count { it.localFile == null }} mods, " + if (minutes == null) "not read yet" else "read $minutes ${if (minutes == 1L) "minute" else "minutes"} ago", color = c.text2)
-                    Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in the mock.") else model.store.refreshRegistry() }, size = ControlSize.Small)
-                } else Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in the mock.") else model.store.refreshRegistry() }, size = ControlSize.Small)
+                    Label("${state.catalog.count { it.localFile == null }} mods, " + if (minutes == null) "not read yet" else "read " + when { minutes == 0L -> "just now"; minutes < 60 -> "$minutes ${if (minutes == 1L) "minute" else "minutes"} ago"; minutes < 1440 -> (minutes / 60).let { "$it ${if (it == 1L) "hour" else "hours"} ago" }; else -> nnomm.core.rules.ago((minutes / 1440).toInt()) }, color = c.text2)
+                    Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in demo mode.") else model.store.refreshRegistry() }, size = ControlSize.Small)
+                } else Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in demo mode.") else model.store.refreshRegistry() }, size = ControlSize.Small)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingField(address, { address = it }, Modifier.weight(1f), "Address of another registry")
             Button("Add", {
                 if (model.isDemo) {
-                    model.store.toast("This does nothing in the mock.")
+                    model.store.toast("This does nothing in demo mode.")
                 } else {
                     val entered = address.trim()
                     if (entered.isNotEmpty() && entered !in sources) {
@@ -133,13 +133,13 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
         Dialog(true, definition.label + "?", model::closeOverlay, initialFocus = focus, footer = {
             Button("Cancel", model::closeOverlay, Modifier.focusRequester(focus), kind = ButtonKind.Ghost)
             Button(definition.actions.first(), {
-                if (model.isDemo) model.store.toast("This does nothing in the mock.")
+                if (model.isDemo) model.store.toast("This does nothing in demo mode.")
                 else if (definition.key == "dzSettings") model.store.resetSettings()
                 else model.store.removeEverything()
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else " Loader files that NNOMM did not install stay in the game folder, including adopted BepInEx core files, winhttp.dll and doorstop_config.ini. Player config, logs, unknown files and recovery copies stay too.")
+            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else " Local and taken-over mods stay in the Library, turned off, with their stored copies kept. Loader files that NNOMM did not install stay in the game folder, including adopted BepInEx core files, winhttp.dll and doorstop_config.ini. Player config, logs, unknown files and recovery copies stay too.")
         }
     }
 }

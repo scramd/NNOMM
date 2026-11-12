@@ -68,6 +68,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             for (operation in diskQueue) {
                 try {
                     operation()
+                    try {
+                        updateStoreUsage()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        io.logger.error("store usage", e)
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -1104,7 +1111,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 }
             }
         }
-        toast("Importing ${pack.name}: ${plural(n,"download","downloads")}")
+        toast(
+            "Importing ${pack.name}" + if (n == 0) "" else ": ${plural(n,"download","downloads")}"
+        )
     }
 
     /** Keep the profile and its versions, but no longer fetch updates for this pack. */
@@ -1471,7 +1480,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         snapshot.catalog
             .filter { it.id in ids }
             .forEach { mod ->
-                listOfNotNull(mod.newestRelease, mod.newerPreRelease)
+                listOfNotNull(mod.newestRelease, mod.newerPreRelease, mod.oldestVersion)
                     .distinctBy { it.version }
                     .forEach { version ->
                         if (
@@ -1596,13 +1605,34 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             toast("Close Nuclear Option before removing mods and the mod loader.")
             return
         }
-        uninstallSilently(state.value.installed.keys.toList())
-        toast("Removed managed mods. Only loader files installed by NNOMM are removed; adopted loader files and your own files stay.")
-        val folder = state.value.game.folder ?: return
+        state.value.installed.keys.forEach(::cancelDownload)
         disk {
-            io.gameFolder.removeLoader(folder)
-            val game = io.gameFolder.inspect(folder)
-            change { it.copy(game = game) }
+            if (io.launcher.running.value || state.value.gameRunning) {
+                toast("Close Nuclear Option before removing mods and the mod loader.")
+                return@disk
+            }
+            val snapshot = state.value
+            val keep =
+                snapshot.installed
+                    .filter { (id, mod) ->
+                        mod.source == ModSource.LOCAL || io.modStore.keepInLibrary(id, mod.versions)
+                    }
+                    .mapValues { (_, mod) ->
+                        mod.copy(profiles = mod.profiles.mapValues { (_, p) -> p.copy(on = false) })
+                    }
+            val remove = snapshot.installed.keys - keep.keys
+            io.modStore.protect(snapshot.installed.keys)
+            io.modStore.remove(remove.toList())
+            change { it.copy(installed = keep) }
+            prepareGameFolder(state.value, modAction = false)
+            state.value.game.folder?.let { folder ->
+                io.gameFolder.removeLoader(folder)
+                val game = io.gameFolder.inspect(folder)
+                change { it.copy(game = game) }
+            }
+            toast(
+                "Removed managed mods from the game. Local and taken-over mods stay in the Library, turned off, with their stored copies kept. Only loader files installed by NNOMM are removed; adopted loader files and your own files stay."
+            )
         }
     }
 
@@ -1613,18 +1643,22 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    fun refreshStoreUsage() {
-        disk {
-            val bytes = io.modStore.usedBytes()
-            val unused = io.modStore.unusedBytes(state.value)
-            change {
-                it.copy(
-                    storeUsedMb = bytes / 1024 / 1024,
-                    storeUsedKb = (bytes + 1023) / 1024,
-                    storeUnusedMb = unused / 1024 / 1024,
-                )
-            }
+    private suspend fun updateStoreUsage() {
+        val snapshot = state.value
+        val bytes = io.modStore.usedBytes()
+        val installed = io.modStore.installedBytes(snapshot)
+        val unused = io.modStore.unusedBytes(snapshot)
+        change {
+            it.copy(
+                storeUsedMb = bytes / 1024 / 1024,
+                storeUsedKb = (installed + 1023) / 1024,
+                storeUnusedMb = unused / 1024 / 1024,
+            )
         }
+    }
+
+    fun refreshStoreUsage() {
+        disk { updateStoreUsage() }
     }
 
     fun moveStore(folder: String) {
@@ -1722,7 +1756,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 )
             }
             checkPackUpdates()
-            if (announce) toast("${updates(state.value).size} mods have an update")
+            if (announce)
+                toast(
+                    updates(state.value).size.let {
+                        if (it == 0) "All mods are up to date"
+                        else plural(it, "mod has an update", "mods have an update")
+                    }
+                )
             if (state.value.setting("onUpdate")?.content == "Update by itself") updateAll()
             try {
                 io.registry.save(mods, now)

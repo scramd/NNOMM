@@ -317,6 +317,11 @@ fun parseAtom(text: String, mod: CatalogMod): List<ReleaseNote> {
                 ?.version ?: return@mapNotNull null
         fun value(name: String) = entry.getElementsByTagName(name).item(0)?.textContent.orEmpty()
         val html = Jsoup.parseBodyFragment(value("content"))
+        html.select("h1,h2,h3,h4,h5,h6").remove()
+        html
+            .select("a")
+            .filter { it.text().startsWith("Full Changelog", true) }
+            .forEach { it.remove() }
         html.select("br").append("\n")
         html.select("p,li,h1,h2,h3,pre").prepend("\n")
         ReleaseNote(

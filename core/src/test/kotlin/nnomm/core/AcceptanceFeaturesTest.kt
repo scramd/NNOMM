@@ -176,7 +176,10 @@ class AcceptanceFeaturesTest {
                 config.writeText("[Logging.Console]\nEnabled = true\n")
                 store.play(withoutMods = true)
                 withTimeout(5000) {
-                    while (!config.readText().contains("Enabled = false")) delay(10)
+                    while (
+                        !runCatching { config.readText().contains("Enabled = false") }
+                            .getOrDefault(false)
+                    ) delay(10)
                 }
             } finally {
                 store.shutdown()

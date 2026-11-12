@@ -227,7 +227,7 @@ class ReviewRegressionTest {
                     CatalogMod("b", "B", tags = listOf("vr", "weapon", "Flavor")),
                 )
             )
-        assertEquals(listOf("vr", "weapon", "Flavor"), mods[1].tags)
+        assertEquals(listOf("VR", "Weapon", "Flavor"), mods[1].tags)
     }
 
     @Test

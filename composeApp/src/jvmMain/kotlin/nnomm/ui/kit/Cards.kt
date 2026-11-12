@@ -12,6 +12,9 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.layout.Layout
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import nnomm.ui.theme.LocalNnTheme
 
 /** Non-interactive glyph, for a parent that owns the single click and Tab stop. */
@@ -110,8 +113,18 @@ fun ModCard(
                 maxLines = if (strip) 1 else 2,
             )
             if (tags.isNotEmpty())
-                Row(Modifier.clipToBounds(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    tags.forEach { Tag(it) }
+                Layout(content = { tags.forEach { Tag(it) } }) { measurables, constraints ->
+                    val chips = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0, maxWidth = androidx.compose.ui.unit.Constraints.Infinity)) }
+                    val gap = 4.dp.roundToPx()
+                    var used = 0
+                    val visible = chips.takeWhile { chip ->
+                        val next = used + (if (used == 0) 0 else gap) + chip.width
+                        (next <= constraints.maxWidth).also { if (it) used = next }
+                    }
+                    layout(used, visible.maxOfOrNull { it.height } ?: 0) {
+                        var x = 0
+                        visible.forEach { it.placeRelative(x, 0); x += it.width + gap }
+                    }
                 }
             why?.let { Label(it, color = c.text3, size = 12f, maxLines = 1) }
             Row(
@@ -151,7 +164,9 @@ fun <T : Any> CardStrip(
     card: @Composable (T) -> Unit,
 ) {
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
-    Box(modifier.fillMaxWidth()) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Box(modifier.fillMaxWidth().hoverable(interaction)) {
         LazyRow(
             Modifier.fillMaxWidth()
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -168,11 +183,11 @@ fun <T : Any> CardStrip(
                 },
             state = scroll,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 6.dp),
+            contentPadding = PaddingValues(bottom = 10.dp),
         ) {
             items(items, key = key) { Box(Modifier.width(244.dp)) { card(it) } }
         }
-        androidx.compose.foundation.HorizontalScrollbar(
+        if (hovered || scroll.isScrollInProgress) androidx.compose.foundation.HorizontalScrollbar(
             androidx.compose.foundation.rememberScrollbarAdapter(scroll),
             Modifier.align(Alignment.BottomStart).fillMaxWidth(),
         )

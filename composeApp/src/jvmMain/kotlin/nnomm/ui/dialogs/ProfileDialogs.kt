@@ -174,7 +174,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                     {
                         scope.launch {
                             if (model.isDemo) {
-                                model.store.toast("This does nothing in the mock.")
+                                model.store.toast("This does nothing in demo mode.")
                                 return@launch
                             }
                             saving = true

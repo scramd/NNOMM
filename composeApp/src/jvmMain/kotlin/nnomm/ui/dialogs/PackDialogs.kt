@@ -96,11 +96,11 @@ class ImportDialog(private val model: AppModel) : Overlay {
             else "Import ${pack.name} ${pack.version}",
             model::closeOverlay,
             wide = true,
-            subtitle = if (!loading && error == null) "Modpack by ${pack.by}, from ${file?.name ?: pack.fileName.orEmpty()}" else null,
+            subtitle = if (!loading && error == null) "Modpack" + pack.by.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty() + ", from ${file?.name ?: pack.fileName.orEmpty()}" else null,
             footer = {
                 Cancel(model)
                 Button(
-                    "Import, $downloads ${if (downloads == 1) "download" else "downloads"}",
+                    if (downloads == 0) "Import" else "Import, $downloads ${if (downloads == 1) "download" else "downloads"}",
                     {
                         scope.launch {
                             importing = true
@@ -245,7 +245,7 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
             "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
             model::closeOverlay,
             wide = true,
-            subtitle = "Modpack by ${p.pack?.by ?: pack.by}",
+            subtitle = "Modpack" + (p.pack?.by ?: pack.by).takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty(),
             leftFooter = { Button("Stop following this pack", {
                 model.store.stopFollowingPack(p.id)
                 model.closeOverlay()

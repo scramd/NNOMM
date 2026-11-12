@@ -299,7 +299,7 @@ fun LibraryPage() {
                     ?.takeIf { it.nextVersion != null }
                     ?.let {
                         Note(
-                            "${s.profile().name} ${it.nextVersion} by ${it.by} is out. You have ${it.version}.",
+                            "${s.profile().name} ${it.nextVersion}${it.by.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty()} is out. You have ${it.version}.",
                             Modifier.padding(horizontal = 18.dp).padding(bottom = 10.dp),
                             icon = NnIcons.box,
                             action = {

@@ -205,7 +205,7 @@ class SecondAcceptanceTest {
         try {
             store.loadMetadata(setOf(mod.id))
             val expected =
-                listOfNotNull(mod.newestRelease, mod.newerPreRelease)
+                listOfNotNull(mod.newestRelease, mod.newerPreRelease, mod.oldestVersion)
                     .filter { it.downloadUrl != null }
                     .map { "${mod.id}/${it.version}" }
                     .toSet()
