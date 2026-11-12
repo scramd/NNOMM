@@ -51,12 +51,30 @@ configure<com.diffplug.gradle.spotless.SpotlessExtension> {
     }
 }
 
-// Exhaustive second-crash/hand-change probe is explicit, keeping unit test runs short.
-tasks.test { exclude("**/LoaderRecoveryMatrixTest*") }
+// Exhaustive interruption runs are explicit; ordinary tests retain focused fault cases.
+val crashTests =
+    listOf(
+        "nnomm.core.LoaderRecoveryMatrixTest.*",
+        "nnomm.core.LoaderOwnershipV2Test.crashMatrixWithHandChanges",
+        "nnomm.core.LoaderOwnershipRegressionTest.crashMatrix",
+        "nnomm.core.LoaderOwnershipRegressionTest.crashesDuringRecoveryReplayPromotionEvidence",
+        "nnomm.core.DoorstopRepairOrderTest.independentEditorMatrix",
+        "nnomm.core.EntryAttackTest.fineGrainedSwapCrashMatrix",
+        "nnomm.core.EntryAttackTest.ioFailureAtSwapSteps",
+        "nnomm.core.LoaderPartialPlacementTest.reviewEveryPerFileCrashKeepsPreexistingPlayerFiles",
+        "nnomm.core.ReviewProbeTest.storePromotionRollsBackAtEveryMutationBoundary",
+        "nnomm.core.ReviewProbeTest.configTransitionRollsBackWithPlugins",
+        "nnomm.core.ReviewProbeTest.interruptedAdoptionIsRepeatableWithoutGameMutation",
+    )
 
-tasks.register<Test>("loaderRecoveryMatrix") {
-    description = "Runs the offline loader recovery interruption and hand-change matrix"
+tasks.test { filter { crashTests.forEach { excludeTestsMatching(it) } } }
+
+tasks.register<Test>("crashTests") {
+    description = "Runs exhaustive disk interruption and recovery matrices"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    include("**/LoaderRecoveryMatrixTest*")
+    filter { crashTests.forEach { includeTestsMatching(it) } }
 }
+
+// Preserve the existing entry point for callers.
+tasks.register("loaderRecoveryMatrix") { dependsOn("crashTests") }

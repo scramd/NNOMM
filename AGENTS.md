@@ -30,6 +30,9 @@ A screen is done when it matches the mock in pictures at 1360 x 860 and at 760 p
 
 ## Build
 
+- Normal tests: `tools/gradlew-locked --no-daemon :core:test :composeApp:jvmTest`.
+- Exhaustive crash runs: `tools/gradlew-locked --no-daemon :core:crashTests` (`:core:loaderRecoveryMatrix` is an alias).
+- Disk tests force writes to disk; a memory-backed `java.io.tmpdir` makes local checks faster.
 - The Gradle toolchain needs JetBrains JDK 25 and downloads it. Gradle itself needs a JDK to start.
 - On the shared development machine, run Gradle only through `tools/gradlew-locked` (it limits parallel builds; memory is tight).
 - Build and tests: `tools/gradlew-locked :core:test :composeApp:jvmJar :composeApp:jvmTest`. Renders of every mock picture: `tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`.
