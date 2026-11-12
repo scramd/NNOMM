@@ -1,4 +1,4 @@
-rootProject.name = "NuclearOptionModManager"
+rootProject.name = "NNOMM"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

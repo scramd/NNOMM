@@ -4,7 +4,6 @@ composeMultiplatform = "1.12.2"
 kotlin = "2.4.20"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.6.1"
-material3 = "1.11.0-alpha07"
 nucleus = "2.5.18"
 kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.8.0"
@@ -12,10 +11,7 @@ kotlinx-datetime = "0.8.0"
 filekit = "0.17.0"
 coil = "3.6.3"
 
-materialKolor = "6.0.0"
-steamworks4j = "1.10.0"
 
-multiplatform-nav3-ui = "1.1.1"
 
 
 [libraries]
@@ -25,7 +21,6 @@ core-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test
 
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
-compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
 kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
@@ -45,10 +40,7 @@ coil = { module = "io.coil-kt.coil3:coil-compose" , version.ref = "coil"}
 coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3" , version.ref = "coil"}
 
 
-materialKolor = { module = "com.materialkolor:material-kolor-material3", version.ref = "materialKolor" }
-steamworks4j = { module = "com.code-disaster.steamworks4j:steamworks4j", version.ref = "steamworks4j" }
 
-jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "multiplatform-nav3-ui" }
 
 
 nucleus-core = { group = "dev.nucleusframework", name = "nucleus.core-runtime", version.ref = "nucleus" }
@@ -62,7 +54,6 @@ nucleus-native-http = { group = "dev.nucleusframework", name = "nucleus.native-h
 nucleus-native-http-ktor = { group = "dev.nucleusframework", name = "nucleus.native-http-ktor", version.ref = "nucleus" }
 
 nucleus-window-tao = { group = "dev.nucleusframework", name = "nucleus.decorated-window-tao", version.ref = "nucleus" }
-nucleus-window-material3 = { group = "dev.nucleusframework", name = "nucleus.decorated-window-material3", version.ref = "nucleus" }
 nucleus-darkmode = { group = "dev.nucleusframework", name = "nucleus.darkmode-detector", version.ref = "nucleus" }
 
 nucleus-taskbar = { group = "dev.nucleusframework", name = "nucleus.taskbar-progress", version.ref = "nucleus" }
