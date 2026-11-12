@@ -70,8 +70,7 @@ fun Menu(
     initialIndex: Int = -1,
 ) {
     if (!expanded) return
-    val locals = currentCompositionLocalMap
-    val app = runCatching { locals[nnomm.ui.LocalApp] }.getOrNull()
+    val app = nnomm.ui.LocalOptionalApp.current
     val dismiss by rememberUpdatedState(onDismiss)
     val registration = remember { { dismiss() } }
     DisposableEffect(app) {

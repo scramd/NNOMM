@@ -303,6 +303,8 @@ class AppModel(
     }
 }
 
+val LocalOptionalApp = staticCompositionLocalOf<AppModel?> { null }
+
 val LocalApp = staticCompositionLocalOf<AppModel> { error("No AppModel provided") }
 
 /**

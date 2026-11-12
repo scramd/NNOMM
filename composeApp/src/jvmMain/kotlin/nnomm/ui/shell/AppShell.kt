@@ -46,6 +46,7 @@ fun AppShell(model: AppModel) {
     LaunchedEffect(model) { rootFocus.requestFocus() }
     CompositionLocalProvider(
         LocalApp provides model,
+        LocalOptionalApp provides model,
         LocalShortcutHandler provides model::shortcut,
     ) {
         val dropTarget =
@@ -109,6 +110,7 @@ fun AppLayers(model: AppModel) {
     val theme = LocalNnTheme.current
     CompositionLocalProvider(
         LocalApp provides model,
+        LocalOptionalApp provides model,
         LocalShortcutHandler provides model::shortcut,
     ) {
         Box(Modifier.fillMaxSize().onKeyEvent(model::shortcut)) {
