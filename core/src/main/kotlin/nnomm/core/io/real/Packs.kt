@@ -39,6 +39,35 @@ class RealPacks(
     private val mods: RealModStore,
     private val client: HttpClient,
 ) : nnomm.core.io.PackSource {
+    private fun localHash(source: Path) =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(treeHash(source).toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    private fun contentPreview(
+        pack: Pack,
+        files: Map<String, String>,
+        settings: SettingsValues?,
+        staging: Path?,
+    ): PackPreview {
+        val identities = files.mapValues { (_, path) -> localHash(Path.of(path)) }
+        return PackPreview(
+            pack.copy(
+                items =
+                    pack.items
+                        .map { item ->
+                            identities[item.id]?.let { hash ->
+                                item.copy(id = "local-$hash", version = hash.take(12))
+                            } ?: item
+                        }
+                        .distinctBy { it.id }
+            ),
+            files.entries.associate { (id, path) -> "local-${identities.getValue(id)}" to path },
+            settings,
+            staging,
+        )
+    }
+
     suspend fun read(path: Path): PackPreview =
         withContext(Dispatchers.IO) {
             if (path.name.endsWith(".nomm.json", true))
@@ -57,7 +86,7 @@ class RealPacks(
                             .associate { item ->
                                 item.id to safe(staging, "mods/${component(item.id)}").toString()
                             }
-                    PackPreview(
+                    contentPreview(
                         document.pack,
                         locals,
                         document.settings?.let(::packSettings),
@@ -83,7 +112,7 @@ class RealPacks(
                     it.toList().associate { p -> "local-" + p.name to p.toString() }
                 }
             else emptyMap()
-        return PackPreview(
+        return contentPreview(
             Pack(
                 name.substringBeforeLast('.'),
                 "",
@@ -134,7 +163,29 @@ class RealPacks(
                                 ?.let { safe(Path.of(it), "BepInEx/config") }
                                 ?.takeIf { it.isDirectory() }
                                 ?: snapshot.takeIf { it.isDirectory() }
-                        config?.let { add(it, "config") }
+                        config?.let { folder ->
+                            val names =
+                                pack.items
+                                    .flatMap { item ->
+                                        val payload =
+                                            item.version?.let { mods.version(item.id, it) }
+                                        if (payload?.isDirectory() == true)
+                                            Files.walk(payload).use { files ->
+                                                files
+                                                    .filter {
+                                                        it.isRegularFile() && it.extension == "cfg"
+                                                    }
+                                                    .map { it.fileName.toString() }
+                                                    .toList()
+                                            }
+                                        else emptyList()
+                                    }
+                                    .toSet()
+                            names.forEach { name ->
+                                val file = safe(folder, name)
+                                if (file.isRegularFile()) add(file, "config/$name")
+                            }
+                        }
                     }
                     pack.items
                         .filter { it.kind == PackKind.LOCAL }
@@ -168,10 +219,11 @@ class RealPacks(
         withContext(Dispatchers.IO) {
             ids.map { id ->
                 val source = Path.of(preview.localFiles[id] ?: error("No local payload for $id"))
-                val localId =
-                    if (id.startsWith("local-")) component(id) else "local-" + component(id)
-                val v = component(preview.pack.version)
-                mods.put(localId, v, nnomm.core.io.DownloadedFile(source.toString()))
+                val hash = localHash(source)
+                val localId = "local-" + hash
+                val v = hash.take(12)
+                if (!mods.hasVersion(localId, v))
+                    mods.put(localId, v, nnomm.core.io.DownloadedFile(source.toString()))
                 CatalogMod(
                     localId,
                     source.name,

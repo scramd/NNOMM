@@ -5,6 +5,7 @@ import java.util.zip.ZipFile
 import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.*
+import kotlinx.serialization.builtins.serializer
 import nnomm.core.io.*
 import nnomm.core.model.*
 import nnomm.core.rules.compareVersions
@@ -26,9 +27,26 @@ internal suspend fun unpack(file: Path, target: Path) {
                 byteArrayOf(0x37, 0x7a, 0xbc.toByte(), 0xaf.toByte(), 0x27, 0x1c)
             ) -> "7z"
             magic.take(2) == listOf(0x4d.toByte(), 0x5a.toByte()) -> "dll"
-            file.extension.lowercase() in setOf("dll", "nobp") -> file.extension.lowercase()
+            file.extension.lowercase() == "nobp" -> file.extension.lowercase()
             else -> error("Unsupported or invalid mod file: ${file.fileName}")
         }
+    if (format == "dll") {
+        val header = Files.newInputStream(file).use { it.readNBytes(64) }
+        require(header.size == 64) { "This DLL is not a PE file." }
+        val offset =
+            java.nio.ByteBuffer.wrap(header, 60, 4)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .int
+                .toLong() and 0xffffffffL
+        require(offset >= 64 && offset + 24 <= Files.size(file)) { "This DLL is not a PE file." }
+        java.nio.channels.FileChannel.open(file).use { channel ->
+            val signature = java.nio.ByteBuffer.allocate(4)
+            channel.read(signature, offset)
+            require(signature.array().contentEquals(byteArrayOf(80, 69, 0, 0))) {
+                "This DLL is not a PE file."
+            }
+        }
+    }
     val aliases = mutableSetOf<String>()
     val pathAliases = mutableMapOf<String, String>()
     fun destination(name: String): Path {
@@ -146,7 +164,7 @@ class RealModStore(
         Path.of(catalogStorePath?.takeIf { it.isNotBlank() } ?: home.resolve("mods").toString())
 
     init {
-        recoverTransactions(home.resolve("transactions"))
+        recoverTransactions(home.resolve("transactions"), homeOnly = true)
     }
 
     private val undoUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -154,6 +172,26 @@ class RealModStore(
     internal fun generation(id: String, version: String) =
         home.resolve("generations/${component(id)}-${component(version)}").let {
             if (it.exists()) it.readText() else ""
+        }
+
+    internal fun hashes(id: String, version: String): Map<String, String> {
+        val file =
+            JsonFile(
+                home.resolve("hashes/${component(id)}/${component(version)}.json"),
+                kotlinx.serialization.builtins.MapSerializer(
+                    String.serializer(),
+                    String.serializer(),
+                ),
+            )
+        return file.read() ?: hashPayload(version(id, version)).also { file.write(it) }
+    }
+
+    private fun hashPayload(path: Path): Map<String, String> =
+        Files.walk(path).use { files ->
+            files
+                .filter { it.isRegularFile() }
+                .toList()
+                .associate { path.relativize(it).toString().replace('\\', '/') to digest(it) }
         }
 
     fun version(id: String, version: String): Path {
@@ -191,6 +229,15 @@ class RealModStore(
                     require(Files.walk(staging).use { it.anyMatch { p -> p.isRegularFile() } }) {
                         "Empty mod payload"
                     }
+                    val hashes =
+                        JsonFile(
+                            home.resolve("hashes/${component(id)}/${component(version)}.json"),
+                            kotlinx.serialization.builtins.MapSerializer(
+                                String.serializer(),
+                                String.serializer(),
+                            ),
+                        )
+                    hashes.write(hashPayload(staging))
                     val stamp = Files.createTempFile(root, "generation-", ".txt")
                     try {
                         stamp.writeText(java.util.UUID.randomUUID().toString())
@@ -212,6 +259,12 @@ class RealModStore(
             }
         }
 
+    override fun protect(ids: Set<String>) {
+        synchronized(undoUntil) {
+            ids.forEach { undoUntil[it] = System.currentTimeMillis() + 9000 }
+        }
+    }
+
     override suspend fun remove(ids: List<String>) =
         withContext(Dispatchers.IO) {
             // Logical removal only. Payloads stay available for Undo and live-game reconciliation.
@@ -222,7 +275,17 @@ class RealModStore(
         }
 
     override suspend fun restore(ids: List<String>) =
-        withContext(Dispatchers.IO) { ids.forEach { component(it) } }
+        withContext(Dispatchers.IO) {
+            ids.forEach { id ->
+                component(id)
+                require(
+                    Files.isDirectory(safe(storeRoot, id)) &&
+                        Files.list(safe(storeRoot, id)).use { it.anyMatch { p -> p.isDirectory() } }
+                ) {
+                    "Stored files are missing for $id."
+                }
+            }
+        }
 
     override suspend fun addLocal(path: String): Pair<CatalogMod, InstalledMod> =
         withContext(Dispatchers.IO) {
@@ -306,7 +369,11 @@ class RealModStore(
                             ?.values
                             ?.map { it.version }
                             ?.toSet()
-                            .orEmpty() + listOfNotNull(m?.defaultVersion)
+                            .orEmpty() +
+                            listOfNotNull(m?.defaultVersion) +
+                            state.downloads
+                                .filter { it.id == dir.name && it.status == DownloadStatus.ACTIVE }
+                                .map { it.version }
                     val versions =
                         Files.list(dir)
                             .use { paths ->
@@ -318,8 +385,7 @@ class RealModStore(
                     val spare =
                         versions.filter {
                             it.name !in referenced &&
-                                (m != null ||
-                                    (undoUntil[dir.name] ?: 0) < System.currentTimeMillis())
+                                ((undoUntil[dir.name] ?: 0) < System.currentTimeMillis())
                         }
                     spare.drop(if (m == null) 0 else keepOld)
                 }
@@ -376,13 +442,22 @@ class RealModStore(
         }
     }
 
-    override suspend fun clearUnused(state: AppState) =
+    override suspend fun clearUnused(state: AppState) = clearUnused { state }
+
+    override suspend fun clearUnused(current: () -> AppState) =
         withContext(Dispatchers.IO) {
+            val state = current()
             require(!state.gameRunning && !gameProcessRunning()) {
                 "Close the game before clearing downloaded files."
             }
             mutex.withLock {
-                unused(state).forEach(::deleteTree)
+                val state = current()
+                unused(state).forEach { path ->
+                    synchronized(undoUntil) {
+                        if ((undoUntil[path.parent.name] ?: 0) < System.currentTimeMillis())
+                            deleteTree(path)
+                    }
+                }
                 // Recompute after retention: a payload just deleted cannot protect recovery.
                 clearableRecovery(state).forEach(::deleteTree)
             }

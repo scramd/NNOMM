@@ -84,7 +84,11 @@ class RealGameLauncher(
         if (!detect()) restoreDoorstop()
         scope.launch {
             while (isActive) {
-                if (!pending) flow.value = detect() || launched?.isAlive == true
+                if (!pending) {
+                    val now = detect() || launched?.isAlive == true
+                    if (flow.value && !now) mutex.withLock { restoreDoorstop() }
+                    flow.value = now
+                }
                 delay(3000)
             }
         }

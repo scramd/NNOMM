@@ -76,8 +76,12 @@ fun problems(s: AppState, id: String): List<Problem> {
         s.artifact(id)
             ?: return if (st.fileMissing)
                 listOf(Problem(ProblemKind.DANGER, "missing", "File missing"))
-            else emptyList()
+            else
+                s.applyProblems[id]
+                    ?.let { listOf(Problem(ProblemKind.WARNING, "placement", it)) }
+                    .orEmpty()
     return buildList {
+        s.applyProblems[id]?.let { add(Problem(ProblemKind.WARNING, "placement", it)) }
         if (st.fileMissing) add(Problem(ProblemKind.DANGER, "missing", "File missing"))
         if (isOn(s, id)) {
             dependencyClosure(s, id, v.version).forEach {

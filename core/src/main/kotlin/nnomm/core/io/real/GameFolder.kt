@@ -19,6 +19,8 @@ internal data class Placement(
     val profileId: String? = null,
     val ownSettings: Boolean = false,
     val generations: Map<String, String> = emptyMap(),
+    val directories: Set<String> = emptySet(),
+    val applied: Boolean = false,
 )
 
 class RealGameFolder(
@@ -30,6 +32,24 @@ class RealGameFolder(
     private val notice: (String) -> Unit = {},
 ) : GameFolder {
     private val mutex = Mutex()
+    private val problemFlow =
+        kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+    override val applyProblems: kotlinx.coroutines.flow.StateFlow<Map<String, String>> = problemFlow
+
+    private fun problem(id: String, text: String) {
+        problemFlow.value = problemFlow.value + (id to text)
+        notice(text)
+    }
+
+    override suspend fun recoverPending() =
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                if (!running()) {
+                    recoverTransactions(home.resolve("transactions"))
+                    recoverTransactions(home.resolve("game-transactions"))
+                }
+            }
+        }
 
     private fun root(folder: String): Path =
         Path.of(folder).toRealPath().also {
@@ -49,7 +69,6 @@ class RealGameFolder(
             if (!Path.of(folder).resolve("NuclearOption.exe").isRegularFile())
                 return@withContext GameInfo(folder = folder, folderMissing = true)
             val game = root(folder)
-            recoverTransactions(home.resolve("transactions"))
             val dll = safe(game, "BepInEx/core/BepInEx.dll")
             val present = dll.isRegularFile()
             val loaderVersion =
@@ -243,10 +262,7 @@ class RealGameFolder(
                         entries,
                         "default",
                         generations =
-                            entries.mapValues { (_, m) ->
-                                treeHash(store.version(m.id, m.version)) +
-                                    store.generation(m.id, m.version)
-                            },
+                            entries.mapValues { (_, m) -> "|" + store.generation(m.id, m.version) },
                     ),
                 )
                 found
@@ -279,189 +295,332 @@ class RealGameFolder(
             mutex.withLock {
                 if (running()) return@withLock
                 val game = root(plan.folder ?: return@withLock)
+                recoverTransactions(home.resolve("game-transactions"))
                 recoverTransactions(home.resolve("transactions"))
                 val plugin = safe(game, "BepInEx/plugins")
                 val recorded = record(game).read()
                 val old = recorded ?: adoption(game).read() ?: Placement()
                 // A fresh home cannot use an old ownership record as permission to remove files.
-                if (
-                    adoption(game).read() == null &&
-                        !home.resolve("state.json").exists() &&
-                        old.entries.values.any { it.id !in plan.knownIds }
-                ) {
+                if (adoption(game).read() == null && recorded != null) {
                     notice(
                         "Existing mods need takeover before changes can be applied. They were left unchanged."
                     )
                     return@withLock
                 }
+                if (recorded == null && adoption(game).read() != null && old.applied) {
+                    notice("Ownership is missing. Take over existing mods before applying changes.")
+                    return@withLock
+                }
+                if (adoption(game).read() == null) saveAdoption(game, old)
                 val names =
                     adoption(game).read()?.entries.orEmpty().entries.associate {
                         it.value.id to it.key
                     } + old.entries.entries.associate { it.value.id to it.key }
-                fun placement(id: String, version: String): String {
-                    names[id]?.let {
-                        return it
-                    }
-                    val parent =
-                        catalog()
-                            .find { it.id == id }
-                            ?.versions
-                            ?.find { it.version == version }
-                            ?.extends
-                            ?.id
-                    return if (parent != null)
-                        "${names[parent] ?: component(parent)}/addons/${component(id)}"
-                    else component(id)
-                }
-                val wanted = linkedMapOf<String, ManagedMod>()
-                plan.versions.forEach { (id, v) ->
-                    val name = placement(id, v)
-                    var alias = false
-                    var parent = plugin
-                    name.split('/').forEach { part ->
-                        if (parent.isDirectory())
-                            Files.list(parent).use { paths ->
-                                if (
-                                    paths.anyMatch { it.name != part && it.name.equals(part, true) }
+                fun parent(id: String, v: String) =
+                    catalog().find { it.id == id }?.versions?.find { it.version == v }?.extends?.id
+                fun placement(id: String, v: String): String =
+                    names[id]
+                        ?: parent(id, v)?.let {
+                            "${names[it] ?: component(it)}/addons/${component(id)}"
+                        }
+                        ?: component(id)
+                val wanted =
+                    plan.versions
+                        .map { (id, v) ->
+                            placement(id, v) to
+                                ManagedMod(
+                                    id,
+                                    v,
+                                    (old.entries.values.find { it.id == id }
+                                            ?: adoption(game).read()?.entries?.values?.find {
+                                                it.id == id
+                                            })
+                                        ?.loose ?: false,
                                 )
-                                    alias = true
-                            }
-                        parent = parent.resolve(part)
-                    }
-                    if (
-                        alias ||
-                            wanted.keys.any { it.equals(name, true) } ||
-                            (safe(plugin, name).exists() && name !in old.entries)
-                    ) {
-                        notice(
-                            "$id could not be placed because $name is already in use. Other mods can still change."
-                        )
-                    } else if (!store.version(id, v).isDirectory())
-                        notice("Stored files are missing for $id.")
-                    else
-                        wanted[name] =
-                            ManagedMod(
-                                id,
-                                v,
-                                (old.entries[name] ?: adoption(game).read()?.entries?.get(name))
-                                    ?.loose ?: false,
-                            )
-                }
-                val generations =
-                    wanted.mapValues { (_, m) ->
-                        treeHash(store.version(m.id, m.version)) + store.generation(m.id, m.version)
-                    }
-                if (
-                    recorded == null &&
-                        wanted == old.entries &&
-                        generations == old.generations &&
-                        plan.profileId == "default" &&
-                        !plan.ownSettings
-                )
-                    return@withLock
-                if (
-                    wanted == old.entries &&
-                        generations == old.generations &&
-                        old.profileId == plan.profileId &&
-                        old.ownSettings == plan.ownSettings
-                )
-                    return@withLock
-                Files.createDirectories(home.resolve("staging"))
-                val stagedGame = Files.createTempDirectory(home.resolve("staging"), "apply-")
-                val staged = stagedGame.resolve("BepInEx/plugins")
-                try {
-                    if (game.resolve("BepInEx").exists())
-                        copyTree(game.resolve("BepInEx"), stagedGame.resolve("BepInEx"))
-                    Files.createDirectories(staged)
-                    // Capture changes per mod and profile; recovery never supplies a different
-                    // profile's files.
-                    for ((name, m) in old.entries) {
-                        val dest = safe(staged, name)
-                        if (!dest.exists()) continue
+                        }
+                        .toMap()
+                val result = old.entries.toMutableMap()
+                val directories = old.directories.toMutableSet()
+                val generations = old.generations.toMutableMap()
+                val directChanges =
+                    (old.entries.keys + wanted.keys)
+                        .filter { name ->
+                            val m = wanted[name]
+                            m != old.entries[name] ||
+                                (m != null && !store.version(m.id, m.version).isDirectory()) ||
+                                (m != null &&
+                                    store.generation(m.id, m.version) !=
+                                        old.generations[name]?.substringAfterLast('|'))
+                        }
+                        .toSet()
+                val changed =
+                    (directChanges +
+                            (old.entries.keys + wanted.keys).filter { name ->
+                                directChanges.any { name.startsWith("$it/") }
+                            })
+                        .toSet()
+                fun extras(m: ManagedMod, profile: String) =
+                    home.resolve("player-files/${component(profile)}/${component(m.id)}")
+                // Snapshot deepest entries first, before a parent can move its children.
+                val captured = mutableMapOf<String, Path>()
+                for (name in changed.sortedByDescending { it.count { c -> c == '/' } }) {
+                    val m = old.entries[name] ?: continue
+                    try {
+                        val dest = safe(plugin, name)
+                        if (!dest.exists()) {
+                            captured[name] =
+                                home.resolve("staging/absent-${java.util.UUID.randomUUID()}")
+                            continue
+                        }
                         val payload = store.version(m.id, m.version)
-                        val extras =
-                            home.resolve(
-                                "player-files/${component(old.profileId ?: "default")}/${component(m.id)}"
-                            )
+                        val kept = extras(m, old.profileId ?: "default")
+                        val snapshot = home.resolve("staging/player-${java.util.UUID.randomUUID()}")
+                        Files.createDirectories(snapshot)
                         if (dest.isDirectory())
                             Files.walk(dest).use { files ->
                                 files
                                     .filter { it.isRegularFile() }
-                                    .toList()
                                     .forEach { file ->
-                                        val relative =
+                                        val rel =
                                             dest.relativize(file).toString().replace('\\', '/')
-                                        val original = safe(payload, relative)
-                                        val placedPath = "$name/$relative"
-                                        val ownedByChild =
-                                            old.entries.keys.any { child ->
-                                                child != name &&
-                                                    child.startsWith("$name/") &&
-                                                    (placedPath == child ||
-                                                        placedPath.startsWith("$child/"))
+                                        if (
+                                            old.entries.keys.none {
+                                                it != name &&
+                                                    it.startsWith("$name/") &&
+                                                    ("$name/$rel" == it ||
+                                                        "$name/$rel".startsWith("$it/"))
                                             }
-                                        if (!original.isRegularFile() && !ownedByChild) {
-                                            val saved = safe(extras, relative)
-                                            replaceTree(saved, file, home.resolve("transactions"))
-                                            notice(
-                                                "Kept files for ${m.id} in $extras. They return with this profile."
+                                        ) {
+                                            val originalHash = store.hashes(m.id, m.version)[rel]
+                                            if (
+                                                originalHash == null || originalHash != digest(file)
                                             )
+                                                copyTree(file, safe(snapshot, rel))
                                         }
                                     }
                             }
-                        deleteTree(dest)
-                    }
-                    for ((name, m) in
-                        wanted.toSortedMap(
-                            compareBy<String> { it.count { c -> c == '/' } }.thenBy { it }
-                        )) {
-                        val dest = safe(staged, name)
-                        val payload = store.version(m.id, m.version)
-                        if (dest.exists()) deleteTree(dest)
-                        // A taken-over loose file stays a loose file.
-                        if (m.loose && payload.resolve(name).isRegularFile())
-                            copyTree(payload.resolve(name), dest)
-                        else copyTree(payload, dest)
-                        val extras =
-                            home.resolve(
-                                "player-files/${component(plan.profileId)}/${component(m.id)}"
+                        // The saved set mirrors the last removal, including player deletions.
+                        replaceTree(kept, snapshot, home.resolve("transactions"))
+                        captured[name] = snapshot
+                        if (Files.walk(snapshot).use { it.anyMatch { p -> p.isRegularFile() } })
+                            notice(
+                                "Kept changed files for ${m.id} in $kept. They return with this profile."
                             )
-                        if (extras.exists() && dest.isDirectory())
-                            Files.walk(extras).use { files ->
+                    } catch (e: Exception) {
+                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                    }
+                }
+                // Removals first, deepest first. Missing wanted payloads never authorize removal.
+                for (name in changed.sortedByDescending { it.count { c -> c == '/' } }) {
+                    if (name in wanted) continue
+                    val m = old.entries[name] ?: continue
+                    try {
+                        require(
+                            name in captured &&
+                                old.entries.keys
+                                    .filter { it.startsWith("$name/") }
+                                    .all { it in captured }
+                        ) {
+                            "Could not keep player files"
+                        }
+                        replaceTree(
+                            safe(plugin, name),
+                            null,
+                            home.resolve("game-transactions"),
+                            keepPrevious = false,
+                            afterCommit =
+                                record(game).path to
+                                    json.encodeToString(
+                                        Placement(
+                                            result - name,
+                                            plan.profileId,
+                                            plan.ownSettings,
+                                            generations - name,
+                                            directories,
+                                            applied = true,
+                                        )
+                                    ),
+                        )
+                        result.remove(name)
+                        generations.remove(name)
+                    } catch (e: Exception) {
+                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                    }
+                }
+                for (name in
+                    changed.filter { it in wanted }.sortedBy { it.count { c -> c == '/' } }) {
+                    val m = wanted.getValue(name)
+                    try {
+                        val payload = store.version(m.id, m.version)
+                        require(payload.isDirectory()) { "Stored files are missing" }
+                        val parentId = parent(m.id, m.version)
+                        require(parentId == null || result.values.any { it.id == parentId }) {
+                            "Its parent must be placed first"
+                        }
+                        val dest = safe(plugin, name)
+                        require(dest.toString().length < 240) { "Game path is too long" }
+                        var at = plugin
+                        name.split('/').forEach { part ->
+                            if (at.isDirectory())
+                                Files.list(at).use { paths ->
+                                    require(
+                                        paths.noneMatch {
+                                            it.name != part && it.name.equals(part, true)
+                                        }
+                                    ) {
+                                        "$name is already in use"
+                                    }
+                                }
+                            at = at.resolve(part)
+                        }
+                        require(!dest.exists() || name in old.entries) { "$name is already in use" }
+                        require(
+                            name !in old.entries ||
+                                (name in captured &&
+                                    old.entries.keys
+                                        .filter { it.startsWith("$name/") }
+                                        .all { it in captured })
+                        ) {
+                            "Could not keep player files"
+                        }
+                        Files.createDirectories(home.resolve("staging"))
+                        val stage = Files.createTempDirectory(home.resolve("staging"), "entry-")
+                        try {
+                            val next = stage.resolve("entry")
+                            if (m.loose && payload.resolve(Path.of(name).fileName).isRegularFile())
+                                copyTree(payload.resolve(Path.of(name).fileName), next)
+                            else copyTree(payload, next)
+                            val kept = extras(m, plan.profileId)
+                            if (next.isDirectory() && kept.isDirectory())
+                                Files.walk(kept).use { files ->
+                                    files
+                                        .filter { it.isRegularFile() }
+                                        .forEach { file ->
+                                            val to =
+                                                safe(
+                                                    next,
+                                                    kept
+                                                        .relativize(file)
+                                                        .toString()
+                                                        .replace('\\', '/'),
+                                                )
+                                            if (!to.exists()) copyTree(file, to)
+                                        }
+                                }
+                            // Validate actual game paths, not long temporary path prefixes.
+                            if (next.isDirectory())
+                                Files.walk(next).use { files ->
+                                    files
+                                        .filter { it.isRegularFile() }
+                                        .forEach {
+                                            require(
+                                                safe(
+                                                        dest,
+                                                        next
+                                                            .relativize(it)
+                                                            .toString()
+                                                            .replace('\\', '/'),
+                                                    )
+                                                    .toString()
+                                                    .length < 240
+                                            ) {
+                                                "Game path is too long"
+                                            }
+                                        }
+                                }
+                            var ancestor = dest.parent
+                            while (ancestor != plugin && ancestor.startsWith(plugin)) {
+                                if (!ancestor.exists())
+                                    directories +=
+                                        plugin.relativize(ancestor).toString().replace('\\', '/')
+                                ancestor = ancestor.parent
+                            }
+                            replaceTree(
+                                dest,
+                                next,
+                                home.resolve("game-transactions"),
+                                keepPrevious = false,
+                                afterCommit =
+                                    record(game).path to
+                                        json.encodeToString(
+                                            Placement(
+                                                result + (name to m),
+                                                plan.profileId,
+                                                plan.ownSettings,
+                                                generations +
+                                                    (name to
+                                                        ("|" + store.generation(m.id, m.version))),
+                                                directories,
+                                                applied = true,
+                                            )
+                                        ),
+                            )
+                            problemFlow.value = problemFlow.value - m.id
+                            result[name] = m
+                            generations[name] = "|" + store.generation(m.id, m.version)
+                        } finally {
+                            deleteTree(stage)
+                        }
+                    } catch (e: Exception) {
+                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                    }
+                }
+                captured.values.forEach(::deleteTree)
+                val recovery = home.resolve("recovery")
+                if (recovery.isDirectory()) {
+                    val copies =
+                        Files.list(recovery)
+                            .use {
+                                it.filter { p -> p.isDirectory() }
+                                    .toList()
+                                    .sortedBy { p -> p.getLastModifiedTime().toMillis() }
+                            }
+                            .toMutableList()
+                    fun bytes() =
+                        copies.sumOf { p ->
+                            Files.walk(p).use { files ->
                                 files
                                     .filter { it.isRegularFile() }
-                                    .toList()
-                                    .forEach { file ->
-                                        val to =
-                                            safe(
-                                                dest,
-                                                extras
-                                                    .relativize(file)
-                                                    .toString()
-                                                    .replace('\\', '/'),
-                                            )
-                                        if (to.exists()) Files.delete(to)
-                                        copyTree(file, to)
-                                    }
+                                    .mapToLong { it.fileSize() }
+                                    .sum()
                             }
+                        }
+                    while (copies.size > 100 || bytes() > 256L * 1024 * 1024) {
+                        val oldest = copies.removeAt(0)
+                        notice(
+                            "Recovery storage is full. Removing the oldest copy at $oldest. Current player files remain in player-files."
+                        )
+                        deleteTree(oldest)
+                        Files.deleteIfExists(recovery.resolve("${oldest.name}.json"))
                     }
-                    swapConfig(stagedGame, old, plan.ownSettings, plan.profileId)
-                    JsonFile(staged.resolve(".nnomm-state.json"), Placement.serializer())
-                        .write(Placement(wanted, plan.profileId, plan.ownSettings, generations))
-                    replaceTree(
-                        game.resolve("BepInEx"),
-                        stagedGame.resolve("BepInEx"),
-                        home.resolve("transactions"),
+                }
+                swapConfig(game, old, plan.ownSettings, plan.profileId)
+                directories
+                    .sortedByDescending { it.count { c -> c == '/' } }
+                    .forEach { name ->
+                        val dir = safe(plugin, name)
+                        if (dir.isDirectory() && Files.list(dir).use { !it.findAny().isPresent }) {
+                            Files.delete(dir)
+                            directories.remove(name)
+                        }
+                    }
+                val updated =
+                    Placement(
+                        result,
+                        plan.profileId,
+                        plan.ownSettings,
+                        generations,
+                        directories,
+                        applied = true,
                     )
+                if (updated != old) {
+                    record(game).write(updated)
                     saveAdoption(
                         game,
-                        Placement(
-                            (adoption(game).read()?.entries.orEmpty() + wanted),
-                            plan.profileId,
+                        updated.copy(
+                            entries = adoption(game).read()?.entries.orEmpty() + updated.entries
                         ),
                     )
-                } finally {
-                    deleteTree(stagedGame)
                 }
             }
         }
@@ -514,8 +673,14 @@ class RealGameFolder(
                 require(!running()) { "Close Nuclear Option before changing the mod loader." }
                 val game = root(folder)
                 val existingVersion = inspect(folder).loaderVersion
-                require(!repair || existingVersion == null || existingVersion == "5.4.23.4") {
-                    "This folder has BepInEx $existingVersion. Its files were left unchanged."
+                if (repair && existingVersion != "5.4.23.4") {
+                    val message =
+                        if (existingVersion == null)
+                            "The installed BepInEx version could not be identified. Its files were left unchanged."
+                        else
+                            "This folder has BepInEx $existingVersion. Its files were left unchanged."
+                    notice(message)
+                    error(message)
                 }
                 val v =
                     ModVersion(

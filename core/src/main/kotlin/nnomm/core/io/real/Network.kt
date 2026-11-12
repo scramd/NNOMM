@@ -27,6 +27,32 @@ fun networkClient(version: String) =
     HttpClient(OkHttp) {
         expectSuccess = true
         followRedirects = true
+        engine {
+            config {
+                followRedirects(false)
+                followSslRedirects(false)
+                addInterceptor { chain ->
+                    try {
+                        checkedUrl(chain.request().url.toString())
+                    } catch (e: IllegalArgumentException) {
+                        throw java.io.IOException(e.message, e)
+                    }
+                    val response = chain.proceed(chain.request())
+                    response.header("Location")?.let { location ->
+                        try {
+                            checkedUrl(
+                                response.request.url.resolve(location)?.toString()
+                                    ?: error("Invalid redirect")
+                            )
+                        } catch (e: IllegalArgumentException) {
+                            response.close()
+                            throw java.io.IOException(e.message, e)
+                        }
+                    }
+                    response
+                }
+            }
+        }
         install(UserAgent) { agent = "NNOMM/$version" }
         install(HttpTimeout) {
             requestTimeoutMillis = 120_000
@@ -45,6 +71,9 @@ class RealRegistry(
 ) : Registry {
     private val file = JsonFile(home.resolve("registry.json"), SavedRegistry.serializer(), notice)
 
+    private val official =
+        JsonFile(home.resolve("official-registry.json"), SavedRegistry.serializer(), notice)
+
     override suspend fun read(): List<CatalogMod> =
         withContext(Dispatchers.IO) {
             val urls = addresses()
@@ -54,12 +83,15 @@ class RealRegistry(
                     .sortedBy { if (it == DEFAULT_REGISTRY) 0 else 1 }
                     .mapNotNull { url ->
                         try {
-                            decodeRegistry(client.get(checkedUrl(url)).boundedText())
+                            decodeRegistry(client.get(checkedUrl(url)).boundedText()).also {
+                                if (url == DEFAULT_REGISTRY)
+                                    official.write(SavedRegistry(it, System.currentTimeMillis()))
+                            }
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             notice("Could not load registry $url; other sources remain available.")
-                            null
+                            if (url == DEFAULT_REGISTRY) official.read()?.mods else null
                         }
                     }
             require(loaded.isNotEmpty()) { "No registry source could be loaded" }
@@ -112,7 +144,12 @@ fun decodeRegistry(text: String): List<CatalogMod> =
             .getOrNull()
     }
 
-@Serializable private data class CachedMeta(val sizeKb: Long? = null, val dateMillis: Long? = null)
+@Serializable
+private data class CachedMeta(
+    val sizeKb: Long? = null,
+    val dateMillis: Long? = null,
+    val retryAfter: Long = 0,
+)
 
 class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
     private val file =
@@ -132,6 +169,9 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
                 .withLock {
                     mutex
                         .withLock { file.read().orEmpty()[key] }
+                        ?.takeIf {
+                            it.retryAfter == 0L || System.currentTimeMillis() < it.retryAfter
+                        }
                         ?.let {
                             return@withLock VersionMetadata(it.sizeKb, it.dateMillis)
                         }
@@ -160,7 +200,7 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (_: Exception) {
-                            CachedMeta()
+                            CachedMeta(retryAfter = System.currentTimeMillis() + 300_000)
                         }
                     mutex.withLock { file.write(file.read().orEmpty() + (key to value)) }
                     VersionMetadata(value.sizeKb, value.dateMillis)
@@ -260,10 +300,10 @@ class RealDownloader(private val client: HttpClient, private val home: Path) : D
             val dir = Files.createTempDirectory(staging, "download-")
             val url = requireNotNull(version.downloadUrl)
             val name =
-                version.fileName
+                version.fileName?.trim()
                     ?: java.net.URI(url).path.substringAfterLast('/').trim().ifEmpty { "download" }
-            val path = safe(dir, name)
             try {
+                val path = safe(dir, name)
                 var lastPercent = -1
                 retryTransfer {
                     client
@@ -342,7 +382,7 @@ private suspend fun retryTransfer(block: suspend () -> Unit) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (attempt == 2) throw e
+            if (e is ClientRequestException || attempt == 2) throw e
             delay(250L * (attempt + 1))
         }
     }

@@ -18,10 +18,7 @@ import nnomm.ui.theme.*
 
 internal suspend fun <T> withPackIo(state: AppState, block: suspend (RealPacks) -> T): T =
     withContext(Dispatchers.IO) {
-        val home = nnomm.app.settingsDirectory().toPath()
-        HttpClient().use { client ->
-            block(RealPacks(home, RealModStore(home) { state.catalog }, client))
-        }
+        block(requireNotNull(state.packSource as? RealPacks) { "Pack files are unavailable in demo mode." })
     }
 
 class ImportDialog(private val model: AppModel) : Overlay {

@@ -49,7 +49,11 @@ interface ModStore {
 
     suspend fun addLocal(path: String): Pair<CatalogMod, InstalledMod>
 
+    fun protect(ids: Set<String>) {}
+
     suspend fun clearUnused(state: AppState) {}
+
+    suspend fun clearUnused(current: () -> AppState) = clearUnused(current())
 
     suspend fun unusedBytes(state: AppState): Long = 0
 
@@ -62,6 +66,11 @@ interface ModStore {
 
 /** Only managed files can be changed; takeover copies existing files without changing the game. */
 interface GameFolder {
+    val applyProblems: StateFlow<Map<String, String>>?
+        get() = null
+
+    suspend fun recoverPending() {}
+
     suspend fun find(settings: SettingsValues): String? = null
 
     suspend fun inspect(folder: String): GameInfo

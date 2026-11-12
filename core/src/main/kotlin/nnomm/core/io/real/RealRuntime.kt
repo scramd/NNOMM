@@ -37,7 +37,7 @@ private constructor(
         ): RealRuntime =
             withContext(Dispatchers.IO) {
                 Files.createDirectories(home)
-                recoverTransactions(home.resolve("transactions"))
+                recoverTransactions(home.resolve("transactions"), homeOnly = true)
                 val persistence = RealPersistence(home, notice)
                 val initial =
                     persistence.load()
@@ -101,9 +101,18 @@ private constructor(
                     initial.settings.general["gamePath"]?.content?.takeIf { it.isNotBlank() }
                         ?: initial.game.folder
                         ?: findGameFolder(initial.settings)
+                if (launcher.running.value)
+                    notice(
+                        "Close Nuclear Option to recover pending changes and take over existing mods."
+                    )
+                else {
+                    recoverTransactions(home.resolve("transactions"))
+                    recoverTransactions(home.resolve("game-transactions"))
+                }
                 val adopted =
                     if (
-                        initial.firstStart.complete &&
+                        !launcher.running.value &&
+                            initial.firstStart.complete &&
                             initial.installed.isEmpty() &&
                             folder != null &&
                             Path.of(folder).resolve("NuclearOption.exe").isRegularFile()
@@ -128,6 +137,7 @@ private constructor(
                         appVersion = version,
                         nowMillis = System.currentTimeMillis(),
                         gameRunning = launcher.running.value,
+                        gameIoPending = launcher.running.value,
                     )
                 if (System.getProperty("os.name").startsWith("Linux") && loaded.game.loaderPresent)
                     notice(

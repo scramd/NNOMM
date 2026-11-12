@@ -247,6 +247,8 @@ data class AppState(
     val toasts: List<Toast> = emptyList(),
     val gameRunning: Boolean = false,
     val gameStarting: Boolean = false,
+    val gameIoPending: Boolean = false,
+    val applyProblems: Map<String, String> = emptyMap(),
     val releaseNotes: Map<String, List<ReleaseNote>> = emptyMap(),
     val notesStatus: Map<String, LoadStatus> = emptyMap(),
     val metadataStatus: Map<String, LoadStatus> = emptyMap(),
@@ -256,6 +258,7 @@ data class AppState(
     val nowMillis: Long = 0,
     val appVersion: String = "0.1.0",
     val storeUsedMb: Long = 0,
+    val packSource: nnomm.core.io.PackSource? = null,
 ) {
     private val index by lazy { catalog.associateBy { it.id } }
     val reverseIncompatibilities by lazy {
