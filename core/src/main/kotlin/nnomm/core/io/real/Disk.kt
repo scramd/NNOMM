@@ -48,7 +48,6 @@ internal fun safe(root: Path, name: String): Path {
     val result = base.resolve(name).normalize()
     require(result.startsWith(base) && result != base) { "Path leaves its folder: $name" }
     name.split('/').filter { it.isNotEmpty() }.forEach(::component)
-    require(result.toString().length < 240) { "Path is too long: $name" }
     var at: Path? = result
     while (at != null && at != base) {
         require(!Files.isSymbolicLink(at)) { "Symbolic links are not managed: $at" }
@@ -242,16 +241,23 @@ internal fun forceDirectory(path: Path) {
     runCatching { FileChannel.open(path, StandardOpenOption.READ).use { it.force(true) } }
 }
 
-/** One journal per target. Recovery always rolls back an uncommitted promotion. */
+/** Promotion is the commit point; recovery preserves targets written after promotion. */
 @Serializable
 internal data class DiskTransaction(
     val target: String,
     val staged: String?,
     val previous: String,
     val existed: Boolean,
+    val gameTarget: Boolean = false,
+    val phase: String = "prepared",
 )
 
-@Serializable internal data class TransactionBatch(val changes: List<DiskTransaction>)
+@Serializable
+internal data class TransactionBatch(
+    val changes: List<DiskTransaction>,
+    val commitPath: String? = null,
+    val commitText: String? = null,
+)
 
 internal class DiskCrash : Error("Simulated process interruption")
 
@@ -259,8 +265,15 @@ internal object DiskFaults {
     var step: (String) -> Unit = {}
 }
 
+private fun isGameTarget(path: Path): Boolean =
+    generateSequence(path.toAbsolutePath()) { it.parent }
+        .any {
+            it.fileName?.toString().equals("BepInEx", true) ||
+                it.resolve("NuclearOption.exe").isRegularFile()
+        }
+
 @Synchronized
-internal fun recoverTransactions(folder: Path) {
+internal fun recoverTransactions(folder: Path, homeOnly: Boolean = false) {
     if (!folder.exists()) return
     Files.list(folder).use { paths ->
         paths
@@ -268,34 +281,89 @@ internal fun recoverTransactions(folder: Path) {
             .toList()
             .forEach { journal ->
                 val batch = json.decodeFromString<TransactionBatch>(journal.readText())
+                if (
+                    homeOnly &&
+                        batch.changes.any { it.gameTarget || isGameTarget(Path.of(it.target)) }
+                )
+                    return@forEach
+                val promotedBatch =
+                    batch.changes.any {
+                        it.phase == "promoted" ||
+                            (it.staged != null &&
+                                !Path.of(it.staged).exists() &&
+                                Path.of(it.target).exists())
+                    }
                 batch.changes.asReversed().forEach { tx ->
                     val target = Path.of(tx.target)
                     val previous = Path.of(tx.previous)
-                    if (previous.exists()) {
-                        if (target.exists()) deleteTree(target)
+                    require(
+                        !tx.existed ||
+                            target.exists() ||
+                            previous.exists() ||
+                            tx.staged?.let { Path.of(it).exists() } == true
+                    ) {
+                        "Transaction storage is unavailable; journal kept at $journal"
+                    }
+                    val promoted =
+                        tx.phase == "promoted" ||
+                            (tx.staged != null && !Path.of(tx.staged).exists() && target.exists())
+                    if (promoted) {
+                        // Promotion is the commit point. Keep later game writes in place.
+                        if (previous.exists()) {
+                            val kept =
+                                folder.parent.resolve(
+                                    "recovery/recovered-${journal.name}/${previous.name}"
+                                )
+                            Files.createDirectories(kept.parent)
+                            Files.move(previous, kept)
+                        }
+                    } else if (previous.exists()) {
+                        if (target.exists()) {
+                            val kept =
+                                folder.parent.resolve(
+                                    "recovery/displaced-${journal.name}/${target.name}"
+                                )
+                            Files.createDirectories(kept.parent)
+                            Files.move(target, kept)
+                        }
                         Files.createDirectories(target.parent)
                         Files.move(previous, target)
-                    } else if (
-                        !tx.existed &&
-                            tx.staged != null &&
-                            !Path.of(tx.staged).exists() &&
-                            target.exists()
-                    )
-                        deleteTree(target)
+                    }
                     tx.staged?.let { deleteTree(Path.of(it)) }
+                    if (
+                        previous.parent.isDirectory() &&
+                            Files.list(previous.parent).use { !it.findAny().isPresent }
+                    )
+                        Files.delete(previous.parent)
                 }
+                if (promotedBatch && batch.commitPath != null && batch.commitText != null)
+                    atomic(Path.of(batch.commitPath), batch.commitText)
                 Files.delete(journal)
             }
     }
 }
 
-internal fun replaceTree(target: Path, source: Path?, journals: Path) {
-    if (source != null && target.exists() && treeHash(target) == treeHash(source)) return
-    replaceTrees(listOf(target to source), journals)
+internal fun replaceTree(
+    target: Path,
+    source: Path?,
+    journals: Path,
+    keepPrevious: Boolean = true,
+    afterCommit: Pair<Path, String>? = null,
+) {
+    if (source != null && target.exists() && treeHash(target) == treeHash(source)) {
+        afterCommit?.let { atomic(it.first, it.second) }
+        return
+    }
+    replaceTrees(listOf(target to source), journals, keepPrevious, afterCommit)
 }
 
 @Synchronized
-internal fun replaceTrees(changes: List<Pair<Path, Path?>>, journals: Path) {
+internal fun replaceTrees(
+    changes: List<Pair<Path, Path?>>,
+    journals: Path,
+    keepPrevious: Boolean = true,
+    afterCommit: Pair<Path, String>? = null,
+) {
     Files.createDirectories(journals)
     val id = java.util.UUID.randomUUID().toString()
     val prepared = mutableListOf<DiskTransaction>()
@@ -303,7 +371,10 @@ internal fun replaceTrees(changes: List<Pair<Path, Path?>>, journals: Path) {
     try {
         changes.forEachIndexed { index, (target, source) ->
             Files.createDirectories(target.parent)
-            val stagingRoot = target.parent.resolve(".nnomm-staging")
+            val bepinex =
+                generateSequence(target.parent) { it.parent }
+                    .firstOrNull { it.fileName?.toString() == "BepInEx" }
+            val stagingRoot = (bepinex?.parent ?: target.parent).resolve(".nnomm-staging")
             Files.createDirectories(stagingRoot)
             val staged =
                 source?.let {
@@ -315,22 +386,43 @@ internal fun replaceTrees(changes: List<Pair<Path, Path?>>, journals: Path) {
                     staged?.toString(),
                     stagingRoot.resolve("old-$id-$index").toString(),
                     target.exists(),
+                    gameTarget = isGameTarget(target),
                 )
         }
-        atomic(journal, json.encodeToString(TransactionBatch(prepared)))
+        atomic(
+            journal,
+            json.encodeToString(
+                TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+            ),
+        )
         DiskFaults.step("prepared")
-        prepared.forEach { tx ->
+        prepared.toList().forEachIndexed { index, tx ->
             val target = Path.of(tx.target)
             val previous = Path.of(tx.previous)
             if (target.exists()) Files.move(target, previous)
+            prepared[index] = tx.copy(phase = "old-moved")
+            atomic(
+                journal,
+                json.encodeToString(
+                    TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                ),
+            )
             DiskFaults.step("old-moved")
             tx.staged?.let { Files.move(Path.of(it), target) }
             forceDirectory(target.parent)
+            prepared[index] = tx.copy(phase = "promoted")
+            atomic(
+                journal,
+                json.encodeToString(
+                    TransactionBatch(prepared, afterCommit?.first?.toString(), afterCommit?.second)
+                ),
+            )
             DiskFaults.step("promoted")
         }
+        afterCommit?.let { atomic(it.first, it.second) }
         prepared.forEachIndexed { index, tx ->
             val previous = Path.of(tx.previous)
-            if (previous.exists()) {
+            if (keepPrevious && previous.exists()) {
                 val recovery =
                     journals.parent.resolve("recovery/$id/$index/${Path.of(tx.target).fileName}")
                 copyTree(previous, recovery)
@@ -348,7 +440,15 @@ internal fun replaceTrees(changes: List<Pair<Path, Path?>>, journals: Path) {
         )
         Files.delete(journal)
         forceDirectory(journals)
-        prepared.forEach { deleteTree(Path.of(it.previous)) }
+        prepared.forEach {
+            val previous = Path.of(it.previous)
+            deleteTree(previous)
+            if (
+                previous.parent.isDirectory() &&
+                    Files.list(previous.parent).use { paths -> !paths.findAny().isPresent }
+            )
+                Files.delete(previous.parent)
+        }
     } catch (e: Exception) {
         // Ordinary IO failures roll back now; a process crash leaves the same journal for startup.
         if (journal.exists()) {

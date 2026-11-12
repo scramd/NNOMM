@@ -23,7 +23,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         )
     private val closing = java.util.concurrent.atomic.AtomicBoolean()
     private val closed = CompletableDeferred<Unit>()
-    private val mutable = MutableStateFlow(initial)
+    private val mutable = MutableStateFlow(initial.copy(packSource = io.packSource))
     val state: StateFlow<AppState> = mutable.asStateFlow()
     private val listInputs =
         state
@@ -97,6 +97,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         return result.await()
     }
 
+    private val placementObserver =
+        io.gameFolder.applyProblems?.let { flow ->
+            worker.launch { flow.collect { value -> change { it.copy(applyProblems = value) } } }
+        }
     private val launcherObserver =
         worker.launch {
             io.launcher.running.collect { running ->
@@ -107,7 +111,21 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         gameStarting = if (running) false else it.gameStarting,
                     )
                 }
-                if (wasRunning && !running) applyAndSave(force = true)
+                if (wasRunning && !running) {
+                    if (state.value.gameIoPending)
+                        worker.launch {
+                            diskAwait { io.gameFolder.recoverPending() }
+                            val folder = state.value.game.folder
+                            if (
+                                folder != null &&
+                                    state.value.firstStart.complete &&
+                                    state.value.installed.isEmpty()
+                            )
+                                adoptExistingMods(folder, true)
+                            change { it.copy(gameIoPending = false) }
+                        }
+                    applyAndSave()
+                }
             }
         }
     private var saveFailed = false
@@ -217,11 +235,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     private fun resolvedPlan(s: AppState) = gamePlan(s)
 
-    private suspend fun prepareGameFolder(snapshot: AppState) {
+    private suspend fun prepareGameFolder(snapshot: AppState, modAction: Boolean = true) {
         val folder = snapshot.game.folder ?: return
         if (snapshot.game.folderMissing) return
         if (io.launcher.running.value || state.value.gameRunning) return
-        if (onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
+        if (modAction && onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
             io.gameFolder.installLoader(folder)
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
@@ -599,6 +617,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         setOn(listOf(id), !isOn(state.value, id, p), p)
 
     private fun uninstallSilently(ids: List<String>) {
+        io.modStore.protect(ids.toSet())
         val keepForRemoval = state.value.installed.filterKeys { it in ids }
         ids.forEach(::cancelDownload)
         change { it.copy(installed = it.installed - ids.toSet()) }
@@ -648,6 +667,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private fun restoreRemoved(ids: List<String>, keep: Map<String, InstalledMod>) {
         disk {
             try {
+                for (m in keep.values) for (v in m.versions) require(
+                    io.modStore.hasVersion(m.id, v)
+                ) {
+                    "Stored files are missing for ${m.id}."
+                }
                 io.modStore.restore(ids)
                 change { it.copy(installed = it.installed + keep) }
                 applyAndSave()
@@ -886,7 +910,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         background {
             try {
                 diskAwait {
-                    if (!withoutMods) prepareGameFolder(state.value)
+                    if (!withoutMods && resolvedPlan(state.value) != appliedPlan)
+                        prepareGameFolder(state.value, modAction = false)
                     io.launcher.start(state.value, withoutMods)
                 }
                 delay(30000)
@@ -1145,15 +1170,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         mods.map { it.first },
                 installed =
                     s.installed +
-                        mods.associate { (mod, m) ->
-                            mod.id to
-                                m.copy(
-                                    profiles =
-                                        s.profiles.associate {
-                                            it.id to ProfileMod(false, m.defaultVersion)
-                                        }
-                                )
-                        },
+                        mods
+                            .filter { it.first.id !in s.installed }
+                            .associate { (mod, m) ->
+                                mod.id to
+                                    m.copy(
+                                        profiles =
+                                            s.profiles.associate {
+                                                it.id to ProfileMod(false, m.defaultVersion)
+                                            }
+                                    )
+                            },
             )
         }
         applyAndSave()
@@ -1271,7 +1298,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         val existing = diskAwait { io.gameFolder.takeOver(folder) }
         change { s ->
             val catalog = (s.catalog + existing.map { it.first }).distinctBy { it.id }
-            val installed = s.installed + existing.associate { (mod, m) -> mod.id to m }
+            val installed =
+                s.installed +
+                    existing.associate { (mod, m) ->
+                        val previous = s.installed[mod.id]
+                        mod.id to
+                            (previous?.copy(
+                                versions = previous.versions + m.versions,
+                                profiles = m.profiles + previous.profiles,
+                            ) ?: m)
+                    }
             val on = installed.values.count { it.profiles["default"]?.on == true }
             s.copy(
                 game = game,
@@ -1304,7 +1340,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    private val metadataRequested = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val metadataRequested = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun requestMetadata(key: String): Boolean =
+        synchronized(metadataRequested) {
+            if ((metadataRequested[key] ?: 0) > io.clock.nowMillis()) false
+            else {
+                metadataRequested[key] = io.clock.nowMillis() + 300_000
+                true
+            }
+        }
 
     fun loadMetadata(ids: Set<String> = state.value.catalog.map { it.id }.toSet()) {
         val snapshot = state.value
@@ -1314,7 +1359,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 mod.versions.forEach { version ->
                     if (
                         version.downloadUrl != null &&
-                            metadataRequested.add("${mod.id}/${version.version}")
+                            requestMetadata("${mod.id}/${version.version}")
                     )
                         background {
                             metadataSlots.withPermit {
@@ -1340,6 +1385,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                         }
                                         return@withPermit
                                     }
+                                if (meta.sizeKb != null || meta.dateMillis != null)
+                                    metadataRequested[key] = Long.MAX_VALUE
                                 change {
                                     it.copy(
                                         metadataStatus =
@@ -1438,13 +1485,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     fun clearUnusedFiles() {
         disk {
-            io.modStore.clearUnused(state.value)
+            io.modStore.clearUnused { state.value }
             refreshStoreUsage()
         }
     }
 
     fun refreshStoreUsage() {
-        background {
+        disk {
             val bytes = io.modStore.usedBytes()
             val unused = io.modStore.unusedBytes(state.value)
             change {
@@ -1536,6 +1583,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     nowMillis = now,
                 )
             }
+            loadMetadata()
             if (announce) toast("${updates(state.value).size} mods have an update")
             if (state.value.setting("onUpdate")?.content == "Update by itself") updateAll()
             try {

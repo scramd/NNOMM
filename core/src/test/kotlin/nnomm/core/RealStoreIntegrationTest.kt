@@ -11,6 +11,13 @@ import nnomm.core.model.*
 import nnomm.core.store.AppStore
 
 class RealStoreIntegrationTest {
+    private val temporary = mutableListOf<java.nio.file.Path>()
+
+    @kotlin.test.AfterTest
+    fun cleanupTemporaryFiles() {
+        temporary.asReversed().forEach { nnomm.core.io.real.deleteTree(it) }
+    }
+
     @Test
     fun registryRefreshKeepsMetadataOnlineAndOffline() = runBlocking {
         val raw =
@@ -53,7 +60,7 @@ class RealStoreIntegrationTest {
 
     @Test
     fun firstStartWaitsForConfirmationAndPersistsIt() = runBlocking {
-        val home = Files.createTempDirectory("nnomm-first-")
+        val home = Files.createTempDirectory("nnomm-first-").also { temporary.add(it) }
         val game = home.resolve("game").createDirectories()
         game.resolve("NuclearOption.exe").writeText("")
         game
@@ -107,7 +114,7 @@ class RealStoreIntegrationTest {
 
     @Test
     fun takeoverInstallProfilesUninstallUndoRepairClearRestart() = runBlocking {
-        val home = Files.createTempDirectory("nnomm-store-")
+        val home = Files.createTempDirectory("nnomm-store-").also { temporary.add(it) }
         val game = home.resolve("game").createDirectories()
         game.resolve("NuclearOption.exe").writeText("")
         game.resolve("BepInEx/core").createDirectories().resolve("BepInEx.dll").writeText("loader")

@@ -13,9 +13,16 @@ import nnomm.core.io.real.*
 import nnomm.core.model.*
 
 class ReviewProbe2Test {
+    private val temporary = mutableListOf<java.nio.file.Path>()
+
+    @kotlin.test.AfterTest
+    fun cleanupTemporaryFiles() {
+        temporary.asReversed().forEach { nnomm.core.io.real.deleteTree(it) }
+    }
+
     @Test
     fun slowTransferRetriesUsesManifestNameAndIgnoresRequestDeadline() = runBlocking {
-        val home = Files.createTempDirectory("nnomm-transfer-")
+        val home = Files.createTempDirectory("nnomm-transfer-").also { temporary.add(it) }
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         var requests = 0
         server.createContext("/download") { ex ->
@@ -83,7 +90,7 @@ class ReviewProbe2Test {
 
     @Test
     fun tarGzipUsesContentAndRejectsLinks() = runBlocking {
-        val home = Files.createTempDirectory("nnomm-tar-")
+        val home = Files.createTempDirectory("nnomm-tar-").also { temporary.add(it) }
         val archive = home.resolve("extensionless")
         org.apache.commons.compress.compressors.gzip
             .GzipCompressorOutputStream(Files.newOutputStream(archive))

@@ -90,6 +90,6 @@ data class RegistryArtifact(
             dependencies,
             incompatibilities,
             extends,
-            fileName = fileName,
+            fileName = fileName?.trim(),
         )
 }

@@ -164,3 +164,19 @@ selecting a previously downloaded version.
 - `shutdown()` waits for the disk queue without the former ten-second cutoff.
 - Runtime startup may adopt existing mods when the saved library is empty; it does
   not place mods, install the loader or create plugins during this adoption.
+
+### Second IO safety round
+
+`ModStore.protect(ids)` is synchronous and must run before removing references
+needed by Undo. `GameFolder.applyProblems` optionally exposes a StateFlow of
+per-mod placement messages; `recoverPending()` runs deferred disk recovery after
+process detection permits it. `AppState.applyProblems` feeds problem badges and
+`gameIoPending` tells the UI that startup game work is deferred.
+`AppState.packSource` is a runtime-only handle copied into store state from
+`AppIo.packSource`; pack dialogs use this handle, including configured storage and
+shared client ownership. It is not persisted. See IO.md for current limitations.
+`clearUnused(current: () -> AppState)` lets real storage read the latest references
+again after acquiring its mutex; the snapshot overload remains for callers/tests.
+Active download versions are included in retention. Pack preview local ids and
+versions now derive from the bundled content, so consumers must use preview ids,
+not the ids supplied by a pack author.

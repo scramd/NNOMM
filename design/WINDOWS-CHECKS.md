@@ -56,3 +56,14 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
   Check a real plugin after one game run, multiple plugin GUIDs in one mod,
   absent configs and the Windows default editor association. Linux tests use
   byte-array fixtures and temporary sandbox files only.
+
+## Second real IO safety round
+
+| Changed behaviour | Windows check |
+| --- | --- |
+| Per-entry rename swaps outside plugin scanning | Lock one mod DLL: that mod reports a problem, others change, all player bytes remain recoverable. Validate same-volume rename and actual destination path limits. |
+| Interrupted promotion rolls forward | Interrupt after each rename, run the game, restart NNOMM: new player files survive. |
+| Startup waits for game exit | Reopen during play with pending recovery/adoption: no game writes; work resumes on observed exit. |
+| Loader Repair refuses unknown/different versions | Test undetected/BepInEx 6 and known 5.4.23.4; only the pinned version can repair. Play alone must not install it. |
+| Inherited vanilla restoration | Reopen NNOMM during Play without mods; Doorstop text returns byte-for-byte on exit. |
+| Add-on order and directory ownership | Parent first, child second; child edits return with profile; empty created folders disappear. |
