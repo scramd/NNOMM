@@ -198,3 +198,33 @@ A refused link at one mod root is reported for that entry; independent safe
 entries continue. Under the runtime home lock, startup removes abandoned
 `staging/player-*`, `staging/edits-*`, and `staging/config-*` preparation copies
 before recovery. Committed player files and journal-owned staging remain separate.
+
+## Fifth IO review
+
+Takeover snapshots are not proof that a file shipped with a mod. For TAKEOVER
+payloads, only recorded verified registry payload hashes classify shipped files;
+all other files are captured as player extras at the first removal/replacement.
+Takeover checks both ownership epochs before trusting an applied record. A moved
+game folder or lost record can recover stored identities by matching tree hashes;
+a stale record disambiguates identical stored versions only when its bytes match.
+Ambiguous matches are left unchanged. Duplicate wanted placement names, including
+case aliases, are refused with entry problems instead of silently dropping a mod.
+Takeover recovers pending game journals before reading ownership.
+
+Saved extras record their source version as well as generation. If a newer
+payload ships the same filename, its player copy is also saved in player-edits
+for the original version/generation before promotion. Returning to that version
+restores it, even after the current extra-file set changes.
+
+Pending recovery is checked against entry paths and their private payload/player
+file paths. A journal that touches shared ownership metadata can still block all
+entries using that metadata. Malformed home journals remain pending and visible,
+but cannot identify a particular game entry to block. Malformed game journals
+conservatively block game changes because their targets are unknown. No journal
+or recovery copy is discarded to unblock an apply. Recovery messages distinguish
+unavailable storage from merely running the game.
+
+Play failures show entry-specific reasons with working Retry and Turn off toast
+actions. Turn off disables the failed entries; the next Play uses the remaining
+mods. Loader repair uses AppStore's serialized disk queue. Unknown placement
+errors no longer claim another program necessarily holds a file open.

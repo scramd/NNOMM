@@ -221,3 +221,14 @@ ownership publication, journal deletion, and interrupted recovery cleanup.
   the artifact hash before recording verified provenance.
 - No UI API changes are required. Offline presentation continues to use
   `CatalogConnection(OFFLINE, savedTime)`.
+
+### Fifth IO review integration
+
+No public model or port signatures changed. `RealModStore.shippedHashes` and
+`matchingVersion`, and the disk helper `pendingTouches`, are internal helpers.
+Takeover uses verified shipped hashes and stored-content identity matching.
+Saved player extras now have a sibling `.version` file alongside `.generation`.
+Play failure toasts use existing callback actions: Retry repeats Play; Turn off
+switches off the failed entries in the active profile. Loader repair now shares
+the disk queue with apply and other mutations. See IO.md for pending-journal
+scope and conservative handling of unreadable game journals.
