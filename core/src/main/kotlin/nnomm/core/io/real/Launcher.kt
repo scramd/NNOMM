@@ -129,15 +129,14 @@ class RealGameLauncher(
         val restore = saved.read() ?: return
         if (restore.isEmpty()) return
         val path = Path.of(restore.getValue("path"))
-        // A removed game folder must stay removed; never recreate it from this record.
-        if (Files.notExists(path.parent)) {
-            saved.write(emptyMap())
-            return
-        }
+        // A missing library may be on an unmounted drive. Retain its restore record.
+        if (Files.notExists(path.parent)) return
         val bytes =
             restore["bytes"]?.let { java.util.Base64.getDecoder().decode(it) }
                 ?: restore.getValue("text").toByteArray(DoorstopIni.charset)
-        writeDoorstop(path, bytes)
+        // A failed edit may have left the original intact (including a read-only file).
+        if (!Files.exists(path) || !Files.readAllBytes(path).contentEquals(bytes))
+            writeDoorstop(path, bytes)
         saved.write(emptyMap())
     }
 
@@ -160,6 +159,8 @@ class RealGameLauncher(
                                 } catch (e: java.io.IOException) {
                                     throw DoorstopSettingsFailure(e)
                                 }
+                            val disabled =
+                                DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
                             JsonFile(
                                     restoreFile,
                                     MapSerializer(String.serializer(), String.serializer()),
@@ -171,8 +172,6 @@ class RealGameLauncher(
                                             java.util.Base64.getEncoder().encodeToString(bytes),
                                     )
                                 )
-                            val disabled =
-                                DoorstopIni.read(bytes).setEnabled(false, includeLegacy = true)
                             writeDoorstop(ini, disabled)
                         } catch (e: Exception) {
                             if (e is DoorstopSettingsFailure) throw e
