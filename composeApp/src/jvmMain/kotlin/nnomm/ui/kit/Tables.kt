@@ -118,7 +118,7 @@ fun <K> Modifier.tableKeyboard(
                             Key.DirectionDown -> (index + 1).coerceIn(keys.indices)
                             else -> (if (index < 0) 0 else index - 1).coerceIn(keys.indices)
                         }
-                    if (!event.isShiftPressed) selection.focus(keys[next])
+                    if (!event.isShiftPressed) selection.activate(keys[next])
                     else
                         selection.select(
                             keys,

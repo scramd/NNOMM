@@ -22,6 +22,17 @@ class RowSelectionTest {
     }
 
     @Test
+    fun keyboardFocusMovementStartsTheNextRangeAtTheMovedRow() {
+        val rows = (1..500).toList()
+        val selection = RowSelection<Int>()
+        selection.activate(1)
+        selection.activate(500)
+        selection.select(rows, 499, shift = true)
+        assertEquals(setOf(499, 500), selection.picked)
+        assertEquals(500, selection.anchor)
+    }
+
+    @Test
     fun filteringDropsMissingKeysAndSortingPreservesIdentity() {
         val selection = RowSelection<String>()
         selection.select(listOf("a", "b", "c"), "b")
