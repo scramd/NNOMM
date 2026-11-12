@@ -640,7 +640,11 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                 }
                 val active = s.downloads.filter { it.percent < 100 }
                 if (active.isNotEmpty())
-                    ProgressBar(active.map { it.percent }.average().toFloat() / 100, neutral = true)
+                    ProgressBar(
+                        if (active.any { it.percent < 0 }) -1f
+                        else active.map { it.percent }.average().toFloat() / 100,
+                        neutral = true,
+                    )
             }
             AnchoredPopover(
                 ui.downloadsOpen,
@@ -672,7 +676,7 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                             if (d.percent >= 100)
                                 if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated"
                                 else "Installed"
-                            else "${d.percent}%",
+                            else if (d.percent < 0) "Downloading" else "${d.percent}%",
                             size = 12f,
                             color = c.text3,
                         )

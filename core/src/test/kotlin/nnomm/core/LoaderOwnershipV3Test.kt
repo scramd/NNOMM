@@ -357,4 +357,49 @@ class LoaderOwnershipV3Test {
             "PROBEB3 after Uninstall: ${data.keys.associateWith { k -> f.game.resolve(k).let { if (it.exists()) it.readText().take(20) else "-" } }}"
         )
     }
+
+    @Test
+    fun reviewCrashAfterRollbackRenameBeforeCompletionMarker() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        var moves = 0
+        DiskFaults.step = { if (it == "old-moved" && ++moves == 2) throw Crash() }
+        assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+        DiskFaults.step = { if (it == "recovery-rollback-restored") throw Crash() }
+        assertFailsWith<Crash> { restart(f).folder.recoverPending() }
+        DiskFaults.step = {}
+        val target = f.game.resolve("BepInEx/core/BepInEx.dll")
+        assertTrue(target.exists())
+        target.deleteExisting()
+        repeat(3) { restart(f).folder.recoverPending() }
+        val r = restart(f)
+        r.folder.installLoader(f.game.toString())
+        assertTrue(target.exists(), "Retry should reinstall the deleted loader file")
+        assertFalse(
+            r.folder.recoveryPending,
+            "A completed rollback followed by player deletion must not block recovery",
+        )
+    }
+
+    @Test
+    fun reviewChangedLoaderWithMissingDetectionDllKeepsGuard() = runBlocking {
+        val failures = mutableListOf<String>()
+        for (startup in listOf(false, true)) {
+            val f = fixture(false, null)
+            f.folder.installLoader(f.game.toString())
+            f.game.resolve("BepInEx/core/BepInEx.dll").deleteExisting()
+            f.game.resolve("BepInEx/core/Extra.dll").deleteExisting()
+            f.game.resolve("winhttp.dll").writeText("player replacement")
+            val r = restart(f)
+            if (startup) r.folder.recoverPending()
+            val before = snapshot(f.game)
+            r.folder.installLoader(f.game.toString())
+            if (before != snapshot(f.game))
+                failures += "startup=$startup added=${snapshot(f.game).keys - before.keys}"
+        }
+        assertTrue(
+            failures.isEmpty(),
+            "Changed present loader files must keep presence guard even if detection DLL was removed: $failures",
+        )
+    }
 }

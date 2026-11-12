@@ -188,6 +188,7 @@ data class Download(
     val kind: DownloadKind,
     val profile: String,
     val version: String,
+    /** -1 means the response total is unknown. */
     val percent: Int = 0,
     val quiet: Boolean = false,
     val withDependencies: List<String> = emptyList(),

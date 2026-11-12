@@ -1573,13 +1573,13 @@ class RealGameFolder(
                 // Only resume the pinned loader while every surviving owned file is unchanged.
                 if (
                     !repair &&
-                        info.loaderPresent &&
-                        (info.loaderVersion != "5.4.23.4" ||
-                            verified.isEmpty() ||
-                            hasPresentRelinquished(game) ||
-                            recorded.any { (name, hash) ->
-                                safe(game, name).exists() && verified[name] != hash
-                            })
+                        (hasPresentRelinquished(game) ||
+                            (info.loaderPresent &&
+                                (info.loaderVersion != "5.4.23.4" ||
+                                    verified.isEmpty() ||
+                                    recorded.any { (name, hash) ->
+                                        safe(game, name).exists() && verified[name] != hash
+                                    })))
                 )
                     return@guarded
                 val existingVersion = info.loaderVersion

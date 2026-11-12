@@ -313,7 +313,10 @@ fun modAction(s: AppState, id: String): ModAction {
     s.downloads
         .firstOrNull { it.id == id && it.percent < 100 && it.error == null }
         ?.let {
-            return ModAction("${it.percent}%", percent = it.percent)
+            return ModAction(
+                if (it.percent < 0) "Downloading" else "${it.percent}%",
+                percent = it.percent,
+            )
         }
     availableVersion(s, id)?.unavailableReason?.let {
         return ModAction("Unavailable", disabled = true, tooltip = it)

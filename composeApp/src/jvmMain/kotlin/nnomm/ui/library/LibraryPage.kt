@@ -550,7 +550,11 @@ private fun LibraryVersion(s: AppState, id: String) {
     val version = verOf(s, id).orEmpty().let { if (it == "takeover") "From game folder" else it }
     val c = LocalNnTheme.current.colors
     when {
-        downloads != null -> DownloadPill(downloads!!.percent / 100f, "${downloads!!.percent}%")
+        downloads != null ->
+            DownloadPill(
+                downloads!!.percent / 100f,
+                if (downloads!!.percent < 0) "Downloading" else "${downloads!!.percent}%",
+            )
         hasUpdate(s, id) ->
             Tooltip(
                 "Update to ${s.mod(id).newestRelease?.version}${if (s.settings.bool("showProfiles") && s.profiles.size > 1) " in ${s.profile().name}" else ""}"
