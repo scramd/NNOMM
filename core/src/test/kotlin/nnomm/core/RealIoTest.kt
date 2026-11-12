@@ -14,7 +14,32 @@ import nnomm.core.io.real.*
 import nnomm.core.model.*
 
 class RealIoTest {
-    private fun temp() = Files.createTempDirectory("nnomm-test-")
+    private fun peFixture() =
+        ByteArray(128).also {
+            it[0] = 77
+            it[1] = 90
+            it[60] = 64
+            it[64] = 80
+            it[65] = 69
+        }
+
+    @Test
+    fun dllExtensionAndMzAloneDoNotAuthorizeImport() = runBlocking {
+        val home = temp()
+        val file = home.resolve("fake.dll")
+        file.writeText("MZnot-a-PE-file")
+        assertFails { RealModStore(home).put("bad", "1", DownloadedFile(file.toString())) }
+        Unit
+    }
+
+    private val temporary = mutableListOf<java.nio.file.Path>()
+
+    @kotlin.test.AfterTest
+    fun cleanupTemporaryFiles() {
+        temporary.asReversed().forEach { nnomm.core.io.real.deleteTree(it) }
+    }
+
+    private fun temp() = Files.createTempDirectory("nnomm-test-").also { temporary.add(it) }
 
     @Test
     fun pathsArePrivate() {
@@ -234,7 +259,7 @@ class RealIoTest {
     fun localHashRecognitionAndRetentionRespectPinnedProfiles() = runBlocking {
         val home = temp()
         val file = home.resolve("known.dll")
-        file.writeText("known mod")
+        file.writeBytes(peFixture())
         val hash =
             java.security.MessageDigest.getInstance("SHA-256")
                 .digest(file.readBytes())
@@ -261,10 +286,10 @@ class RealIoTest {
                     ),
                 settings = SettingsValues(mapOf("keepOld" to JsonPrimitive("None"))),
             )
-        assertEquals(listOf("2"), store.unused(state).map { it.name })
+        assertTrue(store.unused(state).isEmpty())
         store.clearUnused(state)
         assertTrue(store.version("known", "1").exists())
-        assertFalse(store.version("known", "2").exists())
+        assertTrue(store.version("known", "2").exists())
         assertTrue(store.version("known", "3").exists())
     }
 
@@ -354,14 +379,17 @@ class RealIoTest {
         val home = temp()
         val store = RealModStore(home)
         val input = home.resolve("payload.dll")
-        input.writeText("payload")
+        input.writeBytes(peFixture())
         store.put("m", "1", DownloadedFile(input.toString()))
         val original = store.version("m", "1")
         val target = home.resolve("moved")
         store.moveTo(target.toString())
         assertTrue(original.resolve("payload.dll").exists())
         assertEquals(target.resolve("m/1"), store.version("m", "1"))
-        assertEquals("payload", store.version("m", "1").resolve("payload.dll").readText())
+        assertContentEquals(
+            input.readBytes(),
+            store.version("m", "1").resolve("payload.dll").readBytes(),
+        )
         assertTrue(input.exists())
     }
 

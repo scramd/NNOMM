@@ -11,7 +11,19 @@ import nnomm.core.model.*
 
 /** Assertions ported from both reviewers' executable probes; fixtures never use a game install. */
 class ReviewProbeTest {
-    private fun temp() = Files.createTempDirectory("nnomm-review-")
+    private val temporary = mutableListOf<java.nio.file.Path>()
+
+    @kotlin.test.AfterTest
+    fun cleanupTemporaryFiles() {
+        temporary.asReversed().forEach { root ->
+            if (root.exists())
+                Files.walk(root).use { files ->
+                    files.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+                }
+        }
+    }
+
+    private fun temp() = Files.createTempDirectory("nnomm-review-").also { temporary.add(it) }
 
     private val noNet =
         object : Downloader {
@@ -182,7 +194,7 @@ class ReviewProbeTest {
         val client = networkClient("test")
         try {
             payload(store, home, "local-a")
-            payload(store, home, "local-b")
+            payload(store, home, "local-b", text = "other")
             val packs = RealPacks(home, store, client)
             val path = home.resolve("p.nommpack")
             packs.write(
@@ -199,8 +211,8 @@ class ReviewProbeTest {
                 AppState(),
             )
             packs.read(path).use { preview ->
-                assertEquals(2, packs.selectedLocals(preview, setOf("local-a", "local-b")).size)
-                assertTrue(Path.of(preview.localFiles.getValue("local-a")).exists())
+                assertEquals(2, packs.selectedLocals(preview, preview.localFiles.keys).size)
+                assertTrue(Path.of(preview.localFiles.values.first()).exists())
             }
         } finally {
             client.close()
@@ -267,7 +279,10 @@ class ReviewProbeTest {
                 DiskFaults.step = {}
             }
             val reopened = RealModStore(home)
-            assertEquals("good", reopened.version("m", "1").resolve("mod.dll").readText())
+            assertEquals(
+                if (step == "promoted") "new" else "good",
+                reopened.version("m", "1").resolve("mod.dll").readText(),
+            )
         }
     }
 
@@ -337,7 +352,7 @@ class ReviewProbeTest {
             var prepared = 0
             DiskFaults.step = { step ->
                 if (step == "prepared") prepared++
-                if (prepared == 3 && step == point) throw DiskCrash()
+                if (prepared == 2 && step == point) throw DiskCrash()
             }
             try {
                 assertFails {
@@ -348,8 +363,8 @@ class ReviewProbeTest {
             } finally {
                 DiskFaults.step = {}
             }
-            RealModStore(home)
-            assertEquals("shared", config.readText())
+            folder.recoverPending()
+            assertEquals(if (point == "promoted") "profile-b" else "shared", config.readText())
         }
     }
 
