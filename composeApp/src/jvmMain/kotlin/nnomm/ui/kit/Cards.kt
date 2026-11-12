@@ -20,7 +20,7 @@ internal fun SelectionGlyph(selected: Boolean, radio: Boolean) {
     val c = LocalNnTheme.current.colors
     val shape = if (radio) CircleShape else RoundedCornerShape(4.dp)
     Box(
-        Modifier.size(15.dp)
+        Modifier.size(if (radio) 14.dp else 15.dp)
             .background(if (selected && !radio) c.strong else Color.Transparent, shape)
             .border(
                 if (selected && radio) 4.5.dp else 1.5.dp,
@@ -150,24 +150,32 @@ fun <T : Any> CardStrip(
     modifier: Modifier = Modifier,
     card: @Composable (T) -> Unit,
 ) {
-    LazyRow(
-        modifier
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                drawRect(
-                    Brush.horizontalGradient(
-                        listOf(Color.Black, Color.Transparent),
-                        startX = (size.width - 56.dp.toPx()).coerceAtLeast(0f),
-                        endX = size.width,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-            },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 6.dp),
-    ) {
-        items(items, key = key) { Box(Modifier.width(244.dp)) { card(it) } }
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    Box(modifier.fillMaxWidth()) {
+        LazyRow(
+            Modifier.fillMaxWidth()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    if (scroll.canScrollForward) drawRect(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black, Color.Transparent),
+                            startX = (size.width - 56.dp.toPx()).coerceAtLeast(0f),
+                            endX = size.width,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+            state = scroll,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 6.dp),
+        ) {
+            items(items, key = key) { Box(Modifier.width(244.dp)) { card(it) } }
+        }
+        androidx.compose.foundation.HorizontalScrollbar(
+            androidx.compose.foundation.rememberScrollbarAdapter(scroll),
+            Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+        )
     }
 }
 

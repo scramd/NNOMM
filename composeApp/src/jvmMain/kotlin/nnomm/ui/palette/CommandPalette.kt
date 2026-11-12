@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package nnomm.ui.palette
 
@@ -15,6 +15,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import nnomm.core.model.ActionKind
 import nnomm.core.rules.*
+import kotlinx.coroutines.flow.*
 import nnomm.ui.*
 import nnomm.ui.kit.*
 import nnomm.ui.theme.*
@@ -22,9 +23,19 @@ import nnomm.ui.theme.*
 class CommandPalette(private val model: AppModel) : Overlay {
     @Composable
     override fun Content() {
-        val state by model.store.state.collectAsState()
+        val state by remember(model) {
+            model.store.state.map { it.copy(toasts = emptyList(), downloads = emptyList()) }.distinctUntilChanged()
+        }.collectAsState(model.store.state.value)
         val view = model.ui.palette
-        val items = remember(state, view.query) { palItems(state, view.query) }
+        val items = remember(state, view.query) {
+            val base = palItems(state, view.query)
+            val server = PaletteItem("Go to", "Servers", "", nnomm.core.model.UiAction("navigate", "servers"))
+            val match = fuzzy(view.query.trim(), "Servers")
+            if (model.showServers() && (view.query.isBlank() || match != null)) {
+                val at = base.indexOfLast { it.group == "Go to" } + 1
+                base.toMutableList().apply { add(at, server.copy(indices = match?.indices.orEmpty())) }
+            } else base
+        }
         val index = view.index.coerceIn(0, (items.size - 1).coerceAtLeast(0))
         val scroll = rememberLazyListState()
         val c = LocalNnTheme.current.colors
@@ -51,8 +62,8 @@ class CommandPalette(private val model: AppModel) : Overlay {
                 model.registerOverlayKeys("palette") { event ->
                     when (event.key) {
                         Key.DirectionDown ->
-                            view.index = (index + 1).coerceAtMost((items.size - 1).coerceAtLeast(0))
-                        Key.DirectionUp -> view.index = (index - 1).coerceAtLeast(0)
+                            view.index = if (items.isEmpty()) 0 else (index + 1) % items.size
+                        Key.DirectionUp -> view.index = if (items.isEmpty()) 0 else (index + items.size - 1) % items.size
                         Key.Enter -> run(event.isCtrlPressed || event.isMetaPressed)
                         else -> return@registerOverlayKeys false
                     }
@@ -60,7 +71,9 @@ class CommandPalette(private val model: AppModel) : Overlay {
                 }
             onDispose { remove() }
         }
-        LaunchedEffect(index, items) { if (items.isNotEmpty()) scroll.animateScrollToItem(index) }
+        LaunchedEffect(index, items) {
+            if (items.isNotEmpty() && scroll.layoutInfo.visibleItemsInfo.none { it.index == index }) scroll.scrollToItem(index)
+        }
         Box(
             Modifier.fillMaxSize()
                 .background(c.scrim)
@@ -88,7 +101,7 @@ class CommandPalette(private val model: AppModel) : Overlay {
                         if (it.hasFocus) model.ui.focusedField = field
                         else if (model.ui.focusedField === field) model.ui.focusedField = null
                     },
-                    placeholder = "Mod, profile, server, setting or action",
+                    placeholder = "Mod, profile, setting or action",
                     icon = NnIcons.search,
                     palette = true,
                     autofocus = true,
@@ -131,12 +144,25 @@ class CommandPalette(private val model: AppModel) : Overlay {
                                     picture = mod.demoPicture,
                                     size = TileSize.Small,
                                 )
-                            else
+                            else if (item.group != "Profiles")
                                 Icon(
                                     when (item.group) {
                                         "Settings" -> NnIcons.gear
-                                        "Go to" -> NnIcons.browse
-                                        else -> NnIcons.search
+                                        "Go to" -> when (item.action.id) {
+                                            "library" -> NnIcons.library
+                                            "servers" -> NnIcons.server
+                                            "settings" -> NnIcons.gear
+                                            else -> NnIcons.browse
+                                        }
+                                        else -> when (item.action.kind) {
+                                            ActionKind.PLAY -> NnIcons.play
+                                            ActionKind.LOOKFORUPDATES -> NnIcons.refresh
+                                            ActionKind.ADDFILE, ActionKind.NEWPROFILE -> NnIcons.plus
+                                            ActionKind.IMPORT -> NnIcons.box
+                                            ActionKind.SHARE -> NnIcons.share
+                                            ActionKind.TROUBLE -> NnIcons.split
+                                            else -> NnIcons.folder
+                                        }
                                     }
                                 )
                             Label(
@@ -149,22 +175,30 @@ class CommandPalette(private val model: AppModel) : Overlay {
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
-                Row(
+                FlowRow(
                     Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    KeyCap("Up")
-                    KeyCap("Down")
-                    Label("move", size = 12f, color = c.text3)
-                    Label(
-                        "Enter  ${if (items.getOrNull(index)?.alternative != null) "open it" else "do it"}",
-                        size = 12f,
-                        color = c.text3,
-                    )
-                    items.getOrNull(index)?.alternativeHint?.let {
-                        Label("Ctrl Enter  $it", size = 12f, color = c.text3)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        KeyCap("Up")
+                        KeyCap("Down")
+                        Label("move", size = 12f, color = c.text3)
                     }
-                    Label("Esc  close", size = 12f, color = c.text3)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        KeyCap("Enter")
+                        Label(if (items.getOrNull(index)?.alternative != null) "open it" else "do it", size = 12f, color = c.text3)
+                    }
+                    items.getOrNull(index)?.alternativeHint?.let {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            KeyCap("Ctrl Enter")
+                            Label(it, size = 12f, color = c.text3)
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        KeyCap("Esc")
+                        Label("close", size = 12f, color = c.text3)
+                    }
                 }
             }
         }

@@ -88,12 +88,22 @@ class AppModel(
         return { if (searchFocus[page] === focus) searchFocus.remove(page) }
     }
 
+    var isDemo: Boolean = store.io.persistence == null
+
+    fun chooseStoreFolder() {
+        scope.launch { platform.chooseFolder("Move mod store")?.let { store.moveStore(it.absolutePath) } }
+    }
+
     var checkAppUpdates: () -> Unit = {}
     var openAppReleases: () -> Unit = {}
 
     fun openOverlay(kind: String) {
         if (!store.state.value.firstStart.complete && kind != "first") return
         val layer = overlayFactories[kind]?.invoke(this) ?: return
+        if (kind == "palette") {
+            ui.palette.query = ""
+            ui.palette.index = 0
+        }
         ui.overlayKind = kind
         ui.overlay = layer
     }
@@ -297,7 +307,13 @@ class AppModel(
             ActionKind.PALETTETOGGLE -> action.id?.let(store::paletteToggle)
             ActionKind.UNINSTALL -> action.id?.let { store.uninstall(listOf(it)) }
             ActionKind.PLAY -> store.play()
-            ActionKind.LOOKFORUPDATES -> store.lookForUpdates()
+            ActionKind.LOOKFORUPDATES -> {
+                store.refreshRegistry()
+                scope.launch {
+                    store.state.first { it.connection.kind != nnomm.core.model.ConnectionKind.LOADING }
+                    store.toast("${nnomm.core.rules.updates(store.state.value).size} mods have an update", "Show", UiAction("libraryFilter", "upd"))
+                }
+            }
             ActionKind.LIBRARYFILTER -> {
                 ui.go(Page.Library)
                 ui.library.selection = emptySet()

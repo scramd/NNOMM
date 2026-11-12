@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawBehind
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
 import nnomm.core.demo.Demo
@@ -95,6 +96,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
             else "Import ${pack.name} ${pack.version}",
             model::closeOverlay,
             wide = true,
+            subtitle = if (!loading && error == null) "Modpack by ${pack.by}, from ${file?.name ?: pack.fileName.orEmpty()}" else null,
             footer = {
                 Cancel(model)
                 Button(
@@ -130,8 +132,6 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 )
             },
         ) {
-            if (!loading && error == null)
-                Label("Modpack by ${pack.by}, from ${file?.name ?: pack.fileName.orEmpty()}")
             if (loading) Label("Reading the modpack…")
             error?.let { Note(it, warn = true) }
             if (!loading && error == null) {
@@ -163,24 +163,12 @@ class ImportDialog(private val model: AppModel) : Overlay {
                             else "",
                         ) {
                             if (row.kind == PackKind.CONFLICT)
-                                Row {
-                                    Button(
-                                        "Keep ${row.have}",
-                                        { keep = keep + (row.id to "mine") },
-                                        size = ControlSize.Small,
-                                        kind =
-                                            if (keep[row.id] != "pack") ButtonKind.Default
-                                            else ButtonKind.Ghost,
-                                    )
-                                    Button(
-                                        "Use ${row.packVersion} from the pack",
-                                        { keep = keep + (row.id to "pack") },
-                                        size = ControlSize.Small,
-                                        kind =
-                                            if (keep[row.id] == "pack") ButtonKind.Default
-                                            else ButtonKind.Ghost,
-                                    )
-                                }
+                                SegmentedControl(
+                                    listOf("Keep ${row.have}", "Use ${row.packVersion} from the pack"),
+                                    if (keep[row.id] == "pack") 1 else 0,
+                                    { keep = keep + (row.id to if (it == 0) "mine" else "pack") },
+                                    small = true,
+                                )
                             else
                                 Label(
                                     row.text,
@@ -194,7 +182,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     .filter { it.kind == PackKind.LOCAL }
                     .forEach { item ->
                         Note(
-                            "This pack also contains a file that is not from the registry: ${item.id} (${size(item.sizeKb ?: 0)}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
+                            "This pack also contains a file that is not from the registry: ${item.id}${if (model.isDemo) ".dll" else ""} (${size(item.sizeKb ?: 0)}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
                             warn = true,
                             action = {
                                 ToggleLine(local, { local = it }, "Include", "Include the file")
@@ -223,15 +211,30 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
     override fun Content() {
         val state by model.store.state.collectAsState()
         val p = state.profile()
-        // TODO(core): expose the fetched pack preview rather than only nextVersion in PackInfo.
-        val pack = Demo.PACK_UPDATE
+        var fetched by remember { mutableStateOf<Pack?>(null) }
+        var message by remember { mutableStateOf("Reading the pack update…") }
+        LaunchedEffect(p.id) {
+            if (!model.isDemo) {
+                try {
+                    fetched = p.pack?.let { info -> model.store.io.packSource?.following(info) }
+                    if (fetched == null) message = "No pack update is available."
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { message = "Could not read the pack update. Try again later." }
+            }
+        }
+        val pack = (if (model.isDemo) Demo.PACK_UPDATE else fetched)
+        if (pack == null) {
+            Dialog(true, "Pack update", model::closeOverlay, footer = { Cancel(model, "Close") }) { Label(message) }
+            return
+        }
         val rows = packUpdateRows(state, pack)
         Dialog(
             true,
             "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
             model::closeOverlay,
             wide = true,
-            leftFooter = { Button("Stop following this pack", {}, kind = ButtonKind.Ghost) },
+            subtitle = "Modpack by ${p.pack?.by ?: pack.by}",
+            leftFooter = { Button("Stop following this pack", { model.store.toast(if (model.isDemo) "This does nothing in the mock." else "Stopping pack updates is not available yet.") }, enabled = model.isDemo, kind = ButtonKind.Ghost) },
             footer = {
                 Cancel(model, "Not now")
                 Button(
@@ -244,7 +247,6 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
                 )
             },
         ) {
-            Label("Modpack by ${p.pack?.by ?: pack.by}")
             Summary(
                 listOf(
                         PackKind.ADD to "added",
@@ -313,12 +315,15 @@ internal fun DiffLine(
     Row(
         Modifier.fillMaxWidth()
             .heightIn(min = 28.dp)
-            .border(width = .5.dp, color = c.line)
+            .drawBehind { drawLine(c.line, androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height)) }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label(
+        if (kind == "conflict" || kind in listOf("up", "chg")) Icon(
+            if (kind == "conflict") NnIcons.alert else NnIcons.up,
+            Modifier.size(18.dp), if (kind == "conflict") c.warn else c.accentText,
+        ) else Label(
             when (kind) {
                 "add" -> "+"
                 "rem" -> "−"
@@ -344,7 +349,7 @@ internal fun DiffLine(
         )
         Row(Modifier.weight(1f)) {
             Label(
-                name,
+                if (kind == "rem") androidx.compose.ui.text.AnnotatedString(name, spanStyle = androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)) else androidx.compose.ui.text.AnnotatedString(name),
                 weight = 600,
                 color = if (kind in listOf("rem", "off")) c.text3 else c.text,
                 maxLines = 1,

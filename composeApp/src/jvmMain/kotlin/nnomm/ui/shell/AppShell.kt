@@ -162,8 +162,8 @@ private fun PageContent(page: Page) {
         Page.Library -> LibraryPage()
         Page.Settings -> SettingsPage()
         Page.Servers ->
-            Column(Modifier.fillMaxSize().padding(18.dp)) {
-                Label("Servers", size = 22f, weight = 650, width = 112f)
+            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
+                Label("Servers", size = 20f, weight = 650, width = 112f)
                 Column(
                     Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.Center,
@@ -171,11 +171,11 @@ private fun PageContent(page: Page) {
                 ) {
                     Icon(
                         NnIcons.server,
-                        Modifier.size(40.dp),
+                        Modifier.size(28.dp),
                         color = LocalNnTheme.current.colors.text3,
                     )
                     Spacer(Modifier.height(14.dp))
-                    Label("Coming later", size = 20f, weight = 650)
+                    Label("Coming later", size = 16f, weight = 650)
                     Spacer(Modifier.height(8.dp))
                     Label(
                         "A list of dedicated servers comes in a later version of NNOMM.",

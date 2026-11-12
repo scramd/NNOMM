@@ -158,7 +158,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             }
         }
 
-    private fun toast(
+    fun toast(
         text: String,
         action: String? = null,
         target: UiAction? = null,
@@ -833,16 +833,26 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         if (io.persistence == null) background { io.settingsFile.write(state.value.settings) }
     }
 
+    private var gamePathRevision = 0L
+
     fun setSetting(key: String, value: JsonPrimitive, profile: String? = null) {
         val active = state.value.profileId
-        if (key == "gamePath")
+        if (key == "gamePath") {
+            val revision = synchronized(lock) {
+                gamePathRevision++
+                change { nnomm.core.settings.setSetting(it, key, value, profile) }
+                gamePathRevision
+            }
+            saveSettings()
             background {
                 val game =
                     if (value.content.isBlank()) GameInfo()
                     else io.gameFolder.inspect(value.content)
-                change { nnomm.core.settings.setSetting(it, key, value, profile).copy(game = game) }
+                synchronized(lock) {
+                    if (revision == gamePathRevision) change { it.copy(game = game) }
+                }
             }
-        else {
+        } else {
             change { nnomm.core.settings.setSetting(it, key, value, profile) }
             saveSettings()
             if (active != state.value.profileId) applyAndSave()
@@ -951,7 +961,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         if (state.value.trouble != null) stopBrokenModTest()
         val rows =
             importRows(state.value, pack, mode).filterNot {
-                it.local || it.kind == PackKind.UNAVAILABLE
+                it.local || it.kind == PackKind.UNAVAILABLE || (it.packVersion == null && it.kind != PackKind.SAME)
             }
         if (mode == ImportMode.NEW) {
             val id = java.util.UUID.randomUUID().toString()

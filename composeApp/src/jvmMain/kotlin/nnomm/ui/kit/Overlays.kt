@@ -245,6 +245,7 @@ fun Select(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     height: Dp = 28.dp,
+    current: Boolean = false,
 ) {
     var open by remember { mutableStateOf(false) }
     val c = LocalNnTheme.current.colors
@@ -269,16 +270,16 @@ fun Select(
         ) { m, _, _ ->
             Row(
                 m.height(height)
-                    .background(c.raise, RoundedCornerShape(6.dp))
-                    .border(1.dp, c.line, RoundedCornerShape(6.dp))
+                    .background(if (current) c.raise2 else c.raise, RoundedCornerShape(6.dp))
+                    .border(1.dp, if (current) c.text3 else c.line, RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 androidx.compose.foundation.text.BasicText(
                     options.getOrElse(selected) { "" },
-                    Modifier.weight(1f, fill = false),
-                    style = LocalNnTheme.current.text(),
+                    Modifier.weight(1f),
+                    style = LocalNnTheme.current.text(weight = if (current) 600 else 400),
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
@@ -429,7 +430,7 @@ fun Toast(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Label(text, Modifier.weight(1f, fill = false), color = c.strongInk, weight = 500)
+        Label(text, Modifier.weight(1f), color = c.strongInk, weight = 500)
         if (action != null)
             control(Modifier, onClick = onAction) { m, _, _ ->
                 androidx.compose.foundation.text.BasicText(

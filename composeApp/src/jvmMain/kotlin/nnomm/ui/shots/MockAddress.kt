@@ -35,7 +35,6 @@ fun applyMockAddress(model: AppModel, address: String) {
     ui.settings.scope = p["scope"] ?: "all"
     ui.settings.profileId = p["pid"] ?: "default"
     ui.settings.query = p["sq"].orEmpty()
-    ui.palette.query = p["pq"].orEmpty()
     ui.importMode = p["mode"] ?: "new"
     p["panel"]?.removePrefix("mod:")?.let { id ->
         if (p["panel"]?.startsWith("mod:") == true)
@@ -49,11 +48,12 @@ fun applyMockAddress(model: AppModel, address: String) {
             )
     }
     p["overlay"]?.let { if (it == "drop") ui.dragging = true else model.openOverlay(it) }
+    ui.palette.query = p["pq"].orEmpty()
     if (p["trouble"] == "1") model.store.startBrokenModTest()
 }
 
 /** Seed immutable domain states rather than starting asynchronous downloads during a render. */
-fun mockStore(address: String): AppStore {
+fun mockStore(address: String, initialState: (AppState) -> AppState = { it }): AppStore {
     val p =
         address
             .removePrefix("#")
@@ -86,7 +86,7 @@ fun mockStore(address: String): AppStore {
     if (p["running"] == "1") {
         kotlinx.coroutines.runBlocking { io.launcher.start(s, withoutMods = false) }
     }
-    return AppStore(s, io)
+    return AppStore(initialState(s), io)
 }
 
 object ShotPlatform : Platform {

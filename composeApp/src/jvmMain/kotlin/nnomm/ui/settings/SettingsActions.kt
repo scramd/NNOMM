@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.*
@@ -31,22 +32,29 @@ internal fun performSettingAction(model: AppModel, definition: SettingDefinition
         return
     }
     val state = model.store.state.value
+    if (model.isDemo && action !in listOf("Licences")) {
+        model.store.toast("This does nothing in the mock.")
+        return
+    }
     when (action) {
-        "Repair" -> if (state.game.folder != null) model.store.repairLoader() else todo(model, "Choose a game folder before repairing the loader")
+        "Repair" -> if (state.game.folder != null) model.store.repairLoader() else feedback(model, "Choose a game folder before repairing the loader")
+        "Find again" -> model.store.findGameFolder()
+        "Clear" -> model.store.clearUnusedFiles()
+        "Move" -> model.chooseStoreFolder()
         "Choose folder" -> model.ui.settings.chooseGameFolder = true
         "Open" -> state.settings.general["store"]?.content?.takeIf { it.isNotBlank() }?.let { model.platform.openFolder(File(it)) }
-            ?: todo(model, "The mod store location is unavailable")
+            ?: feedback(model, "The mod store location is unavailable")
         "Look now" -> model.checkAppUpdates()
         "Open log folder" -> state.game.folder?.let { model.platform.openFolder(File(it, "BepInEx")) }
-            ?: todo(model, "The game log folder is unavailable")
-        "Copy report" -> todo(model, "Copy report needs the last game log and report export")
+            ?: feedback(model, "The game log folder is unavailable")
+        "Copy report" -> feedback(model, "Report export is not available yet.")
         "Licences" -> model.openOverlay("licences")
-        else -> todo(model, action)
+        else -> feedback(model, action)
     }
 }
 
-private fun todo(model: AppModel, action: String) {
-    model.ui.settings.notice = "TODO(core): $action"
+private fun feedback(model: AppModel, action: String) {
+    model.store.toast(action)
 }
 
 @Composable
@@ -60,7 +68,7 @@ internal fun GameFolderChooser(model: AppModel) {
             folder?.let { model.store.setSetting("gamePath", JsonPrimitive(it.path)) }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            model.ui.settings.notice = "Could not choose a folder: ${e.message}"
+            model.store.toast("Could not choose a folder: ${e.message}")
         } finally {
             model.ui.settings.chooseGameFolder = false
         }
@@ -81,8 +89,12 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 .padding(horizontal = 10.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Switch(source in sources, { on ->
-                    val next = if (on) sources + source else sources - source
-                    model.store.setSetting("sources", JsonPrimitive(next.joinToString("\n")))
+                    if (model.isDemo) {
+                        model.store.toast("This does nothing in the mock.")
+                    } else {
+                        val next = if (on) sources + source else sources - source
+                        model.store.setSetting("sources", JsonPrimitive(next.joinToString("\n")))
+                    }
                 }, description = if (source == nomnom) "NOMNOM" else source)
                 Column(Modifier.weight(1f)) {
                     Label(if (source == nomnom) "NOMNOM" else source, weight = 600, maxLines = 1)
@@ -91,17 +103,22 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 if (source == nomnom) {
                     val minutes = state.connection.readAtMillis?.let { ((state.nowMillis - it) / 60000).coerceAtLeast(0) }
                     Label("${state.catalog.count { it.localFile == null }} mods, " + if (minutes == null) "not read yet" else "read $minutes ${if (minutes == 1L) "minute" else "minutes"} ago", color = c.text2)
-                    Button("Read now", model.store::refreshRegistry, size = ControlSize.Small)
-                } else Button("Read now", model.store::refreshRegistry, size = ControlSize.Small)
+                    Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in the mock.") else model.store.refreshRegistry() }, size = ControlSize.Small)
+                } else Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in the mock.") else model.store.refreshRegistry() }, size = ControlSize.Small)
             }
         }
+        if (!model.isDemo) Label("Additional registries are not supported yet.", color = c.text2)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingField(address, { address = it }, Modifier.weight(1f), "Address of another registry")
             Button("Add", {
-                val entered = address.trim()
-                if (entered.isNotEmpty() && entered !in sources) {
-                    model.store.setSetting("sources", JsonPrimitive((sources + entered).joinToString("\n")))
-                    address = ""
+                if (model.isDemo) {
+                    model.store.toast("This does nothing in the mock.")
+                } else {
+                    val entered = address.trim()
+                    if (entered.isNotEmpty() && entered !in sources) {
+                        model.store.setSetting("sources", JsonPrimitive((sources + entered).joinToString("\n")))
+                        address = ""
+                    }
                 }
             })
         }
@@ -112,10 +129,13 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
     @Composable
     override fun Content() {
         val definition = SETTINGS.firstOrNull { it.key == model.ui.settings.confirmKey } ?: return
-        Dialog(true, definition.label + "?", model::closeOverlay, footer = {
-            Button("Cancel", model::closeOverlay, kind = ButtonKind.Ghost)
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        Dialog(true, definition.label + "?", model::closeOverlay, initialFocus = focus, footer = {
+            Button("Cancel", model::closeOverlay, Modifier.focusRequester(focus), kind = ButtonKind.Ghost)
             Button(definition.actions.first(), {
-                todo(model, definition.actions.first())
+                if (model.isDemo) model.store.toast("This does nothing in the mock.")
+                else if (definition.key == "dzSettings") model.store.resetSettings()
+                else model.store.removeEverything()
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {

@@ -354,6 +354,7 @@ fun Chip(
     selected: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingIcon: ImageVector? = null,
 ) {
     val c = LocalNnTheme.current.colors
     control(modifier.semantics { this.selected = selected }, onClick = onClick) { m, h, _ ->
@@ -370,6 +371,7 @@ fun Chip(
                 color = if (selected) c.onInk else if (h) c.text else c.text2,
                 weight = if (selected) 600 else 400,
             )
+            trailingIcon?.let { Icon(it, Modifier.size(16.dp), if (selected) c.onInk else c.text2) }
             if (count != null)
                 Label(
                     count.toString(),
@@ -399,7 +401,7 @@ fun FilterOption(
         Row(
             m.height(25.dp)
                 .background(if (h) c.raise else Color.Transparent, RoundedCornerShape(4.dp))
-                .padding(horizontal = 4.dp),
+                .offset(x = (-4).dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -473,7 +475,7 @@ fun SegmentedControl(
 }
 
 @Composable
-fun LinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun LinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, size: Float = 13f) {
     val c = LocalNnTheme.current.colors
     var baseline by remember { mutableFloatStateOf(0f) }
     control(modifier, onClick = onClick) { m, h, _ ->
@@ -485,11 +487,11 @@ fun LinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier)
                 drawLine(
                     c.line2,
                     androidx.compose.ui.geometry.Offset(0f, y),
-                    androidx.compose.ui.geometry.Offset(size.width, y),
+                    androidx.compose.ui.geometry.Offset(this.size.width, y),
                     strokeWidth = 1.dp.toPx(),
                 )
             },
-            style = LocalNnTheme.current.text().copy(color = if (h) c.text else c.text2),
+            style = LocalNnTheme.current.text(size).copy(color = if (h) c.text else c.text2),
             onTextLayout = { baseline = it.firstBaseline },
         )
     }
@@ -529,9 +531,14 @@ fun TextField(
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         if (icon != null) Icon(icon, color = if (focus) c.text2 else c.text3)
+        var editing by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(value, androidx.compose.ui.text.TextRange(value.length))) }
+        if (editing.text != value) editing = androidx.compose.ui.text.input.TextFieldValue(value, androidx.compose.ui.text.TextRange(value.length))
         BasicTextField(
-            value,
-            onValueChange,
+            editing,
+            {
+                editing = it
+                onValueChange(it.text)
+            },
             Modifier.weight(1f)
                 .focusRequester(requester)
                 .onFocusChanged { focus = it.hasFocus }
@@ -664,6 +671,7 @@ fun Note(
     warn: Boolean = false,
     action: (@Composable () -> Unit)? = null,
     icon: ImageVector = if (warn) NnIcons.alert else NnIcons.info,
+    centered: Boolean = false,
 ) {
     val c = LocalNnTheme.current.colors
     Row(
@@ -678,7 +686,7 @@ fun Note(
                 RoundedCornerShape(LocalNnTheme.current.radius),
             )
             .padding(horizontal = 11.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = if (centered) Alignment.CenterVertically else Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Icon(icon, Modifier.padding(top = 1.dp), color = if (warn) c.warn else c.text2)
