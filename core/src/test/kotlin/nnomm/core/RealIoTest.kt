@@ -438,7 +438,7 @@ class RealIoTest {
         assertFalse(game.resolve("winhttp.dll").exists())
         assertEquals("player settings", game.resolve("doorstop_config.ini").readText())
         assertTrue(
-            Files.walk(home.resolve("recovery")).use { paths ->
+            Files.walk(game.resolve(".nnomm/recovery")).use { paths ->
                 paths.anyMatch { it.fileName.toString() == "BepInEx.dll" }
             }
         )

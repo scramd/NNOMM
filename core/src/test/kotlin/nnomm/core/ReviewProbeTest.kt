@@ -349,10 +349,17 @@ class ReviewProbeTest {
             folder.apply(state(game), "default")
             // Snapshot replacement is itself a transaction; inject in the final game-tree
             // transaction.
-            var prepared = 0
             DiskFaults.step = { step ->
-                if (step == "prepared") prepared++
-                if (prepared == 2 && step == point) throw DiskCrash()
+                val journals = home.resolve("game-transactions")
+                val configSwap =
+                    journals.isDirectory() &&
+                        Files.list(journals).use { paths ->
+                            paths.anyMatch {
+                                it.name.endsWith(".txn") &&
+                                    it.readText().contains("\"target\": \"${config.parent}\"")
+                            }
+                        }
+                if (configSwap && step == point) throw DiskCrash()
             }
             try {
                 assertFails {

@@ -164,7 +164,7 @@ class RealModStore(
         Path.of(catalogStorePath?.takeIf { it.isNotBlank() } ?: home.resolve("mods").toString())
 
     init {
-        recoverTransactions(home.resolve("transactions"), homeOnly = true)
+        recoverTransactions(home.resolve("transactions"), homeOnly = true, notice = {})
     }
 
     private val undoUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -256,6 +256,7 @@ class RealModStore(
                 } finally {
                     deleteTree(staging)
                 }
+                undoUntil[id] = System.currentTimeMillis() + 9000
             }
         }
 
@@ -324,7 +325,11 @@ class RealModStore(
 
     override suspend fun usedBytes(): Long =
         withContext(Dispatchers.IO) {
-            listOf(storeRoot, home.resolve("recovery"), home.resolve("player-files"))
+            (listOf(storeRoot, home.resolve("player-files"), home.resolve("player-edits")) +
+                    recoveryCopies())
+                .let { roots ->
+                    roots.filter { path -> roots.none { it != path && path.startsWith(it) } }
+                }
                 .filter { it.exists() }
                 .sumOf { root ->
                     Files.walk(root).use { files ->
@@ -401,15 +406,53 @@ class RealModStore(
             }
         }
 
+    private fun recoveryCopies(): List<Path> {
+        val root = home.resolve("recovery")
+        if (!root.isDirectory()) return emptyList()
+        val copies =
+            Files.list(root).use { files ->
+                files
+                    .toList()
+                    .flatMap { file ->
+                        if (file.isDirectory()) listOf(file)
+                        else if (file.name.endsWith(".json"))
+                            runCatching {
+                                    json
+                                        .decodeFromString<Map<String, String>>(file.readText())[
+                                            "copies"]
+                                        .orEmpty()
+                                        .lines()
+                                        .filter { it.isNotBlank() }
+                                        .map { Path.of(it) }
+                                }
+                                .getOrDefault(emptyList())
+                        else emptyList()
+                    }
+                    .filter { it.isDirectory() && !isLink(it) }
+                    .distinct()
+            }
+        return copies.filter { path -> copies.none { it != path && path.startsWith(it) } }
+    }
+
+    internal fun recoveryOverLimit(): Boolean {
+        val copies = recoveryCopies()
+        if (copies.size > 100) return true
+        return copies.sumOf { root ->
+            Files.walk(root).use { files ->
+                files.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+            }
+        } > 256L * 1024 * 1024
+    }
+
     /** Only remove old recovery trees whose every byte also exists outside recovery. */
     private fun clearableRecovery(state: AppState): List<Path> {
-        val root = home.resolve("recovery")
-        if (!root.exists()) return emptyList()
+        val copies = recoveryCopies()
         val live = mutableSetOf<String>()
         val roots =
             listOfNotNull(
                 storeRoot,
                 home.resolve("player-files"),
+                home.resolve("player-edits"),
                 home.resolve("profiles"),
                 state.game.folder?.let { Path.of(it).resolve("BepInEx") },
             )
@@ -418,28 +461,21 @@ class RealModStore(
             .forEach { folder ->
                 Files.walk(folder).use { paths ->
                     paths
-                        .filter { it.isRegularFile() && !Files.isSymbolicLink(it) }
+                        .filter { file ->
+                            file.isRegularFile() &&
+                                !isLink(file) &&
+                                copies.none { file.startsWith(it) }
+                        }
                         .forEach { live += digest(it) }
                 }
             }
-        return Files.list(root).use { paths ->
-            paths
-                .filter {
-                    it.isDirectory() &&
-                        it.getLastModifiedTime().toMillis() < System.currentTimeMillis() - 9000
+        return copies
+            .filter { it.getLastModifiedTime().toMillis() < System.currentTimeMillis() - 9000 }
+            .filter { folder ->
+                Files.walk(folder).use { files ->
+                    files.filter { it.isRegularFile() }.allMatch { digest(it) in live }
                 }
-                .toList()
-                .filter { folder ->
-                    Files.walk(folder).use { files ->
-                        files
-                            .filter {
-                                it.isRegularFile() &&
-                                    it.name !in setOf(".nnomm-state.json", ".nnomm-state.json.bak")
-                            }
-                            .allMatch { digest(it) in live }
-                    }
-                }
-        }
+            }
     }
 
     override suspend fun clearUnused(state: AppState) = clearUnused { state }

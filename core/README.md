@@ -187,3 +187,21 @@ port. Real IO writes it at Play. `importPack`
 accepts an optional destination id and permitted settings, so the UI can prepare a
 private config snapshot before profile selection. `RealPacks.importSettings` never
 writes into the game. `problemReport` builds the read-only report on an IO dispatcher.
+
+### Third IO safety round
+
+`GameFolder.applySucceeded` is false for deferred, refused or partial applies. Call
+`apply`, then read this property and `applyProblems`; only a full success can cache
+the requested plan. `AppStore.retryApply()` retries the current plan. `GameFolder.recoveryPending`
+keeps deferred or failed journals visible after a recovery attempt. Placement
+problems supply the `retryApply` action, and are hidden when the mod is off.
+
+`SavedState` now includes the serializable `TroubleSession`. Its original enabled
+set and temporary switches are saved before applying a guided-test round. Reopen
+resumes the test; Stop restores the original switches. Runtime open holds an OS
+file lock on `<home>/.lock` until shutdown. Direct `RealGameFolder` operations
+also acquire this lock when no runtime owns it in this process.
+
+Disk swaps accept an internal `beforeMutation` gate and recover only their own
+journal on an IO failure. Internal crash hooks cover both rename windows,
+ownership publication, journal deletion, and interrupted recovery cleanup.

@@ -57,7 +57,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private val metadataSlots = Semaphore(1)
     private val jobs = mutableMapOf<String, Job>()
     private val transfers = mutableMapOf<String, Deferred<Unit>>()
-    private var appliedPlan: GamePlan = resolvedPlan(initial)
+    private var appliedPlan: GamePlan? = null
     private var applyPending = false
 
     // Preserve disk mutation order, including an Undo issued before remove finishes.
@@ -121,8 +121,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                     state.value.firstStart.complete &&
                                     state.value.installed.isEmpty()
                             )
-                                adoptExistingMods(folder, true)
-                            change { it.copy(gameIoPending = false) }
+                                Unit // Startup adoption is authorized only by a fresh game/home
+                            // pair.
+                            change { it.copy(gameIoPending = io.gameFolder.recoveryPending) }
                         }
                     applyAndSave()
                 }
@@ -246,7 +247,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
         }
         io.gameFolder.apply(gamePlan(snapshot))
-        appliedPlan = resolvedPlan(snapshot)
+        if (io.gameFolder.applySucceeded) appliedPlan = resolvedPlan(snapshot)
+        else {
+            appliedPlan = null
+            error("Some changes are pending. Retry or take over existing mods before Play.")
+        }
     }
 
     private fun applyAndSave(force: Boolean = false) {
@@ -937,8 +942,18 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     fun startBrokenModTest() {
         if (state.value.trouble != null) return
-        change { startTrouble(it) }
-        applyAndSave()
+        if (io.persistence == null) {
+            change { startTrouble(it) }
+            applyAndSave()
+        } else
+            disk {
+                if (state.value.trouble != null) return@disk
+                val next = startTrouble(state.value)
+                // Save the original set and session before publishing temporary switches.
+                io.persistence.save(next)
+                change { next }
+                prepareGameFolder(next)
+            }
     }
 
     fun answerBrokenModTest(stillThere: Boolean) {
@@ -1247,6 +1262,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 )),
                 )
             }
+            io.modStore.protect(setOf(id))
             toast(
                 "Replaced ${oldMod.name}",
                 "Undo",
@@ -1308,6 +1324,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
+    fun retryApply() = applyAndSave(force = true)
+
     fun takeOverExistingMods(folder: String) {
         background { adoptExistingMods(folder, false) }
     }
@@ -1346,7 +1364,22 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     /** Notices share the store's toast lifetime and are cancelled with the store. */
     fun forwardNotices(notices: kotlinx.coroutines.channels.ReceiveChannel<String>) {
-        worker.launch { for (message in notices) toast(message) }
+        worker.launch {
+            for (message in notices) {
+                if (
+                    message.contains("takeover", true) ||
+                        message.contains("Take over", true) ||
+                        message.contains("Ownership is missing")
+                )
+                    toast(
+                        message,
+                        "Take over",
+                        ms = 30000,
+                        undo = { state.value.game.folder?.let(::takeOverExistingMods) },
+                    )
+                else toast(message)
+            }
+        }
     }
 
     fun completeFirstStart() {

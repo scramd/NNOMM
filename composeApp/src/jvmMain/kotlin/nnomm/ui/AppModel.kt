@@ -293,6 +293,7 @@ class AppModel(
      */
     fun perform(action: UiAction) {
         when (action.kind) {
+            ActionKind.RETRYAPPLY -> store.retryApply()
             ActionKind.OPENMOD ->
                 action.id?.let {
                     ui.openMod(

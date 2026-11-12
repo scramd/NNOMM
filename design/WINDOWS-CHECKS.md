@@ -85,3 +85,9 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Automatic “By itself” update waits for the same placement-save/runtime-drain path as window close | Start an update during a queued mod write: install/restart begins only after safe shutdown; save failure prevents installation. |
 | Hiding profiles and reset save preferences without placing files | Hide profiles outside Default, verify Default is selected and files wait until the next mod action or Play; reset must not change game files. |
 | Per-profile console value applies at Play | Different overrides on two profiles, reset/clear override, Windows config locking and private config transitions. |
+
+Third IO safety round: check Windows reparse/junction refusal before entry moves,
+non-following deletion, home OS file locking (including installed/portable copies),
+same-drive game recovery with home on C: and game on D:, and repeated recovery
+under file locks. Core uses NOFOLLOW basic attributes (`isOther`), symbolic-link detection and a
+canonical-parent/entry comparison for junctions reported as directories; native Windows junction coverage is not verified on Linux.

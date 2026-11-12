@@ -22,6 +22,9 @@ internal data class Placement(
     val directories: Set<String> = emptySet(),
     val applied: Boolean = false,
     val gameRoot: String? = null,
+    val unplaced: Map<String, ManagedMod> = emptyMap(),
+    val entryProfiles: Map<String, String> = emptyMap(),
+    val epoch: String? = null,
 )
 
 class RealGameFolder(
@@ -33,9 +36,15 @@ class RealGameFolder(
     private val notice: (String) -> Unit = {},
 ) : GameFolder {
     private val mutex = Mutex()
+    override var applySucceeded = false
+        private set
+
     private val problemFlow =
         kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
     override val applyProblems: kotlinx.coroutines.flow.StateFlow<Map<String, String>> = problemFlow
+
+    private suspend fun <T> guarded(block: suspend () -> T): T =
+        mutex.withLock { HomeLocks.operation(home, block) }
 
     private fun problem(id: String, text: String) {
         problemFlow.value = problemFlow.value + (id to text)
@@ -68,12 +77,17 @@ class RealGameFolder(
             }
         }
 
+    override val recoveryPending: Boolean
+        get() =
+            pendingTransactions(home.resolve("transactions")) ||
+                pendingTransactions(home.resolve("game-transactions"))
+
     override suspend fun recoverPending() =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
+            guarded {
                 if (!running()) {
-                    recoverTransactions(home.resolve("transactions"))
-                    recoverTransactions(home.resolve("game-transactions"))
+                    recoverTransactions(home.resolve("transactions"), notice = notice)
+                    recoverTransactions(home.resolve("game-transactions"), notice = notice)
                 }
             }
         }
@@ -125,13 +139,17 @@ class RealGameFolder(
 
     override suspend fun takeOver(folder: String): List<Pair<CatalogMod, InstalledMod>> =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
+            guarded {
                 require(!running()) { "Close Nuclear Option before taking over mods." }
                 val game = root(folder)
                 val record = record(game)
-                recoverTransactions(home.resolve("transactions"))
+                val previousAdoption = adopted(game)
+                val trusted = if (previousAdoption?.applied == true) record.read() else null
+                val owned = trusted?.entries.orEmpty()
+                recoverTransactions(home.resolve("transactions"), notice = notice)
                 val found = mutableListOf<Pair<CatalogMod, InstalledMod>>()
                 val entries = mutableMapOf<String, ManagedMod>()
+                val unplaced = mutableMapOf<String, ManagedMod>()
                 Files.createDirectories(home.resolve("staging"))
                 for ((location, on) in listOf("plugins" to true, "disabledPlugins" to false)) {
                     val dir = safe(game, "BepInEx/$location")
@@ -146,6 +164,8 @@ class RealGameFolder(
                                     continue
                                 }
                                 safe(dir, path.name)
+                                if (on && path.name in owned) continue
+                                rejectLinks(path)
                                 val meta =
                                     if (
                                         path.isDirectory() &&
@@ -268,7 +288,7 @@ class RealGameFolder(
                                             )
                                     )
                                 found += pair.first to installed
-                                entries[path.name] =
+                                (if (on) entries else unplaced)[path.name] =
                                     ManagedMod(
                                         installed.id,
                                         installed.defaultVersion,
@@ -286,10 +306,20 @@ class RealGameFolder(
                 saveAdoption(
                     game,
                     Placement(
-                        entries,
-                        "default",
+                        owned + entries,
+                        trusted?.profileId ?: "default",
+                        ownSettings = trusted?.ownSettings ?: false,
+                        directories = trusted?.directories.orEmpty(),
+                        entryProfiles =
+                            trusted?.entryProfiles.orEmpty() +
+                                entries.keys.associateWith { "default" },
+                        unplaced = previousAdoption?.unplaced.orEmpty() + unplaced,
+                        epoch = java.util.UUID.randomUUID().toString(),
                         generations =
-                            entries.mapValues { (_, m) -> "|" + store.generation(m.id, m.version) },
+                            trusted?.generations.orEmpty() +
+                                entries.mapValues { (_, m) ->
+                                    "|" + store.generation(m.id, m.version)
+                                },
                     ),
                 )
                 found
@@ -322,28 +352,49 @@ class RealGameFolder(
 
     override suspend fun apply(plan: GamePlan) =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
-                if (running()) return@withLock
-                val game = root(plan.folder ?: return@withLock)
-                recoverTransactions(home.resolve("game-transactions"))
-                recoverTransactions(home.resolve("transactions"))
+            guarded {
+                applySucceeded = false
+                if (running()) return@guarded
+                val game = root(plan.folder ?: return@guarded)
+                recoverTransactions(home.resolve("game-transactions"), notice = notice)
+                recoverTransactions(home.resolve("transactions"), notice = notice)
+                if (
+                    pendingTransactions(home.resolve("game-transactions")) ||
+                        pendingTransactions(home.resolve("transactions"))
+                ) {
+                    notice(
+                        "Changes are pending recovery. Close the game and Retry; recovery files are kept."
+                    )
+                    return@guarded
+                }
                 val plugin = safe(game, "BepInEx/plugins")
                 val recorded = record(game).read()
-                val old = recorded ?: adopted(game) ?: Placement()
+                val adoption = adopted(game)
+                val old =
+                    if (
+                        adoption != null &&
+                            !adoption.applied &&
+                            (recorded == null || recorded.epoch != adoption.epoch)
+                    )
+                        adoption
+                    else recorded ?: adoption ?: Placement()
+                problemFlow.value = problemFlow.value.filterKeys { it in plan.versions }
                 // A fresh home cannot use an old ownership record as permission to remove files.
                 if (adopted(game) == null && recorded != null) {
                     notice(
                         "Existing mods need takeover before changes can be applied. They were left unchanged."
                     )
-                    return@withLock
+                    return@guarded
                 }
                 if (recorded == null && adopted(game) != null && old.applied) {
                     notice("Ownership is missing. Take over existing mods before applying changes.")
-                    return@withLock
+                    return@guarded
                 }
                 if (adopted(game) == null) saveAdoption(game, old)
                 val names =
-                    adopted(game)?.entries.orEmpty().entries.associate { it.value.id to it.key } +
+                    (adopted(game)?.unplaced.orEmpty() + adopted(game)?.entries.orEmpty())
+                        .entries
+                        .associate { it.value.id to it.key } +
                         old.entries.entries.associate { it.value.id to it.key }
                 fun parent(id: String, v: String) =
                     catalog().find { it.id == id }?.versions?.find { it.version == v }?.extends?.id
@@ -361,12 +412,19 @@ class RealGameFolder(
                                     id,
                                     v,
                                     (old.entries.values.find { it.id == id }
-                                            ?: adopted(game)?.entries?.values?.find { it.id == id })
+                                            ?: adopted(game)?.entries?.values?.find { it.id == id }
+                                            ?: adopted(game)?.unplaced?.values?.find {
+                                                it.id == id
+                                            })
                                         ?.loose ?: false,
                                 )
                         }
                         .toMap()
                 val result = old.entries.toMutableMap()
+                val owners =
+                    old.entries.keys
+                        .associateWith { old.entryProfiles[it] ?: old.profileId ?: "default" }
+                        .toMutableMap()
                 val directories = old.directories.toMutableSet()
                 val generations = old.generations.toMutableMap()
                 val directChanges =
@@ -374,6 +432,8 @@ class RealGameFolder(
                         .filter { name ->
                             val m = wanted[name]
                             m != old.entries[name] ||
+                                (m != null && !safe(plugin, name).exists()) ||
+                                (m != null && (owners[name] ?: old.profileId) != plan.profileId) ||
                                 (m != null && !store.version(m.id, m.version).isDirectory()) ||
                                 (m != null &&
                                     store.generation(m.id, m.version) !=
@@ -388,19 +448,36 @@ class RealGameFolder(
                         .toSet()
                 fun extras(m: ManagedMod, profile: String) =
                     home.resolve("player-files/${component(profile)}/${component(m.id)}")
+                val blocked = mutableSetOf<String>()
+                for (name in changed) {
+                    try {
+                        rejectLinks(safe(plugin, name))
+                        for ((childName, child) in
+                            wanted.filterKeys { it == name || it.startsWith("$name/") }) {
+                            require(store.version(child.id, child.version).isDirectory()) {
+                                "Stored files are missing for ${child.id}"
+                            }
+                        }
+                    } catch (e: Exception) {
+                        blocked += name
+                        (old.entries[name] ?: wanted[name])?.let {
+                            problem(
+                                it.id,
+                                "${it.id} was left unchanged: ${e.message}. Retry or turn it off.",
+                            )
+                        }
+                    }
+                }
+                fun blocked(name: String) = blocked.any { name == it || name.startsWith("$it/") }
                 // Snapshot deepest entries first, before a parent can move its children.
                 val captured = mutableMapOf<String, Path>()
                 for (name in changed.sortedByDescending { it.count { c -> c == '/' } }) {
                     val m = old.entries[name] ?: continue
+                    if (blocked(name)) continue
                     try {
                         val dest = safe(plugin, name)
-                        if (!dest.exists()) {
-                            captured[name] =
-                                home.resolve("staging/absent-${java.util.UUID.randomUUID()}")
-                            continue
-                        }
                         val payload = store.version(m.id, m.version)
-                        val kept = extras(m, old.profileId ?: "default")
+                        val kept = extras(m, owners[name] ?: "default")
                         val snapshot = home.resolve("staging/player-${java.util.UUID.randomUUID()}")
                         Files.createDirectories(snapshot)
                         if (dest.isDirectory())
@@ -426,8 +503,46 @@ class RealGameFolder(
                                         }
                                     }
                             }
-                        // The saved set mirrors the last removal, including player deletions.
+                        if (dest.isRegularFile()) {
+                            val rel = dest.fileName.toString()
+                            if (store.hashes(m.id, m.version)[rel] != digest(dest))
+                                copyTree(dest, safe(snapshot, rel))
+                        }
+                        // Shipped-file edits belong to this exact version/generation. A later
+                        // version's capture cannot overwrite edits that it never put back.
+                        val editedStage =
+                            home.resolve("staging/edits-${java.util.UUID.randomUUID()}")
+                        Files.createDirectories(editedStage)
+                        try {
+                            val shipped = store.hashes(m.id, m.version)
+                            Files.walk(snapshot).use { files ->
+                                files
+                                    .filter { it.isRegularFile() }
+                                    .forEach { file ->
+                                        val relative =
+                                            snapshot.relativize(file).toString().replace('\\', '/')
+                                        if (relative in shipped)
+                                            copyTree(file, safe(editedStage, relative))
+                                    }
+                            }
+                            replaceTree(
+                                editedFiles(
+                                    m,
+                                    owners[name] ?: "default",
+                                    old.generations[name].orEmpty(),
+                                ),
+                                editedStage,
+                                home.resolve("transactions"),
+                            )
+                        } finally {
+                            deleteTree(editedStage)
+                        }
+                        // The saved extra set mirrors removal, including player deletions.
                         replaceTree(kept, snapshot, home.resolve("transactions"))
+                        atomic(
+                            kept.resolveSibling(kept.fileName.toString() + ".generation"),
+                            old.generations[name].orEmpty(),
+                        )
                         captured[name] = snapshot
                         if (Files.walk(snapshot).use { it.anyMatch { p -> p.isRegularFile() } })
                             notice(
@@ -447,6 +562,7 @@ class RealGameFolder(
                 for (name in changed.sortedByDescending { it.count { c -> c == '/' } }) {
                     if (name in wanted) continue
                     val m = old.entries[name] ?: continue
+                    if (blocked(name)) continue
                     try {
                         require(
                             name in captured &&
@@ -461,21 +577,31 @@ class RealGameFolder(
                             null,
                             home.resolve("game-transactions"),
                             keepPrevious = false,
+                            beforeMutation = {
+                                check(!running()) { "Game started; changes are pending" }
+                            },
                             afterCommit =
                                 record(game).path to
                                     json.encodeToString(
                                         Placement(
                                             result - name,
-                                            plan.profileId,
-                                            plan.ownSettings,
+                                            old.profileId,
+                                            old.ownSettings,
                                             generations - name,
                                             directories,
                                             applied = true,
+                                            entryProfiles = owners - name,
+                                            epoch = old.epoch,
                                         )
                                     ),
                         )
-                        result.remove(name)
-                        generations.remove(name)
+                        result.keys
+                            .filter { it == name || it.startsWith("$name/") }
+                            .toList()
+                            .forEach {
+                                result.remove(it)
+                                generations.remove(it)
+                            }
                     } catch (e: Exception) {
                         problem(
                             m.id,
@@ -489,6 +615,7 @@ class RealGameFolder(
                 for (name in
                     changed.filter { it in wanted }.sortedBy { it.count { c -> c == '/' } }) {
                     val m = wanted.getValue(name)
+                    if (blocked(name)) continue
                     try {
                         val payload = store.version(m.id, m.version)
                         require(payload.isDirectory()) { "Stored files are missing" }
@@ -543,9 +670,69 @@ class RealGameFolder(
                                                         .toString()
                                                         .replace('\\', '/'),
                                                 )
-                                            if (!to.exists()) copyTree(file, to)
+                                            val savedGeneration =
+                                                kept
+                                                    .resolveSibling(
+                                                        kept.fileName.toString() + ".generation"
+                                                    )
+                                                    .let {
+                                                        if (it.isRegularFile()) it.readText()
+                                                        else ""
+                                                    }
+                                            if (
+                                                !to.exists() ||
+                                                    savedGeneration ==
+                                                        "|" + store.generation(m.id, m.version)
+                                            ) {
+                                                if (to.exists()) deleteTree(to)
+                                                copyTree(file, to)
+                                            } else
+                                                notice(
+                                                    "Shipped files were placed for ${m.id}. Its edits stay saved for their original version in ${home.resolve("player-edits")}."
+                                                )
                                         }
                                 }
+                            if (
+                                m.loose &&
+                                    kept.resolve(Path.of(name).fileName).isRegularFile() &&
+                                    kept
+                                        .resolveSibling(kept.fileName.toString() + ".generation")
+                                        .readText() == "|" + store.generation(m.id, m.version)
+                            ) {
+                                deleteTree(next)
+                                copyTree(kept.resolve(Path.of(name).fileName), next)
+                            }
+                            val edited =
+                                editedFiles(
+                                    m,
+                                    plan.profileId,
+                                    "|" + store.generation(m.id, m.version),
+                                )
+                            if (edited.isDirectory()) {
+                                if (m.loose) {
+                                    val file = edited.resolve(Path.of(name).fileName)
+                                    if (file.isRegularFile()) {
+                                        deleteTree(next)
+                                        copyTree(file, next)
+                                    }
+                                } else
+                                    Files.walk(edited).use { files ->
+                                        files
+                                            .filter { it.isRegularFile() }
+                                            .forEach { file ->
+                                                val to =
+                                                    safe(
+                                                        next,
+                                                        edited
+                                                            .relativize(file)
+                                                            .toString()
+                                                            .replace('\\', '/'),
+                                                    )
+                                                if (to.exists()) deleteTree(to)
+                                                copyTree(file, to)
+                                            }
+                                    }
+                            }
                             // Validate actual game paths, not long temporary path prefixes.
                             if (next.isDirectory())
                                 Files.walk(next).use { files ->
@@ -579,22 +766,28 @@ class RealGameFolder(
                                 next,
                                 home.resolve("game-transactions"),
                                 keepPrevious = false,
+                                beforeMutation = {
+                                    check(!running()) { "Game started; changes are pending" }
+                                },
                                 afterCommit =
                                     record(game).path to
                                         json.encodeToString(
                                             Placement(
                                                 result + (name to m),
-                                                plan.profileId,
-                                                plan.ownSettings,
+                                                old.profileId,
+                                                old.ownSettings,
                                                 generations +
                                                     (name to
                                                         ("|" + store.generation(m.id, m.version))),
                                                 directories,
                                                 applied = true,
+                                                entryProfiles = owners + (name to plan.profileId),
+                                                epoch = old.epoch,
                                             )
                                         ),
                             )
                             problemFlow.value = problemFlow.value - m.id
+                            owners[name] = plan.profileId
                             result[name] = m
                             generations[name] = "|" + store.generation(m.id, m.version)
                         } finally {
@@ -611,35 +804,25 @@ class RealGameFolder(
                     }
                 }
                 captured.values.forEach(::deleteTree)
-                val recovery = home.resolve("recovery")
-                if (recovery.isDirectory()) {
-                    val copies =
-                        Files.list(recovery)
-                            .use {
-                                it.filter { p -> p.isDirectory() }
-                                    .toList()
-                                    .sortedBy { p -> p.getLastModifiedTime().toMillis() }
-                            }
-                            .toMutableList()
-                    fun bytes() =
-                        copies.sumOf { p ->
-                            Files.walk(p).use { files ->
-                                files
-                                    .filter { it.isRegularFile() }
-                                    .mapToLong { it.fileSize() }
-                                    .sum()
-                            }
-                        }
-                    while (copies.size > 100 || bytes() > 256L * 1024 * 1024) {
-                        val oldest = copies.removeAt(0)
-                        notice(
-                            "Recovery storage is full. Removing the oldest copy at $oldest. Current player files remain in player-files."
-                        )
-                        deleteTree(oldest)
-                        Files.deleteIfExists(recovery.resolve("${oldest.name}.json"))
-                    }
-                }
-                swapConfig(game, old, plan.ownSettings, plan.profileId)
+                // A promoted entry with pending metadata must be recovered before publishing any
+                // aggregate record; otherwise the old in-memory plan could erase its ownership.
+                if (pendingTransactions(home.resolve("game-transactions"))) return@guarded
+                if (store.recoveryOverLimit())
+                    notice(
+                        "Recovery copies are kept. Use Clear in Settings to remove copies whose bytes exist elsewhere."
+                    )
+                val beforeConfig =
+                    Placement(
+                        result,
+                        old.profileId,
+                        old.ownSettings,
+                        generations,
+                        directories,
+                        applied = true,
+                        entryProfiles = owners,
+                        epoch = old.epoch,
+                    )
+                swapConfig(game, beforeConfig, plan.ownSettings, plan.profileId)
                 directories
                     .sortedByDescending { it.count { c -> c == '/' } }
                     .forEach { name ->
@@ -657,16 +840,27 @@ class RealGameFolder(
                         generations,
                         directories,
                         applied = true,
+                        entryProfiles = owners,
+                        epoch = old.epoch,
                     )
                 if (updated != old) {
                     record(game).write(updated)
                     saveAdoption(
                         game,
-                        updated.copy(entries = adopted(game)?.entries.orEmpty() + updated.entries),
+                        updated.copy(
+                            entries = adopted(game)?.entries.orEmpty() + updated.entries,
+                            unplaced = adopted(game)?.unplaced.orEmpty(),
+                        ),
                     )
                 }
+                applySucceeded = problemFlow.value.isEmpty()
             }
         }
+
+    fun canAutomaticallyTakeOver(folder: String): Boolean {
+        val game = root(folder)
+        return adopted(game) == null && record(game).read() == null
+    }
 
     private fun swapConfig(game: Path, old: Placement, ownSettings: Boolean, p: String) {
         if (
@@ -681,7 +875,37 @@ class RealGameFolder(
             )
         val next = home.resolve("profiles/${if (ownSettings) component(p) else "shared"}/config")
         if (config.exists()) replaceTree(previous, config, home.resolve("transactions"))
-        if (next.exists()) replaceTree(config, next, home.resolve("transactions"))
+        if (!old.ownSettings && ownSettings && !next.exists()) {
+            record(game).write(old.copy(profileId = p, ownSettings = ownSettings))
+            return
+        }
+        val empty = home.resolve("staging/config-${java.util.UUID.randomUUID()}")
+        Files.createDirectories(empty)
+        try {
+            replaceTree(
+                config,
+                if (next.exists()) next else empty,
+                home.resolve("game-transactions"),
+                afterCommit =
+                    record(game).path to
+                        json.encodeToString(old.copy(profileId = p, ownSettings = ownSettings)),
+                beforeMutation = {
+                    check(!running()) { "Game started; config changes are pending" }
+                },
+            )
+        } finally {
+            deleteTree(empty)
+        }
+    }
+
+    private fun editedFiles(m: ManagedMod, profile: String, generation: String): Path {
+        val key =
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(generation.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        return home.resolve(
+            "player-edits/${component(profile)}/${component(m.id)}/${component(m.version)}/$key"
+        )
     }
 
     private fun loaderRecord(game: Path) =
@@ -693,13 +917,19 @@ class RealGameFolder(
 
     override suspend fun removeLoader(folder: String) =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
+            guarded {
                 require(!running()) { "Close Nuclear Option before removing the mod loader." }
                 val game = root(folder)
                 val record = loaderRecord(game)
                 val removals =
                     record.read().orEmpty().map { relative -> safe(game, relative) to null }
-                replaceTrees(removals, home.resolve("transactions"))
+                replaceTrees(
+                    removals,
+                    home.resolve("transactions"),
+                    beforeMutation = {
+                        check(!running()) { "Game started; loader changes are pending" }
+                    },
+                )
                 record.write(emptyList())
             }
         }
@@ -712,7 +942,7 @@ class RealGameFolder(
 
     private suspend fun loader(folder: String, repair: Boolean) =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
+            guarded {
                 require(!running()) { "Close Nuclear Option before changing the mod loader." }
                 val game = root(folder)
                 val existingVersion = inspect(folder).loaderVersion
@@ -769,7 +999,13 @@ class RealGameFolder(
                         home.resolve(
                             "loader-${Integer.toHexString(game.toString().hashCode())}.json"
                         ) to ownedStaged
-                    replaceTrees(replacements, home.resolve("transactions"))
+                    replaceTrees(
+                        replacements,
+                        home.resolve("transactions"),
+                        beforeMutation = {
+                            check(!running()) { "Game started; loader changes are pending" }
+                        },
+                    )
                 } finally {
                     deleteTree(staging)
                     transfer.close()
