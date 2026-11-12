@@ -141,7 +141,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             } catch (e: Exception) {
                                 io.logger.error("deferred apply", e)
                                 toast(
-                                    "Could not apply mod changes. Your files have been kept.",
+                                    if (e is LoaderInstallFailure)
+                                        "Could not install the mod loader. ${loaderFailureHelp(e)}"
+                                    else "Could not apply mod changes. Your files have been kept.",
                                     "Retry",
                                     undo = { retryApply() },
                                 )
@@ -333,7 +335,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     io.persistence?.save(state.value)
                     io.logger.error("apply", e)
                     toast(
-                        "Could not apply mod changes. Your files have been kept.",
+                        if (e is LoaderInstallFailure)
+                            "Could not install the mod loader. ${loaderFailureHelp(e)}"
+                        else "Could not apply mod changes. Your files have been kept.",
                         "Retry",
                         undo = { applyAndSave(force = true, allowLoader = installLoader) },
                     )
@@ -1031,7 +1035,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         else
                             when (e.message) {
                                 "Doorstop's enabled setting was not found." ->
-                                    "The mod loader’s settings file is damaged. Use Repair for the mod loader in Settings, Game."
+                                    if (state.value.game.loaderVersion == "5.4.23.4")
+                                        "The mod loader’s settings file is damaged. Use Repair for the mod loader in Settings, Game."
+                                    else
+                                        "The mod loader’s settings file is damaged. Restore it using the loader’s original installer before playing without mods."
                                 "Nuclear Option is already running." ->
                                     "Nuclear Option is already running."
                                 else -> "Check that the game is installed and try Play again."
@@ -1551,15 +1558,32 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 io.logger.error("repair loader", e)
                 toast(
                     "Could not repair the mod loader. ${loaderFailureHelp(e)}",
-                    "Retry",
+                    if (e is LoaderRepairRefused) null else "Retry",
                     ms = 30000,
-                    undo = { repairLoader() },
+                    undo =
+                        if (e is LoaderRepairRefused) null
+                        else {
+                            { repairLoader() }
+                        },
                 )
             }
         }
     }
 
-    @Volatile private var visibleMetadataIds: Set<String> = emptySet()
+    private val visibleMetadataIds = mutableMapOf<String, Int>()
+
+    fun metadataVisible(id: String): () -> Unit {
+        synchronized(visibleMetadataIds) {
+            visibleMetadataIds[id] = (visibleMetadataIds[id] ?: 0) + 1
+        }
+        loadMetadata(setOf(id), visibleOnly = true)
+        return {
+            synchronized(visibleMetadataIds) {
+                val count = (visibleMetadataIds[id] ?: 1) - 1
+                if (count == 0) visibleMetadataIds.remove(id) else visibleMetadataIds[id] = count
+            }
+        }
+    }
 
     private fun requestMetadata(key: String): Boolean =
         synchronized(metadataRequested) {
@@ -1573,8 +1597,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     fun loadMetadata(
         ids: Set<String> = state.value.catalog.map { it.id }.toSet(),
         backgroundLoad: Boolean = false,
+        visibleOnly: Boolean = false,
     ) {
-        if (!backgroundLoad) visibleMetadataIds = ids.toSet()
         val snapshot = state.value
         snapshot.catalog
             .filter { it.id in ids }
@@ -1586,7 +1610,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             background {
                                 (if (backgroundLoad) backgroundMetadataSlots else metadataSlots)
                                     .withPermit {
-                                        if (!backgroundLoad && mod.id !in visibleMetadataIds)
+                                        if (
+                                            visibleOnly &&
+                                                synchronized(visibleMetadataIds) {
+                                                    mod.id !in visibleMetadataIds
+                                                }
+                                        )
                                             return@withPermit
                                         if (!requestMetadata("${mod.id}/${version.version}"))
                                             return@withPermit
@@ -1764,6 +1793,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     ms = 30000,
                     undo = { removeEverything() },
                 )
+                if (reason.contains("take over", true))
+                    toast(
+                        "Take over existing mods to let NNOMM manage them.",
+                        "Take over",
+                        ms = 30000,
+                        undo = { state.value.game.folder?.let(::takeOverExistingMods) },
+                    )
                 return@disk
             }
             // Publish the completed mod removal before the independent loader operation.
@@ -1802,7 +1838,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         if (snapshot.installed.isEmpty()) add("There are no mods to remove.")
                         if (snapshot.game.folder == null)
                             add(
-                                "No game folder is selected. Mods left in the previously selected game folder will be removed when you choose that folder again and press Play."
+                                "No game folder is selected. If mods remain in a game folder, choose that folder and press Play to remove them."
                             )
                     }
                     .joinToString(" ")
@@ -1814,10 +1850,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private suspend fun removeLoaderAfterMods(folder: String) {
         try {
             check(!io.launcher.running.value && !state.value.gameRunning)
-            io.gameFolder.removeLoader(folder)
+            val result = io.gameFolder.removeLoader(folder)
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
-            toast("NNOMM-installed mod loader files were removed. Existing loader files were kept.")
+            if (result.removed > 0)
+                toast(
+                    "NNOMM-installed mod loader files were removed." +
+                        if (result.kept) " Existing loader files were kept." else ""
+                )
+            else if (result.kept)
+                toast("Existing mod loader files were kept. NNOMM did not install them.")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

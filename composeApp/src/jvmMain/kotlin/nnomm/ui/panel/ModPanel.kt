@@ -35,7 +35,10 @@ private val memories = WeakHashMap<AppModel, PanelMemory>()
 @Composable
 fun ModPanel(ref: PanelRef) {
     val model = LocalApp.current
-    LaunchedEffect(ref.modId) { model.store.loadMetadata(setOf(ref.modId)) }
+    DisposableEffect(ref.modId) {
+        val dispose = model.store.metadataVisible(ref.modId)
+        onDispose { dispose() }
+    }
     val state by
         remember(model) {
                 model.store.state.map { it.copy(toasts = emptyList()) }.distinctUntilChanged()

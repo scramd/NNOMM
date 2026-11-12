@@ -87,6 +87,18 @@ interface ModStore {
 }
 
 /** Only managed files can be changed; takeover copies existing files without changing the game. */
+class DoorstopSettingsFailure(cause: Exception? = null) :
+    java.io.IOException("Doorstop's enabled setting was not found.", cause)
+
+class LoaderDownloadFailure(cause: Exception) : java.io.IOException(cause)
+
+class LoaderRepairRefused :
+    IllegalStateException(
+        "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
+    )
+
+data class LoaderRemoval(val removed: Int = 0, val kept: Boolean = false)
+
 interface GameFolder {
     val placementConflicts: StateFlow<Map<String, Set<String>>>?
         get() = null
@@ -111,7 +123,7 @@ interface GameFolder {
     val applySucceeded: Boolean
         get() = true
 
-    suspend fun removeLoader(folder: String) {}
+    suspend fun removeLoader(folder: String): LoaderRemoval = LoaderRemoval()
 
     suspend fun setConsole(folder: String, enabled: Boolean) {}
 

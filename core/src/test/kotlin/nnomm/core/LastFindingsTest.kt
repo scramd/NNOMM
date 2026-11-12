@@ -45,9 +45,10 @@ class LastFindingsTest {
                         if (failing) throw AccessDeniedException("secret")
                     }
 
-                    override suspend fun removeLoader(folder: String) {
+                    override suspend fun removeLoader(folder: String): nnomm.core.io.LoaderRemoval {
                         calls += folder
                         if (failing) throw AccessDeniedException("secret")
+                        return nnomm.core.io.LoaderRemoval()
                     }
                 }
             val state =
@@ -120,7 +121,7 @@ class LastFindingsTest {
         val store = settingHelp(SETTINGS.first { it.key == "store" }, s)
         val cache = settingHelp(SETTINGS.first { it.key == "cache" }, s)
         assertTrue(store.contains(size((1_950_000L + 1023) / 1024)))
-        assertTrue(cache.contains("Last calculated: 53 KB"))
+        assertTrue(cache.contains("Last calculated: 53\u00a0KB"))
         assertFalse(cache.contains("Retry."))
         assertEquals("1 mod", plural(1, "mod", "mods"))
         assertEquals("2 mods", plural(2, "mod", "mods"))
@@ -167,10 +168,12 @@ class LastFindingsTest {
             )
         try {
             withTimeout(5000) { backgroundStarted.await() }
-            app.loadMetadata(setOf("a"))
+            val leaveA = app.metadataVisible("a")
             withTimeout(5000) { first.await() }
-            app.loadMetadata(setOf("a", "b"))
-            app.loadMetadata(setOf("c"))
+            val leaveB = app.metadataVisible("b")
+            app.metadataVisible("c")
+            leaveA()
+            leaveB()
             release.complete(Unit)
             withTimeout(5000) { while (synchronized(calls) { "c" !in calls }) delay(10) }
             assertEquals(

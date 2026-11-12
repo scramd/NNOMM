@@ -148,8 +148,8 @@ fun ago(d: Int): String =
     }
 
 fun size(kb: Long): String =
-    if (kb >= 1024) String.format(Locale.ROOT, "%.${if(kb>=10240)0 else 1}f MB", kb / 1024.0)
-    else "$kb KB"
+    if (kb >= 1024) String.format(Locale.ROOT, "%.${if(kb>=10240)0 else 1}f\u00a0MB", kb / 1024.0)
+    else "$kb\u00a0KB"
 
 fun num(n: Long): String =
     when {

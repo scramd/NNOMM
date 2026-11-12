@@ -1206,7 +1206,12 @@ class RealGameFolder(
                 val game = root(folder)
                 val record = loaderRecord(game)
                 val removals =
-                    record.read().orEmpty().map { relative -> safe(game, relative) to null }
+                    record
+                        .read()
+                        .orEmpty()
+                        .map { relative -> safe(game, relative) }
+                        .filter { it.exists() }
+                        .map { it to null }
                 replaceTrees(
                     removals,
                     home.resolve("transactions"),
@@ -1215,6 +1220,18 @@ class RealGameFolder(
                     },
                 )
                 record.write(emptyList())
+                LoaderRemoval(
+                    removals.size,
+                    listOf("doorstop_config.ini", "winhttp.dll", "BepInEx/core").any {
+                        safe(game, it).let { path ->
+                            if (path.isDirectory())
+                                Files.walk(path).use { files ->
+                                    files.anyMatch { it.isRegularFile() }
+                                }
+                            else path.exists()
+                        }
+                    },
+                )
             }
         }
 
@@ -1237,7 +1254,7 @@ class RealGameFolder(
                         else
                             "This folder has BepInEx $existingVersion. Its files were left unchanged."
                     notice(message)
-                    error(message)
+                    throw LoaderRepairRefused()
                 }
                 val v =
                     ModVersion(
@@ -1246,7 +1263,14 @@ class RealGameFolder(
                         downloadUrl =
                             "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.4/BepInEx_win_x64_5.4.23.4.zip",
                     )
-                val transfer = downloader.download(CatalogMod("bepinex", "BepInEx"), v) {}
+                val transfer =
+                    try {
+                        downloader.download(CatalogMod("bepinex", "BepInEx"), v) {}
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        throw LoaderDownloadFailure(e)
+                    }
                 val downloaded = Path.of(transfer.path)
                 val staging = Files.createTempDirectory(home.resolve("staging"), "loader-")
                 try {
@@ -1265,18 +1289,46 @@ class RealGameFolder(
                                         !relative.startsWith("BepInEx/config/")
                                 )
                                 val dest = safe(game, relative)
+                                val wasOwned = relative in ownedNames
                                 if (!dest.exists()) ownedNames += relative
                                 if (
-                                    !relative.startsWith("BepInEx/core/") &&
-                                        (!dest.exists() || repair) &&
+                                    (!dest.exists() || (repair && wasOwned)) &&
                                         !(relative == "doorstop_config.ini" && dest.exists())
                                 )
                                     replacements += dest to src
                             }
                     }
-                    val coreTarget = safe(game, "BepInEx/core")
-                    if (repair || !coreTarget.exists())
-                        replacements += coreTarget to staging.resolve("BepInEx/core")
+                    val doorstop = safe(game, "doorstop_config.ini")
+                    if (repair && doorstop.exists()) {
+                        val old =
+                            try {
+                                Files.readString(doorstop)
+                            } catch (_: java.io.IOException) {
+                                null
+                            }
+                        if (old == null || !Regex("(?im)^\\s*enabled\\s*=").containsMatchIn(old)) {
+                            val restored = staging.resolve("restored-doorstop.ini")
+                            restored.writeText(
+                                if (old == null) staging.resolve("doorstop_config.ini").readText()
+                                else {
+                                    val newline = if (old.contains("\r\n")) "\r\n" else "\n"
+                                    val section =
+                                        Regex(
+                                                "(?im)^[ \t]*\\[(?:UnityDoorstop|General)\\][ \t]*(?=\\r?$)"
+                                            )
+                                            .find(old)
+                                    if (section == null)
+                                        "[UnityDoorstop]${newline}enabled = true$newline$old"
+                                    else
+                                        old.substring(0, section.range.last + 1) +
+                                            newline +
+                                            "enabled = true" +
+                                            old.substring(section.range.last + 1)
+                                }
+                            )
+                            replacements += doorstop to restored
+                        }
+                    }
                     val ownedStaged = staging.resolve("ownership.json")
                     ownedStaged.writeText(json.encodeToString(ownedNames.distinct()))
                     replacements +=
