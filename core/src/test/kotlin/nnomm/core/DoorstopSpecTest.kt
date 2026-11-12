@@ -516,13 +516,19 @@ class DoorstopSpecTest {
         for (target in listOf("", "valid.dll")) {
             val original = bytes("[General]\nenabled=false\ntarget_assembly=$target\n")
             val f = fixture(original)
+            val owned =
+                mapOf(
+                    "BepInEx/core/BepInEx.dll" to
+                        digest(f.game.resolve("BepInEx/core/BepInEx.dll")),
+                    "winhttp.dll" to digest(f.game.resolve("winhttp.dll")),
+                )
             JsonFile(
                     f.home.resolve(
-                        "loader-${Integer.toHexString(f.game.toString().hashCode())}.json"
+                        "loader-${Integer.toHexString(f.game.toString().hashCode())}.json.hashes"
                     ),
-                    ListSerializer(String.serializer()),
+                    LoaderOwnership.serializer(),
                 )
-                .write(listOf("BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini"))
+                .write(LoaderOwnership(f.game.toRealPath().toString(), owned))
             val ini = f.game.resolve("doorstop_config.ini")
             val moves = mutableListOf<Path>()
             DiskFaults.beforeMove = {

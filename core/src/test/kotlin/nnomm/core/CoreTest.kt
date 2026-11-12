@@ -539,10 +539,42 @@ class CoreTest {
 
     @Test
     fun sharingBuildsPack() {
-        val a = AppStore(Demo.state(), Demo.io())
+        val seed =
+            AppState(
+                installed =
+                    mapOf(
+                        "registry" to
+                            InstalledMod(
+                                "registry",
+                                versions = setOf("1", "2"),
+                                defaultVersion = "2",
+                                profiles = mapOf("default" to ProfileMod(true, "1")),
+                            ),
+                        "local" to
+                            InstalledMod(
+                                "local",
+                                versions = setOf("local-v"),
+                                source = ModSource.LOCAL,
+                                defaultVersion = "local-v",
+                                profiles = mapOf("default" to ProfileMod(true, "local-v")),
+                            ),
+                        "off" to
+                            InstalledMod(
+                                "off",
+                                versions = setOf("3"),
+                                defaultVersion = "3",
+                                profiles = mapOf("default" to ProfileMod(false, "3")),
+                            ),
+                    )
+            )
+        val a = AppStore(seed, Demo.io())
         try {
-            assertEquals(16, a.shareProfile().items.size)
-            assertEquals(17, a.shareProfile(includeLocal = true).items.size)
+            val registry = PackItem(PackKind.VER, "registry", "1")
+            assertEquals(listOf(registry), a.shareProfile().items)
+            assertEquals(
+                listOf(registry, PackItem(PackKind.LOCAL, "local", "local-v")),
+                a.shareProfile(includeLocal = true).items,
+            )
         } finally {
             a.close()
         }

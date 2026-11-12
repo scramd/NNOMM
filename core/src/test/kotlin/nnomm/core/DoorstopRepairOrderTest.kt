@@ -6,7 +6,6 @@ import kotlin.io.path.*
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
-import kotlinx.serialization.builtins.*
 import nnomm.core.io.*
 import nnomm.core.io.real.*
 import nnomm.core.model.*
@@ -113,11 +112,18 @@ class DoorstopRepairOrderTest {
                 zip.closeEntry()
             }
         }
-        JsonFile(
-                f.home.resolve("loader-${Integer.toHexString(f.game.toString().hashCode())}.json"),
-                ListSerializer(String.serializer()),
+        val owned =
+            mapOf(
+                "BepInEx/core/BepInEx.dll" to digest(f.game.resolve("BepInEx/core/BepInEx.dll")),
+                "winhttp.dll" to digest(f.game.resolve("winhttp.dll")),
             )
-            .write(listOf("BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini"))
+        JsonFile(
+                f.home.resolve(
+                    "loader-${Integer.toHexString(f.game.toString().hashCode())}.json.hashes"
+                ),
+                LoaderOwnership.serializer(),
+            )
+            .write(LoaderOwnership(f.game.toRealPath().toString(), owned))
         val moves = mutableListOf<Path>()
         DiskFaults.beforeMove = {
             moves.add(it)

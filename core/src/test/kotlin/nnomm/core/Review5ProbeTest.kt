@@ -116,8 +116,11 @@ class Review5ProbeTest {
         val store = RealModStore(home, null) { fooCatalog }
         val f = RealGameFolder(home, store, noNet, catalog = { fooCatalog }, running = { false })
         f.takeOver(g.toString())
+        g.resolve("BepInEx/plugins/Foo/data.json").writeText("NEW PLAYER DATA")
         payload(store, "foo", "2", mapOf("Foo.dll" to "foo two"))
         f.apply(plan(g, mapOf("foo" to "2")))
+        assertTrue(f.applySucceeded)
+        assertEquals("foo two", g.resolve("BepInEx/plugins/Foo/Foo.dll").readText())
         val state =
             AppState(
                 settings = noneKept(),
@@ -137,7 +140,8 @@ class Review5ProbeTest {
         // A fresh store object has no in-memory Undo protection (as after a restart).
         RealModStore(home, null) { fooCatalog }.clearUnused(state)
         assertTrue(
-            containsText(g, "PLAYER DATA") || containsText(home, "PLAYER DATA"),
+            containsText(home.resolve("player-files"), "NEW PLAYER DATA") ||
+                containsText(home.resolve("player-edits"), "NEW PLAYER DATA"),
             "Clear deleted the only copy of a player file from a taken-over mod",
         )
     }
@@ -151,7 +155,10 @@ class Review5ProbeTest {
         val store = RealModStore(home, null) { fooCatalog }
         val f = RealGameFolder(home, store, noNet, catalog = { fooCatalog }, running = { false })
         f.takeOver(g.toString())
+        g.resolve("BepInEx/plugins/Foo/data.json").writeText("NEW PLAYER DATA")
         f.apply(plan(g, emptyMap()))
+        assertTrue(f.applySucceeded)
+        assertFalse(g.resolve("BepInEx/plugins/Foo").exists())
         RealModStore(home, null) { fooCatalog }
             .clearUnused(
                 AppState(
@@ -161,7 +168,8 @@ class Review5ProbeTest {
                 )
             )
         assertTrue(
-            containsText(g, "PLAYER DATA") || containsText(home, "PLAYER DATA"),
+            containsText(home.resolve("player-files"), "NEW PLAYER DATA") ||
+                containsText(home.resolve("player-edits"), "NEW PLAYER DATA"),
             "uninstall + Clear deleted the only copy of a player file from a taken-over mod",
         )
     }

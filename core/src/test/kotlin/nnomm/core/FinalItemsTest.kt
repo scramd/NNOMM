@@ -128,10 +128,14 @@ class FinalItemsTest {
     @Test
     fun loaderInstallFailureWhenTurningOnFirstMod() = runBlocking {
         val io = Demo.io()
+        var attempts = 0
+        var offline = true
         val folder =
             object : GameFolder by io.gameFolder {
                 override suspend fun installLoader(folder: String) {
-                    throw java.net.UnknownHostException("github.com")
+                    attempts++
+                    if (offline) throw java.net.UnknownHostException("github.com")
+                    io.gameFolder.installLoader(folder)
                 }
             }
         val s = Demo.state()
@@ -152,6 +156,17 @@ class FinalItemsTest {
             }
             val texts = app.state.value.toasts.map { it.text }
             assertTrue(texts.any { it.contains("connection") }, "$texts")
+            app.awaitDiskIdle()
+            assertEquals(1, attempts)
+            assertTrue(
+                app.state.value.installed.getValue(off).profiles.getValue(state.profileId).on
+            )
+            assertFalse(app.state.value.game.loaderPresent)
+            offline = false
+            app.runToast(app.state.value.toasts.first { it.action == "Retry" }.id)
+            app.awaitDiskIdle()
+            assertEquals(2, attempts)
+            assertTrue(app.state.value.game.loaderPresent)
         } finally {
             app.shutdown()
         }

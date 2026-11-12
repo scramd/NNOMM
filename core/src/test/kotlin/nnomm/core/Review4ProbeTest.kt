@@ -315,11 +315,23 @@ class Review4ProbeTest {
         val f = RealGameFolder(home, store, noNet, running = { false })
         val started = CompletableDeferred<Unit>()
         val a = storeWith(store, f, g, started)
-        val locked = store.version("modb", "1").resolve("b.dll").toFile()
-        locked.setReadable(false)
-        a.setOn(listOf("moda", "modb"), true)
-        a.awaitDiskIdle()
-        locked.setReadable(true)
+        val target = g.resolve("BepInEx/plugins/modb")
+        var refused = false
+        DiskFaults.beforeMove = {
+            if (it == target) {
+                refused = true
+                throw AccessDeniedException(it.toString())
+            }
+        }
+        try {
+            a.setOn(listOf("moda", "modb"), true)
+            a.awaitDiskIdle()
+        } finally {
+            DiskFaults.beforeMove = {}
+        }
+        assertTrue(refused, "The first apply must reach the injected failure")
+        assertTrue("modb" in a.state.value.applyProblems)
+        assertFalse(target.exists())
         a.play()
         withTimeout(5000) { started.await() }
         val moda = g.resolve("BepInEx/plugins/moda/a.dll").exists()

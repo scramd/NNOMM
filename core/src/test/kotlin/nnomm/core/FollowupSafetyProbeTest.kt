@@ -5,11 +5,9 @@ import kotlin.io.path.*
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
-import nnomm.core.demo.Demo
 import nnomm.core.io.*
 import nnomm.core.io.real.*
 import nnomm.core.model.*
-import nnomm.core.store.AppStore
 
 class FollowupSafetyProbeTest {
     private val temporary = mutableListOf<Path>()
