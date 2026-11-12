@@ -383,7 +383,9 @@ fun LibraryPage() {
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 ) {
                                     listOf(
-                                            "Mod loader BepInEx ${s.game.loaderVersion ?: "5.4.23.4"}",
+                                            if (model.isDemo || s.game.loaderPresent)
+                                                "Mod loader BepInEx ${s.game.loaderVersion ?: if (model.isDemo) "5.4.23.4" else ""}".trim()
+                                            else "Mod loader not installed",
                                             if (model.isDemo) "Game ${s.game.version ?: "—"}" else s.game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it" } ?: "Nuclear Option, version unknown",
                                             if (!model.isDemo) s.storeUsedKb?.let { "${size(it)} of mods" } ?: "Mod size unknown" else if (s.installed.keys.any { s.mod(it).newestRelease?.sizeKb == null }) "Mod size unknown" else "${size(s.installed.keys.sumOf { s.mod(it).newestRelease?.sizeKb ?: 0 })} of mods",
                                         )

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import nnomm.core.model.DownloadStatus
 import nnomm.core.rules.*
 import nnomm.ui.*
 import nnomm.ui.browse.BrowsePage
@@ -607,6 +608,15 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
     }
 }
 
+/** The one-line state of the download list: running downloads first, then failures. */
+internal fun downloadSummary(active: Int, failed: Int, total: Int): String =
+    when {
+        total == 0 -> "No downloads"
+        active > 0 -> "$active download${if (active == 1) "" else "s"}"
+        failed > 0 -> "$failed download${if (failed == 1) "" else "s"} failed"
+        else -> "Downloads finished"
+    }
+
 @Composable
 private fun DownloadQueue(model: AppModel, narrow: Boolean) {
     val s by
@@ -628,17 +638,15 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                     Icon(NnIcons.download)
                     if (!narrow)
                         Label(
-                            s.downloads
-                                .count { it.percent < 100 }
-                                .let {
-                                    if (s.downloads.isEmpty()) "No downloads"
-                                    else if (it == 0) "Downloads finished"
-                                    else "$it download${if (it == 1) "" else "s"}"
-                                },
+                            downloadSummary(
+                                s.downloads.count { it.status == DownloadStatus.ACTIVE },
+                                s.downloads.count { it.status == DownloadStatus.FAILED },
+                                s.downloads.size,
+                            ),
                             size = 12f,
                         )
                 }
-                val active = s.downloads.filter { it.percent < 100 }
+                val active = s.downloads.filter { it.status == DownloadStatus.ACTIVE }
                 if (active.isNotEmpty())
                     ProgressBar(
                         if (active.any { it.percent < 0 }) -1f
@@ -673,22 +681,35 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                         ModTile(d.id, s.mod(d.id).name, s.mod(d.id).demoPicture, TileSize.Small)
                         Label(s.catalog.find { it.id == d.id }?.name ?: d.id, Modifier.weight(1f))
                         Label(
-                            if (d.percent >= 100)
-                                if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated"
-                                else "Installed"
-                            else if (d.percent < 0) "Downloading" else "${d.percent}%",
+                            when (d.status) {
+                                DownloadStatus.FAILED -> "Failed"
+                                DownloadStatus.COMPLETE ->
+                                    if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated"
+                                    else "Installed"
+                                DownloadStatus.ACTIVE ->
+                                    if (d.percent < 0) "Downloading" else "${d.percent}%"
+                            },
                             size = 12f,
                             color = c.text3,
                         )
-                        if (d.percent < 100)
+                        if (d.status == DownloadStatus.FAILED)
+                            IconButton(
+                                NnIcons.refresh,
+                                "Try again",
+                                { model.store.retryDownload(d.id) },
+                                small = true,
+                            )
+                        if (d.status != DownloadStatus.COMPLETE)
                             IconButton(
                                 NnIcons.x,
-                                "Cancel",
+                                if (d.status == DownloadStatus.FAILED) "Remove from the list"
+                                else "Cancel",
                                 { model.store.cancelDownload(d.id) },
                                 small = true,
                             )
                     }
-                    if (d.percent < 100) ProgressBar(d.percent / 100f, neutral = true)
+                    if (d.status == DownloadStatus.ACTIVE)
+                        ProgressBar(d.percent / 100f, neutral = true)
                 }
             }
         }
