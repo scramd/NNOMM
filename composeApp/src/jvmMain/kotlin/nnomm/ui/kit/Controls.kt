@@ -113,6 +113,7 @@ fun Label(
     overflow: TextOverflow = TextOverflow.Ellipsis,
     textAlign: TextAlign = TextAlign.Start,
     lineHeight: TextUnit = TextUnit.Unspecified,
+    lineHeightStyle: androidx.compose.ui.text.style.LineHeightStyle? = null,
 ) =
     BasicText(
         text,
@@ -120,7 +121,7 @@ fun Label(
         style =
             LocalNnTheme.current
                 .text(size, weight, width)
-                .copy(color = color, textAlign = textAlign)
+                .copy(color = color, textAlign = textAlign, lineHeightStyle = lineHeightStyle)
                 .let {
                     if (lineHeight == TextUnit.Unspecified) it else it.copy(lineHeight = lineHeight)
                 },

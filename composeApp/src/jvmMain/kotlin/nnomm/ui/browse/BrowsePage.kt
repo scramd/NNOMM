@@ -517,8 +517,8 @@ private fun BrowseCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ModTile(x.id, x.name, x.demoPicture, TileSize.Medium, imageUrl = x.imageUrl)
                 Column(Modifier.weight(1f)) {
-                    Label(modName(row), size = 13.5f, weight = 600, maxLines = 2)
-                    Label(x.authors.joinToString(", "), color = c.text3, size = 12f, maxLines = 1)
+                    Label(modName(row), Modifier.heightIn(min = 18.9.dp), size = 13.5f, weight = 600, maxLines = 2)
+                    Label(x.authors.joinToString(", "), Modifier.heightIn(min = 16.8.dp), color = c.text3, size = 12f, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -550,7 +550,7 @@ private fun BrowseCard(
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(8.dp))
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                Modifier.fillMaxWidth().heightIn(min = 27.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {

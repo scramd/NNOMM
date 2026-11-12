@@ -67,3 +67,9 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Loader Repair refuses unknown/different versions | Test undetected/BepInEx 6 and known 5.4.23.4; only the pinned version can repair. Play alone must not install it. |
 | Inherited vanilla restoration | Reopen NNOMM during Play without mods; Doorstop text returns byte-for-byte on exit. |
 | Add-on order and directory ownership | Parent first, child second; child edits return with profile; empty created folders disappear. |
+
+## Acceptance settings behaviour
+
+- An observed game start now applies the profile's Keep/Minimise/Close NNOMM choice; verify native window minimisation and graceful close on Windows.
+- Play and explicit console-setting changes write only `[Logging.Console] Enabled` in BepInEx.cfg through the game-folder port, preserving a private backup; verify Windows file locking and profile config transitions.
+- The updater selects `latest` or `beta`; beta metadata resolves the newest published `-beta` prerelease rather than GitHub's stable-only latest endpoint. Verify with packaged Windows builds once a beta release exists.

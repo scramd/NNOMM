@@ -23,7 +23,10 @@ The state of the Kotlin build of NNOMM against the agreed mock. Written for a re
 
 ## Deviations from the mock
 
-None yet.
+- Servers remains a "Coming later" page, as agreed for the first version; the mock contains a complete server list.
+- Native Archivo text shaping still changes a few line wraps and baselines (notably the import warning); Compose and Chromium use different text layout engines.
+- Browse strips reserve a minimum footer line so section headings no longer drift; the final two-card strip is about four pixels taller than the mock.
+- Real pack imports add an unchecked mod-settings option when settings exist, so those dialogs can be taller than the mock's settings-free fixture.
 
 ## Decided without the user
 

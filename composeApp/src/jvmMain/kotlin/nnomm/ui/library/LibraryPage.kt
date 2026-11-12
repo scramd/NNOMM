@@ -385,7 +385,7 @@ fun LibraryPage() {
                                     listOf(
                                             "Mod loader BepInEx ${s.game.loaderVersion ?: "5.4.23.4"}",
                                             "Game ${s.game.version ?: "—"}",
-                                            "${size(s.installed.keys.sumOf { s.mod(it).newestRelease?.sizeKb ?: 0 })} of mods",
+                                            if (s.installed.keys.any { s.mod(it).newestRelease?.sizeKb == null }) "Mod size unknown" else "${size(s.installed.keys.sumOf { s.mod(it).newestRelease?.sizeKb ?: 0 })} of mods",
                                         )
                                         .forEach { Label(it, color = c.text3, size = 12f) }
                                 }

@@ -103,7 +103,7 @@ class FirstStart(private val model: AppModel) : Overlay {
                 Column(Modifier.border(1.dp, c.line2, RoundedCornerShape(9.dp)).fillMaxWidth()) {
                     CheckRow(
                         NnIcons.folder,
-                        "Nuclear Option ${game.version.orEmpty()}",
+                        game.version?.takeUnless { it == "unknown" }?.let { "Nuclear Option $it" } ?: "Game version is unknown",
                         if (model.ui.mock == "first")
                             "D:\\SteamLibrary\\steamapps\\common\\Nuclear Option"
                         else game.folder ?: "Choose the folder containing NuclearOption.exe.",

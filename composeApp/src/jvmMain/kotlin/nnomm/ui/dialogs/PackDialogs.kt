@@ -31,6 +31,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
         var error by remember { mutableStateOf<String?>(null) }
         var loading by remember { mutableStateOf(model.ui.importFile != null) }
         var importing by remember { mutableStateOf(false) }
+        var includeSettings by remember { mutableStateOf(false) }
         var local by remember { mutableStateOf(false) }
         var keep by remember { mutableStateOf(emptyMap<String, String>()) }
         val scope = rememberCoroutineScope()
@@ -109,9 +110,10 @@ class ImportDialog(private val model: AppModel) : Overlay {
                                         }
                                     model.store.addPreparedLocalMods(records)
                                 }
-                                // TODO(core): importPack needs ports for the preview's bundled
-                                // settings/config.
-                                model.store.importPack(pack, mode, keep)
+                                val target = java.util.UUID.randomUUID().toString()
+                                val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
+                                if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
+                                model.store.importPack(pack, mode, keep, target, settings)
                                 model.ui.go(Page.Library)
                                 model.ui.library.filter = "all"
                                 model.closeOverlay()
@@ -138,7 +140,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         add(n(PackKind.SAME).toString() to "you have")
                         add(
                             n(PackKind.ADD).toString() to
-                                "new, ${size(rows.filter { it.kind == PackKind.ADD }.sumOf { state.mod(it.id).newestRelease?.sizeKb ?: 0 })}"
+                                "new, " + if (rows.filter { it.kind == PackKind.ADD }.any { state.mod(it.id).newestRelease?.sizeKb == null }) "size unknown" else size(rows.filter { it.kind == PackKind.ADD }.sumOf { state.mod(it.id).newestRelease?.sizeKb ?: 0 })
                         )
                         if (mode == ImportMode.NEW) add(n(PackKind.OTHER).toString() to "in another version")
                         else {
@@ -179,13 +181,17 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     .filter { it.kind == PackKind.LOCAL }
                     .forEach { item ->
                         Note(
-                            "This pack also contains a file that is not from the registry: ${item.id}${if (model.isDemo) ".dll" else ""} (${size(item.sizeKb ?: 0)}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
+                            "This pack also contains a file that is not from the registry: ${item.id}${if (model.isDemo) ".dll" else ""} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
+                            modifier = Modifier.heightIn(min = 54.dp),
                             warn = true,
                             action = {
                                 ToggleLine(local, { local = it }, "Include", "Include the file")
                             },
                         )
                     }
+                if (mode == ImportMode.NEW && (preview?.settings != null || preview?.modSettingsFolder != null)) {
+                    ToggleLine(includeSettings, { includeSettings = it }, "Include the pack's mod settings", "These settings change how mods behave.")
+                }
                 OptionCard(
                     "Make a new profile \"${pack.name}\"",
                     "It gets the pack's mods in the pack's versions. ${state.profile().name} stays as it is.",
@@ -274,7 +280,7 @@ internal fun Summary(values: List<Pair<String, String>>) {
         values.forEach { (value, title) ->
             Column(
                 Modifier.weight(1f)
-                    .heightIn(min = 59.dp)
+                    .heightIn(min = 60.dp)
                     .border(1.dp, c.line, RoundedCornerShape(6.dp))
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {

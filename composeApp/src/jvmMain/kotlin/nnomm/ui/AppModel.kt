@@ -282,7 +282,10 @@ class AppModel(
 
     fun showServers() = store.state.value.settings.general["showServers"]?.content != "false"
 
-    val ui = UiState()
+    val ui = UiState().apply {
+        page = startupPage(store.state.value.settings)
+        onPageChanged = { store.setSetting("lastPage", kotlinx.serialization.json.JsonPrimitive(it.name)) }
+    }
 
     /** Runs the action of a toast (Undo, "What's new"...) and follows its UI target. */
     fun runToast(id: Long) {

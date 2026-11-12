@@ -406,6 +406,7 @@ fun ModPanel(ref: PanelRef) {
                                                 },
                                                 versions.indexOf(version),
                                                 { model.store.changeVersion(mod.id, versions[it]) },
+                                                modifier = Modifier.width(IntrinsicSize.Max),
                                                 height = 24.dp,
                                             )
                                         }
@@ -707,7 +708,10 @@ private fun Label(
     weight: Int = 400,
     width: Float = 100f,
     lineHeight: TextUnit = (size * 1.4f).sp,
-) = KitLabel(text, modifier, color, size, weight, width, lineHeight = lineHeight)
+) = KitLabel(text, modifier, color, size, weight, width, lineHeight = lineHeight,
+    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        androidx.compose.ui.text.style.LineHeightStyle.Trim.None))
 
 @Composable
 private fun PanelTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> Unit) {
