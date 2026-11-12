@@ -416,6 +416,17 @@ internal fun recoverTransactions(
                         return@forEach
                     // Persist the direction before rollback can remove staging or restore the
                     // target.
+                    // Only a persisted rollback can explain a previous copy already moved back.
+                    require(
+                        batch.changes.none { tx ->
+                            tx.phase == "old-moved" &&
+                                tx.existed &&
+                                !Path.of(tx.previous).exists() &&
+                                !Path.of(tx.target).exists()
+                        }
+                    ) {
+                        "Transaction storage is unavailable; journal kept at $journal"
+                    }
                     batch =
                         batch.copy(
                             changes =
@@ -504,9 +515,12 @@ internal fun recoverTransactions(
                             }
                             Files.createDirectories(target.parent)
                             Files.move(previous, target)
+                            DiskFaults.step("recovery-rollback-restored")
                         } else
                             require(
-                                tx.phase == "recover-unmoved" || !tx.existed || target.exists()
+                                tx.phase in listOf("recover-unmoved", "recover-rollback") ||
+                                    !tx.existed ||
+                                    target.exists()
                             ) {
                                 "Transaction storage is unavailable; journal kept at $journal"
                             }
