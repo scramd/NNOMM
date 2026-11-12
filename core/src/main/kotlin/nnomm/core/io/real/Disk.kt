@@ -47,8 +47,10 @@ internal fun safe(root: Path, name: String): Path {
     val base = root.toAbsolutePath().normalize()
     val result = base.resolve(name).normalize()
     require(result.startsWith(base) && result != base) { "Path leaves its folder: $name" }
+    name.split('/').filter { it.isNotEmpty() }.forEach(::component)
+    require(result.toString().length < 240) { "Path is too long: $name" }
     var at: Path? = result
-    while (at != null) {
+    while (at != null && at != base) {
         require(!Files.isSymbolicLink(at)) { "Symbolic links are not managed: $at" }
         at = at.parent
     }
@@ -56,7 +58,17 @@ internal fun safe(root: Path, name: String): Path {
 }
 
 internal fun component(name: String): String {
-    require(name !in listOf(".", "..") && name.isNotBlank() && name.none { it in "/\\:" }) {
+    require(
+        name !in listOf(".", "..") &&
+            name.isNotBlank() &&
+            name.none { it in "/\\:<>\"|?*" || it.code < 32 } &&
+            !name.endsWith(".") &&
+            !name.endsWith(" ") &&
+            !name
+                .substringBefore('.')
+                .uppercase()
+                .matches(Regex("CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]"))
+    ) {
         "Unsafe identifier: $name"
     }
     return name
@@ -82,6 +94,7 @@ internal fun atomic(path: Path, text: String) {
         } catch (_: AtomicMoveNotSupportedException) {
             Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING)
         }
+        forceDirectory(path.parent)
     } finally {
         Files.deleteIfExists(tmp)
     }
@@ -152,15 +165,11 @@ internal fun copyTree(from: Path, to: Path, link: Boolean = false) {
         Files.list(from).use {
             it.forEach { child -> copyTree(child, safe(to, child.fileName.toString()), link) }
         }
+        forceDirectory(to)
     } else {
         Files.createDirectories(to.parent)
-        if (link) {
-            try {
-                Files.createLink(to, from)
-                return
-            } catch (_: Exception) {}
-        }
         Files.copy(from, to)
+        FileChannel.open(to, StandardOpenOption.WRITE).use { it.force(true) }
     }
 }
 
@@ -227,3 +236,140 @@ class RealPersistence(home: Path, notice: (String) -> Unit = {}) : StatePersiste
             )
         }
 }
+
+internal fun forceDirectory(path: Path) {
+    // Windows does not permit opening a directory channel. The rename remains atomic there.
+    runCatching { FileChannel.open(path, StandardOpenOption.READ).use { it.force(true) } }
+}
+
+/** One journal per target. Recovery always rolls back an uncommitted promotion. */
+@Serializable
+internal data class DiskTransaction(
+    val target: String,
+    val staged: String?,
+    val previous: String,
+    val existed: Boolean,
+)
+
+@Serializable internal data class TransactionBatch(val changes: List<DiskTransaction>)
+
+internal class DiskCrash : Error("Simulated process interruption")
+
+internal object DiskFaults {
+    var step: (String) -> Unit = {}
+}
+
+@Synchronized
+internal fun recoverTransactions(folder: Path) {
+    if (!folder.exists()) return
+    Files.list(folder).use { paths ->
+        paths
+            .filter { it.name.endsWith(".txn") }
+            .toList()
+            .forEach { journal ->
+                val batch = json.decodeFromString<TransactionBatch>(journal.readText())
+                batch.changes.asReversed().forEach { tx ->
+                    val target = Path.of(tx.target)
+                    val previous = Path.of(tx.previous)
+                    if (previous.exists()) {
+                        if (target.exists()) deleteTree(target)
+                        Files.createDirectories(target.parent)
+                        Files.move(previous, target)
+                    } else if (
+                        !tx.existed &&
+                            tx.staged != null &&
+                            !Path.of(tx.staged).exists() &&
+                            target.exists()
+                    )
+                        deleteTree(target)
+                    tx.staged?.let { deleteTree(Path.of(it)) }
+                }
+                Files.delete(journal)
+            }
+    }
+}
+
+internal fun replaceTree(target: Path, source: Path?, journals: Path) {
+    if (source != null && target.exists() && treeHash(target) == treeHash(source)) return
+    replaceTrees(listOf(target to source), journals)
+}
+
+@Synchronized
+internal fun replaceTrees(changes: List<Pair<Path, Path?>>, journals: Path) {
+    Files.createDirectories(journals)
+    val id = java.util.UUID.randomUUID().toString()
+    val prepared = mutableListOf<DiskTransaction>()
+    val journal = journals.resolve("$id.txn")
+    try {
+        changes.forEachIndexed { index, (target, source) ->
+            Files.createDirectories(target.parent)
+            val stagingRoot = target.parent.resolve(".nnomm-staging")
+            Files.createDirectories(stagingRoot)
+            val staged =
+                source?.let {
+                    stagingRoot.resolve("$id-$index").also { dest -> copyTree(it, dest) }
+                }
+            prepared +=
+                DiskTransaction(
+                    target.toString(),
+                    staged?.toString(),
+                    stagingRoot.resolve("old-$id-$index").toString(),
+                    target.exists(),
+                )
+        }
+        atomic(journal, json.encodeToString(TransactionBatch(prepared)))
+        DiskFaults.step("prepared")
+        prepared.forEach { tx ->
+            val target = Path.of(tx.target)
+            val previous = Path.of(tx.previous)
+            if (target.exists()) Files.move(target, previous)
+            DiskFaults.step("old-moved")
+            tx.staged?.let { Files.move(Path.of(it), target) }
+            forceDirectory(target.parent)
+            DiskFaults.step("promoted")
+        }
+        prepared.forEachIndexed { index, tx ->
+            val previous = Path.of(tx.previous)
+            if (previous.exists()) {
+                val recovery =
+                    journals.parent.resolve("recovery/$id/$index/${Path.of(tx.target).fileName}")
+                copyTree(previous, recovery)
+            }
+        }
+        atomic(
+            journals.parent.resolve("recovery/$id.json"),
+            json.encodeToString(
+                mapOf(
+                    "what" to prepared.joinToString { it.target },
+                    "when" to System.currentTimeMillis().toString(),
+                    "why" to "Replacement",
+                )
+            ),
+        )
+        Files.delete(journal)
+        forceDirectory(journals)
+        prepared.forEach { deleteTree(Path.of(it.previous)) }
+    } catch (e: Exception) {
+        // Ordinary IO failures roll back now; a process crash leaves the same journal for startup.
+        if (journal.exists()) {
+            try {
+                recoverTransactions(journals)
+            } catch (recovery: Exception) {
+                e.addSuppressed(recovery)
+            }
+        }
+        if (!journal.exists())
+            prepared.forEach { it.staged?.let { staged -> deleteTree(Path.of(staged)) } }
+        throw e
+    }
+}
+
+internal fun treeHash(root: Path): String =
+    Files.walk(root).use { paths ->
+        paths
+            .filter { it.isRegularFile() }
+            .sorted()
+            .map { root.relativize(it).toString() + ":" + digest(it) }
+            .toList()
+            .joinToString("|")
+    }

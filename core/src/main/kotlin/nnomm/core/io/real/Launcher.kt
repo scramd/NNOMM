@@ -14,7 +14,13 @@ internal fun gameProcessRunning(): Boolean =
     ProcessHandle.allProcesses().use { all ->
         all.anyMatch { p ->
             p.info().command().orElse("").substringAfterLast('/').substringAfterLast('\\').let {
-                it.equals("NuclearOption.exe", true) || it == "NuclearOption"
+                it.equals("NuclearOption.exe", true) ||
+                    it == "NuclearOption" ||
+                    p.info().arguments().orElse(emptyArray()).any { arg ->
+                        arg.substringAfterLast('/')
+                            .substringAfterLast('\\')
+                            .equals("NuclearOption.exe", true)
+                    }
             }
         }
     }
@@ -75,10 +81,11 @@ class RealGameLauncher(
     private var pending = false
 
     init {
+        if (!detect()) restoreDoorstop()
         scope.launch {
             while (isActive) {
                 if (!pending) flow.value = detect() || launched?.isAlive == true
-                delay(1000)
+                delay(3000)
             }
         }
     }
@@ -147,10 +154,10 @@ class RealGameLauncher(
                     flow.value = fakeCommand != null
                     pending = true
                     scope.launch {
+                        var exited = false
                         try {
                             var seen = fakeCommand != null
-                            var attempts = 0
-                            while (!seen && attempts++ < 120) {
+                            while (!seen) {
                                 seen = detect()
                                 if (!seen) delay(500)
                             }
@@ -159,9 +166,16 @@ class RealGameLauncher(
                                 while (
                                     detect() || (fakeCommand != null && launched?.isAlive == true)
                                 ) delay(500)
+                            exited = seen
                         } finally {
                             withContext(NonCancellable + Dispatchers.IO) {
-                                if (withoutMods) restoreDoorstop()
+                                if (
+                                    withoutMods &&
+                                        exited &&
+                                        !detect() &&
+                                        (fakeCommand == null || launched?.isAlive != true)
+                                )
+                                    restoreDoorstop()
                                 pending = false
                                 flow.value = false
                                 launched = null

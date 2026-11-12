@@ -149,3 +149,18 @@ selecting a previously downloaded version.
 `MatchReason.kind: String` → `MatchKind` (`NAME`, `TAG`, `AUTHOR`, `DESCRIPTION`).
 `refreshRegistry()` now accepts optional `announce = false`; the explicit
 `lookForUpdates()` action requests the count toast without a Show button.
+
+### Real IO safety API changes
+
+- `GamePlan.knownIds` (default: active version ids) carries the full library identity
+  set for safe reconciliation. `gamePlan(state)` supplies it automatically.
+- `DownloadedFile` is now `AutoCloseable`; its optional cleanup action releases only
+  downloader-owned staging. AppStore closes it after storing. Pack payloads use the
+  default no-op cleanup. Callers of RealDownloader outside AppStore must close it.
+- `GameInfo.folderMissing` (default false) distinguishes a missing configured game
+  folder from an unknown game version. Settings help says "Game folder not found."
+- `ModVersion.unavailableReason` and `modAction` expose unsupported RAR versions
+  before downloading. TAR.GZ is supported through Commons Compress.
+- `shutdown()` waits for the disk queue without the former ten-second cutoff.
+- Runtime startup may adopt existing mods when the saved library is empty; it does
+  not place mods, install the loader or create plugins during this adoption.

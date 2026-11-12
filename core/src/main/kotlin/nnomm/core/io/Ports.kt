@@ -33,7 +33,9 @@ interface Downloader {
     ): DownloadedFile
 }
 
-data class DownloadedFile(val path: String)
+data class DownloadedFile(val path: String, val cleanup: () -> Unit = {}) : AutoCloseable {
+    override fun close() = cleanup()
+}
 
 /** Store keeps each version once. Remove must remain reversible until Undo expires. */
 interface ModStore {
@@ -136,6 +138,7 @@ data class GamePlan(
     val profileId: String,
     val versions: Map<String, String>,
     val ownSettings: Boolean,
+    val knownIds: Set<String> = versions.keys,
 ) {
     internal fun asState() =
         AppState(
@@ -173,4 +176,5 @@ fun gamePlan(state: AppState, profileId: String = state.profileId) =
             .mapNotNull { m -> m.profiles[profileId]?.takeIf { it.on }?.let { m.id to it.version } }
             .toMap(),
         state.settings.bool("ownSettingsP", profileId),
+        state.installed.keys,
     )

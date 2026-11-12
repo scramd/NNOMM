@@ -305,6 +305,9 @@ fun modAction(s: AppState, id: String): ModAction {
         ?.let {
             return ModAction("${it.percent}%", percent = it.percent)
         }
+    availableVersion(s, id)?.unavailableReason?.let {
+        return ModAction("Unavailable", disabled = true, tooltip = it)
+    }
     val off = s.connection.kind == ConnectionKind.OFFLINE
     if (id !in s.installed)
         return ModAction(

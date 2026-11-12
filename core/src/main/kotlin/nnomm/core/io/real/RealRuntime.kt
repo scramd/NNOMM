@@ -34,6 +34,7 @@ private constructor(
         ): RealRuntime =
             withContext(Dispatchers.IO) {
                 Files.createDirectories(home)
+                recoverTransactions(home.resolve("transactions"))
                 val persistence = RealPersistence(home, notice)
                 val initial =
                     persistence.load()
@@ -98,9 +99,21 @@ private constructor(
                     initial.settings.general["gamePath"]?.content?.takeIf { it.isNotBlank() }
                         ?: initial.game.folder
                         ?: findGameFolder(initial.settings)
+                val adopted =
+                    if (
+                        initial.installed.isEmpty() &&
+                            folder != null &&
+                            Path.of(folder).resolve("NuclearOption.exe").isRegularFile()
+                    )
+                        game.takeOver(folder)
+                    else emptyList()
                 val loaded =
                     initial.copy(
-                        catalog = saved?.first.orEmpty() + initial.catalog,
+                        catalog =
+                            (saved?.first.orEmpty() + initial.catalog + adopted.map { it.first })
+                                .distinctBy { it.id },
+                        installed =
+                            initial.installed + adopted.associate { it.second.id to it.second },
                         connection = CatalogConnection(ConnectionKind.OFFLINE, saved?.second),
                         game = folder?.let { game.inspect(it) } ?: GameInfo(),
                         settings =
@@ -112,6 +125,10 @@ private constructor(
                         appVersion = version,
                         nowMillis = System.currentTimeMillis(),
                         gameRunning = launcher.running.value,
+                    )
+                if (System.getProperty("os.name").startsWith("Linux") && loaded.game.loaderPresent)
+                    notice(
+                        "For mods under Proton, set WINEDLLOVERRIDES=\"winhttp.dll=n,b\" %command% in this game's Steam launch options. Process detection under Proton needs verification."
                     )
                 val packs = RealPacks(home, mods, client)
                 app =

@@ -45,8 +45,8 @@ data class RegistryEntry(
             side =
                 when (isClientOrServer?.lowercase()) {
                     "server" -> Side.SERVER
-                    "both" -> Side.BOTH
-                    else -> Side.CLIENT
+                    "client" -> Side.CLIENT
+                    else -> Side.BOTH
                 },
             versions =
                 artifacts.map {

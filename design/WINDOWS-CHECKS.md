@@ -21,3 +21,14 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Shell file routing | FileKit chooser/saver; native Compose file-drop target; initial and single-instance file launches route `.dll`, `.zip`, `.7z`, `.nommpack` and `.nomm.json` through `AppModel.acceptFiles`. Packs retain the file for the import factory. | Drop each format, open files with spaces/non-ASCII names with app closed and running; check import preview and local install after real IO is connected. |
 | Branding | New original olive/cream N icon from `composeApp/icons/icon.svg`, PNG/ICO/ICNS generated from it; vendor NNOMM, Linux package name nnomm. | Check installer publisher, taskbar and shortcuts; rebuild all platform packages. |
 | Update setting | Startup checks now follow Update NNOMM: Never skips, Tell me reports availability, By itself downloads and uses Nucleus install/restart. Windows portable/ZIP builds keep manual downloads. About calls `AppModel.checkAppUpdates` and `openAppReleases`. | Check all three settings in an installed Windows build, failure/offline handling, portable/ZIP manual path and installer restart. Linux demo/kit checks intentionally make no updater requests. |
+
+## Real IO safety fix round
+
+| Changed behavior | Check on Windows |
+| --- | --- |
+| Journaled directory/file replacement and rollback | Inject interruption with antivirus/file handles present; restart and verify old or new complete tree, recovery index and directory rename behavior. |
+| Portable path preflight | Reserved names, trailing dots/spaces, case aliases and 240-character path limit reject before game changes. |
+| Copy-only placement, stable takeover names and parent/addons placement | Verify loader reads one copy; native mods and Blueprinter keep their expected paths. |
+| Doorstop restoration tied to observed game exit and startup | Steam delayed start, app closes first, app restart while game runs, and Steam URI arguments need real Windows checks. |
+| Process polling every three seconds, executable/argument detection | Verify external Steam starts and exits, CPU usage, and game-close apply timing. |
+| Pinned loader batch repair preserves existing Doorstop INI | Check 5.4.23.4 repair, differing-version refusal and interrupted repair with locked DLLs. |
