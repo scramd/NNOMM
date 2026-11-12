@@ -28,6 +28,8 @@ The state of the Kotlin build of NNOMM against the agreed mock. Written for a re
 - Browse strips reserve a minimum footer line so section headings no longer drift; the final two-card strip is about four pixels taller than the mock.
 - Real pack imports add an unchecked mod-settings option when settings exist, so those dialogs can be taller than the mock's settings-free fixture.
 
+- The drop overlay omits the mock-only file-drop simulation buttons; real native drops are used, so its centered content group sits slightly lower.
+
 ## Decided without the user
 
 Choices that change the player's experience and that neither the mock nor `design/DESIGN.md` settles. Each says the other option, so it can be changed later.
@@ -39,3 +41,7 @@ Choices that change the player's experience and that neither the mock nor `desig
 - **Mod loader notice**: installing BepInEx shows "Installed the mod loader BepInEx 5.4.23.4. Mods need it to run." Other option: no notice (the mock has none, but its setting text promises one).
 - **A missing older version** is shown as "Version X is not available" and never replaced by another download. Other option: none that is safe.
 - **Publisher name**: the installer's vendor is "NNOMM". Other option: the owner's name.
+
+- **Hide profiles**: selects Default immediately; game files change at the next mod action or Play. Other option: apply the switch as soon as profiles are hidden.
+- **Console preference**: saves without changing the game folder and takes effect at Play, including the active profile's override. Other option: write BepInEx.cfg immediately when the preference changes.
+- **Game start wait**: after 60 seconds without an observed game process, Play becomes available again with “Nuclear Option did not start. Try Play again.” External starts remain observable.
