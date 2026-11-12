@@ -29,6 +29,7 @@ object Shots {
         mutableListOf<ShotSpec>().apply {
             addAll(mockShots.map { it.spec() })
             add(MockShot("browse-loading", "page=browse&mock=loading").spec())
+            addAll(nnomm.ui.dialogs.dialogMockShots.map { it.spec() })
             for (dark in listOf(true, false)) {
                 val theme = if (dark) "dark" else "light"
                 add(ShotSpec("kit-table-$theme", dark) { WindowShell { KitTableDemo() } })

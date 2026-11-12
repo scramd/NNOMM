@@ -19,6 +19,8 @@ interface Platform {
     /** Opens a save window. Returns the chosen file, or null. */
     suspend fun chooseSaveFile(title: String, suggestedName: String, extension: String): File?
 
+    suspend fun chooseFolder(title: String): File? = null
+
     fun openFolder(folder: File)
 
     fun openUrl(url: String)
@@ -204,7 +206,7 @@ class AppModel(
                 }
             ActionKind.OPENGAMEFOLDER -> store.state.value.game.folder?.let { platform.openFolder(File(it)) }
             ActionKind.NEWPROFILE -> openOverlay("newprofile")
-            ActionKind.IMPORT,
+            ActionKind.IMPORT -> scope.launch { nnomm.ui.dialogs.choosePackFor(this@AppModel) }
             ActionKind.SHARE,
             ActionKind.TROUBLE -> openOverlay(action.kind.name.lowercase())
             else -> Unit

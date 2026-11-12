@@ -53,6 +53,11 @@ class DesktopPlatform : Platform, AutoCloseable {
                 ?.let { File(it.path) }
         }
 
+    override suspend fun chooseFolder(title: String): File? =
+        withContext(Dispatchers.IO) {
+            FileKit.openDirectoryPicker(dialogSettings = FileKitDialogSettings(title = title))?.let { File(it.path) }
+        }
+
     override fun openFolder(folder: File) {
         scope.launch { Desktop.getDesktop().open(folder) }
     }
