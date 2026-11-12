@@ -1107,6 +1107,24 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         toast("Importing ${pack.name}: ${plural(n,"download","downloads")}")
     }
 
+    /** Keep the profile and its versions, but no longer fetch updates for this pack. */
+    fun stopFollowingPack(profileId: String = state.value.profileId) {
+        change { s ->
+            s.copy(
+                profiles =
+                    s.profiles.map { profile ->
+                        if (profile.id == profileId)
+                            profile.copy(
+                                pack = profile.pack?.copy(followAddress = null, nextVersion = null)
+                            )
+                        else profile
+                    }
+            )
+        }
+        saveSettings()
+        toast("Stopped following this pack. Its mods and versions stay in this profile.")
+    }
+
     fun checkPackUpdates() {
         val source = io.packSource ?: return
         state.value.profiles.forEach { profile ->
@@ -1579,7 +1597,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             return
         }
         uninstallSilently(state.value.installed.keys.toList())
-        toast("Removed all mods.")
+        toast("Removed managed mods. Only loader files installed by NNOMM are removed; adopted loader files and your own files stay.")
         val folder = state.value.game.folder ?: return
         disk {
             io.gameFolder.removeLoader(folder)

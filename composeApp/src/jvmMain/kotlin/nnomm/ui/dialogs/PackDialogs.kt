@@ -27,12 +27,13 @@ class ImportDialog(private val model: AppModel) : Overlay {
     override fun Content() {
         val state by model.store.state.collectAsState()
         var pack by remember { mutableStateOf(Demo.PACK_IMPORT) }
+        var localNames by remember { mutableStateOf(emptyMap<String, String>()) }
         var preview by remember { mutableStateOf<PackPreview?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
         var loading by remember { mutableStateOf(model.ui.importFile != null) }
         var importing by remember { mutableStateOf(false) }
         var includeSettings by remember { mutableStateOf(false) }
-        var local by remember { mutableStateOf(false) }
+        var selectedLocalIds by remember { mutableStateOf(emptySet<String>()) }
         var keep by remember { mutableStateOf(emptyMap<String, String>()) }
         val scope = rememberCoroutineScope()
         val file = model.ui.importFile
@@ -40,6 +41,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
             if (file != null) {
                 try {
                     preview = withPackIo(state) { it.read(file.toPath()) }
+                    localNames = withContext(Dispatchers.IO) { preview!!.pack.items.associate { it.id to bundledFileName(it, preview) } }
                     val loaded = preview!!.pack
                     val unknown =
                         loaded.items.filter {
@@ -103,10 +105,10 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         scope.launch {
                             importing = true
                             try {
-                                if (local && preview != null) {
+                                if (selectedLocalIds.isNotEmpty() && preview != null) {
                                     val records =
                                         withPackIo(state) {
-                                            it.selectedLocals(preview!!, preview!!.localFiles.keys)
+                                            it.selectedLocals(preview!!, selectedLocalIds)
                                         }
                                     model.store.addPreparedLocalMods(records)
                                 }
@@ -136,7 +138,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
             if (!loading && error == null) {
                 Summary(
                     buildList {
-                        add(rows.size.toString() to "mods in the pack")
+                        add(pack.items.size.toString() to "mods in the pack")
                         add(n(PackKind.SAME).toString() to "you have")
                         add(
                             n(PackKind.ADD).toString() to
@@ -181,11 +183,13 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     .filter { it.kind == PackKind.LOCAL }
                     .forEach { item ->
                         Note(
-                            "This pack also contains a file that is not from the registry: ${item.id}${if (model.isDemo) ".dll" else ""} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
+                            "This pack also contains a file that is not from the registry: ${localNames[item.id] ?: item.id} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by}.",
                             modifier = Modifier.heightIn(min = 54.dp),
                             warn = true,
                             action = {
-                                ToggleLine(local, { local = it }, "Include", "Include the file")
+                                ToggleLine(item.id in selectedLocalIds, { include ->
+                                    selectedLocalIds = if (include) selectedLocalIds + item.id else selectedLocalIds - item.id
+                                }, "Include", "Include ${localNames[item.id] ?: item.id}")
                             },
                         )
                     }
@@ -227,7 +231,12 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
         }
         val pack = (if (model.isDemo) Demo.PACK_UPDATE else fetched)
         if (pack == null) {
-            Dialog(true, "Pack update", model::closeOverlay, footer = { Cancel(model, "Close") }) { Label(message) }
+            Dialog(true, "Pack update", model::closeOverlay,
+                leftFooter = { Button("Stop following this pack", {
+                    model.store.stopFollowingPack(p.id)
+                    model.closeOverlay()
+                }, kind = ButtonKind.Ghost) },
+                footer = { Cancel(model, "Close") }) { Label(message) }
             return
         }
         val rows = packUpdateRows(state, pack)
@@ -237,7 +246,10 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
             model::closeOverlay,
             wide = true,
             subtitle = "Modpack by ${p.pack?.by ?: pack.by}",
-            leftFooter = { Button("Stop following this pack", { model.store.toast(if (model.isDemo) "This does nothing in the mock." else "Stopping pack updates is not available yet.") }, enabled = model.isDemo, kind = ButtonKind.Ghost) },
+            leftFooter = { Button("Stop following this pack", {
+                model.store.stopFollowingPack(p.id)
+                model.closeOverlay()
+            }, kind = ButtonKind.Ghost) },
             footer = {
                 Cancel(model, "Not now")
                 Button(
@@ -372,3 +384,11 @@ internal fun PackKind.key(): String =
         PackKind.CONFLICT -> "conflict"
         else -> ""
     }
+
+/** Show payload names, never the content-derived identity used by the store. */
+internal fun bundledFileName(item: PackItem, preview: PackPreview?): String {
+    val payload = preview?.localFiles?.get(item.id)?.let({ java.io.File(it) })
+    val files = payload?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sortedBy { it.name }?.toList()
+    return if (!files.isNullOrEmpty()) files.joinToString(", ") { it.name }
+    else payload?.name ?: item.id
+}

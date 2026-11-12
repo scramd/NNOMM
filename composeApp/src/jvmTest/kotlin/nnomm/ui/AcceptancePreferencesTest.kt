@@ -23,10 +23,23 @@ class AcceptancePreferencesTest {
         assertEquals(Page.Browse, startupPage(settings("Browse")))
         assertEquals(Page.Library, startupPage(settings("Library")))
     }
-    @Test fun testChannelFindsAnActualPrereleaseTag() {
+    @Test fun manualUnsupportedCheckAnswersEvenWhenAutomaticChecksAreDisabled() = kotlinx.coroutines.runBlocking {
+        val answers = mutableListOf<String>()
+        AppUpdates().check("Never", manual = true, status = answers::add)
+        assertEquals(1, answers.size)
+        assertContains(answers.single(), "releases page")
+        answers.clear()
+        AppUpdates().check("Tell me", status = answers::add)
+        assertTrue(answers.isEmpty(), "Unsupported startup checks must stay quiet")
+    }
+    @Test fun testChannelFindsPublishedBetaTagsFromAtom() {
         assertEquals("latest", updaterChannel(false))
         assertEquals("beta", updaterChannel(true))
-        assertEquals("0.2-beta", testReleaseTag("""[{"tag_name":"0.1","prerelease":false},{"tag_name":"0.2-beta","prerelease":true}]"""))
-        assertNull(testReleaseTag("""[{"tag_name":"0.1","prerelease":false}]"""))
+        fun feed(vararg tags: String) = """<feed xmlns="http://www.w3.org/2005/Atom">${tags.joinToString("") { """<entry><link href="https://github.com/scramd/NNOMM/releases/tag/$it"/></entry>""" }}</feed>"""
+        assertEquals("v0.2-beta", testReleaseTag(feed("v0.3", "v0.2-beta")))
+        assertEquals("v0.3-beta.1", testReleaseTag(feed("v0.4-alpha-beta", "v0.3-beta.1", "v0.2-beta")))
+        assertNull(testReleaseTag(feed("v0.3", "v0.4-alpha")))
+        assertNull(testReleaseTag(feed()))
+        assertNull(testReleaseTag("""<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>v0.2-beta</title><link href="https://example.com/releases/tag/v0.2-beta"/></entry></feed>"""))
     }
 }

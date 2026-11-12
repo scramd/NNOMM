@@ -1,47 +1,47 @@
 # NNOMM build status
 
-The state of the Kotlin build of NNOMM against the agreed mock. Written for a reader who knows nothing of the work so far. `design/ARCHITECTURE.md` says how the app is built; `core/README.md` and `composeApp/COMPONENT-KIT.md` describe the two modules.
+NNOMM has the agreed pages and real IO integration. It is still a development build: use a sandbox with an empty `NuclearOption.exe`, never a real game installation. The latest acceptance fixes still need independent Opus and Sol review together with the parallel core safety changes.
 
 ## Works now
 
-- `:core`: domain model, rules, `AppStore` with every action of the mock, settings, demo data, real IO (registry, sizes and dates, release notes, downloads with hash check, mod store, game folder placement, first-start takeover, BepInEx install, launch through `steam://`, Play without mods through Doorstop, packs, saving). The core review findings are fixed (92 tests; a Library recompute with 300 mods takes about 1.5 ms).
-- `:composeApp`: identity and icon, window with own title bar, theme, Archivo, icons, kit (lazy table, cards, highlights, focus rings), shell (sidebar, Play box, profiles, downloads, panel slide, toasts, dialogs layer, keyboard, narrow layout, file drop, Servers "Coming later"), and all pages: Library, Browse, mod panel, Settings, dialogs (command search, pack import and update, new profile, share, rename, confirm, licences, broken-mod test, first start).
-- See it: `tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots` (mock left, app right, in `composeApp/build/shots/compare/`). Run it: `tools/gradlew-locked :composeApp:createDistributable`, then `composeApp/build/compose/binaries/main/app/NNOMM/bin/NNOMM --demo`.
+- Compose Desktop shell and component kit, dark/light themes, narrow layout, Browse, Library, mod details, Settings, profiles, command search, pack previews, sharing, first start and the broken-mod test. Servers says “Coming later”, as agreed.
+- Real runtime: registry and cached data, verified downloads, version storage, managed game placement, takeover, persistence, Undo, packs, BepInEx preparation and Steam URI launch. The sandbox checks and earlier safety rounds are recorded in `design/notes/` and `core/IO.md`; these are not Windows certification.
+- Pack imports have separate, initially unchecked Include switches for bundled payloads. Warnings name the files, the summary counts bundled entries, and selected files enter the Library off. Settings import is also optional.
+- Stop following a pack clears that profile's follow address and pending update marker, persists across reopening, and keeps its mods, versions and pack membership. A check already in flight cannot restore the marker after stopping.
+- Beta updater discovery reads published tags from GitHub's releases Atom feed, including numbered beta tags, then uses release metadata assets. It makes no unauthenticated GitHub API call. Stable updates keep the latest-release asset path.
+- Manual “Look now” checks answer even when automatic checks are disabled. Unsupported development/package formats offer the releases page. Startup checks do not announce unsupported formats, failures or an already current version.
+- The danger-zone label and help explain ownership before confirmation: managed mods and loader files NNOMM installed are removed; adopted loader files, player files and recovery copies stay. The completion text uses the same ownership limit.
 
-## In progress
+## Remaining work
 
-- Real mode works in the sandbox (first start with takeover after confirmation, real registry, install from GitHub, switches, profiles, Undo, restart, offline; see `design/notes/real-mode-check.md`). Second safety round of the real IO: the game-folder apply changes one mod entry at a time instead of the whole BepInEx folder, recovery never deletes a game path, game writes wait while the game runs, Clear and Undo cannot race, add-ons wait for their parent. **Until this round is reviewed, do not point NNOMM at a real game folder.**
-- Polish: plain Space on every control with the Tao backend on Linux, "Open its settings file" (mod to BepInEx config mapping), small layout differences.
+- Integrate and review the separate final core fixes for game-exit apply authorization, takeover preservation, Clear retention and registry freshness. Do not treat this UI/updater pass as proof that those fixes are complete.
+- Independent Opus and Sol review of the final combined code and pictures. This implementation pass runs alone, so it does not supply those reviews.
+- Run the Windows checks below on packaged builds, then perform the final sandbox acceptance pass on the integrated branch.
+- Offline pack imports can add selected bundled files to the Library before the core rejects profile creation with “Needs a connection”. The current core requires a connection for pack import, including local-only packs; this remains a follow-up.
+- Loose takeover payloads are not automatically linked to registry identities by a later hash match. They remain local files unless identified during takeover.
+- The broken-mod test assumes one cause; interacting mods can produce an inconclusive result rather than a guessed culprit.
 
-## Done in review rounds
+## Windows-only checks
 
-- Whole-app reviews (Opus and Sol, two areas each) and their fix rounds: keyboard model (focused controls first, Space and `/` with Tao), import entry points, selection rules, panel motion and tabs, Play box and "Game is running", downloads popover, broken-mod test phases, pack import numbers, Settings actions wired to the core, command search, Share feedback, caret and focus in dialogs.
-
-## Next
-
-- Merge the IO safety round, then a final review round (whole app, and the real IO again), fixes, status and the workspace pin.
+`design/WINDOWS-CHECKS.md` is the detailed checklist. Linux cannot verify the custom native frame, installers and separate application identity, packaged self-update/restart, Steam library discovery or real game launch with mods. Also check Windows locked DLLs, junctions/reparse points, recovery across drives, private config transitions, loader ownership and removal, and delayed process detection. The Atom beta path and manual unsupported-update feedback need packaged Windows checks too. No release or tag is authorized by this status.
 
 ## Deviations from the mock
 
-- Servers remains a "Coming later" page, as agreed for the first version; the mock contains a complete server list.
-- Native Archivo text shaping still changes a few line wraps and baselines (notably the import warning); Compose and Chromium use different text layout engines.
-- Browse strips reserve a minimum footer line so section headings no longer drift; the final two-card strip is about four pixels taller than the mock.
-- Real pack imports add an unchecked mod-settings option when settings exist, so those dialogs can be taller than the mock's settings-free fixture.
+- Servers remains “Coming later”; server joining and the Steam helper are excluded from the first version.
+- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line; the final two-card strip is about four pixels taller than the mock.
+- Real packs can add optional settings and multiple bundled-file warnings, so their preview is taller than the single-file mock. Bundled files show readable payload names rather than internal content ids; the demo warning no longer repeats `.dll`.
+- Removal wording names the ownership boundary instead of promising a plain game. Stop following now performs the action instead of the mock's no-op.
+- The drop overlay uses native drops and omits mock-only simulation controls; its centered group sits slightly lower.
 
-- The drop overlay omits the mock-only file-drop simulation buttons; real native drops are used, so its centered content group sits slightly lower.
+## Decisions without the user
 
-## Decided without the user
+- Servers settings retain only sidebar visibility, with “The server list comes in a later version.” The page says “A list of dedicated servers comes in a later version of NNOMM.” The alternative is hiding the category/tab.
+- Unknown game versions compare with the newest version named by the registry. Missing exact mod versions report unavailability instead of substituting downloads.
+- BepInEx installation reports the installed version. Installer vendor is “NNOMM”.
+- Hiding profiles selects Default immediately; placement waits for a mod action or Play. Console preferences save immediately and apply at Play. A start with no observed game process times out with a retry notice.
+- Bundled pack payloads stay off when imported, even after Include; Include authorizes adding them to the Library. Players turn them on separately, matching the design's initial safety state.
+- A manual updater check bypasses “Never” for that request and never auto-installs. Unsupported builds offer the existing releases-page action. Automatic checks retain the saved preference.
 
-Choices that change the player's experience and that neither the mock nor `design/DESIGN.md` settles. Each says the other option, so it can be changed later.
+## Reproduce checks
 
-- **Servers settings**: the first version keeps only "Show Servers in the sidebar" in the Servers category; the join helper, join choice, ping colours, refresh and favourites settings are left out because there is no server list. Other option: hide the whole category.
-- **Servers page text**: title "Servers", empty state "Coming later" with "A list of dedicated servers comes in a later version of NNOMM." Other option: no Servers tab at all until the page exists.
-- **Servers settings lead text**: "The server list comes in a later version." instead of the mock's Steam sentence. Other option: no lead text.
-- **Missing release metadata**: when NNOMM cannot read the game version, "Made for" marks compare with the newest game version that the registry names. Other option: no marks until the version is known.
-- **Mod loader notice**: installing BepInEx shows "Installed the mod loader BepInEx 5.4.23.4. Mods need it to run." Other option: no notice (the mock has none, but its setting text promises one).
-- **A missing older version** is shown as "Version X is not available" and never replaced by another download. Other option: none that is safe.
-- **Publisher name**: the installer's vendor is "NNOMM". Other option: the owner's name.
-
-- **Hide profiles**: selects Default immediately; game files change at the next mod action or Play. Other option: apply the switch as soon as profiles are hidden.
-- **Console preference**: saves without changing the game folder and takes effect at Play, including the active profile's override. Other option: write BepInEx.cfg immediately when the preference changes.
-- **Game start wait**: after 60 seconds without an observed game process, Play becomes available again with “Nuclear Option did not start. Try Play again.” External starts remain observable.
+Use JetBrains JDK 25 and `tools/gradlew-locked` for builds. Run `:core:test :composeApp:jvmTest`, then `:composeApp:renderShots` and `tools/compare-shots`. Compare images are under `composeApp/build/shots/compare/`. Run real-mode checks with an isolated settings home and a temporary sandbox game copy; use a separate virtual display when other agents use the desktop. Reports must distinguish exercised behavior from remaining Windows and independent-review work.

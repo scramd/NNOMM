@@ -105,3 +105,8 @@ canonical-parent/entry comparison for junctions reported as directories; native 
   takeover payload) are eligible for Clear.
 - A refused link or junction at one mod root leaves it alone while independent
   safe entries apply.
+
+## Final app acceptance fixes
+
+- Beta discovery uses `releases.atom`, including `-beta.1` tags, then the same metadata asset download paths as stable (`beta.yml` on Windows). Verify published beta metadata and installation from a packaged build; no release API token is needed.
+- Manual “Look now” bypasses the automatic-check “Never” preference for one check, returns unsupported-build feedback with a releases-page button, and never starts automatic installation. Startup unsupported/failure/current checks stay quiet.

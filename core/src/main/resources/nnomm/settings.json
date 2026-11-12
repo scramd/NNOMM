@@ -318,8 +318,8 @@
     {
       "cat": "danger",
       "key": "dzAll",
-      "label": "Remove all mods and the mod loader",
-      "help": "The game goes back to its plain state. NNOMM keeps your profiles, so you can install everything again.",
+      "label": "Remove managed mods and NNOMM-installed loader files",
+      "help": "Removes managed mods and only loader files NNOMM installed. An adopted loader and your own files stay. NNOMM keeps your profiles and recovery copies.",
       "type": "actions",
       "actions": [
         "Remove everything"

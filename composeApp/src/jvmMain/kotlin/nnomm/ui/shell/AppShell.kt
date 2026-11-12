@@ -128,7 +128,8 @@ fun AppLayers(model: AppModel) {
                     }
                     Toast(
                         message,
-                        if (message.startsWith("An NNOMM update")) "Get update" else null,
+                        if (message.startsWith("An NNOMM update")) "Get update"
+                        else if (message.startsWith("Automatic updates are unavailable")) "Releases page" else null,
                         model.openAppReleases,
                     )
                 }
