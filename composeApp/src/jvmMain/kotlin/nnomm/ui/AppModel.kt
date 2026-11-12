@@ -257,10 +257,27 @@ class AppModel(
     }
 
     fun openModSettings(id: String) {
-        // TODO(core): expose the BepInEx GUID/config ownership for each mod.
-        if (store.io.modStore !is nnomm.core.io.real.RealModStore)
+        val disk = store.io.modStore as? nnomm.core.io.real.RealModStore
+        if (disk == null) {
             notify("This does nothing in the mock.")
-        else notify("No settings file is known for ${store.state.value.mod(id).name}.")
+            return
+        }
+        val state = store.state.value
+        val version = nnomm.core.rules.verOf(state, id) ?: return
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    state.game.folder?.let { folder ->
+                        nnomm.core.config.modConfigFiles(
+                            java.nio.file.Path.of(folder), disk.version(id, version), id, state.mod(id).name,
+                        )
+                    }.orEmpty()
+                }
+            }.onSuccess { files ->
+                if (files.isEmpty()) notify("This mod has no settings file yet. It appears after the game has run once with the mod.")
+                else files.forEach { openPath(it.toFile()) }
+            }.onFailure { notify("Could not find this mod's settings files.") }
+        }
     }
 
     fun showServers() = store.state.value.settings.general["showServers"]?.content != "false"
