@@ -189,7 +189,7 @@ class Review6ProbeTest {
             "Takeover exceeded generous time budget",
         )
         println(
-            "PROBE P2 takeover of 6 small entries with 288 MB store: ${(System.nanoTime() - t) / 1_000_000} ms, found ${found.size}"
+            "PROBE P2 takeover of 6 small entries with 288\u00a0MB store: ${(System.nanoTime() - t) / 1_000_000} ms, found ${found.size}"
         )
     }
 
@@ -671,7 +671,7 @@ class Review6ProbeTest {
         f.apply(plan(g, mapOf("reg" to "1")))
         val failLoader =
             object : GameFolder by f {
-                override suspend fun removeLoader(folder: String) {
+                override suspend fun removeLoader(folder: String): nnomm.core.io.LoaderRemoval {
                     error("Loader file is locked")
                 }
             }
@@ -1040,7 +1040,7 @@ class Review6ProbeTest {
                 nnomm.core.settings.SETTINGS.first { it.key == "store" },
                 state,
             )
-        assertTrue(help.contains("53 KB"))
+        assertTrue(help.contains("53\u00a0KB"))
         assertFalse(help.contains("438"))
     }
 }

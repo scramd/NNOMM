@@ -479,7 +479,9 @@ class EntryAttackTest {
             DiskFaults.step = {}
             f.recoverPending()
             assertTrue(contains(h, "UNIQUE CORE") || contains(g, "UNIQUE CORE"))
-            assertEquals("PLAYER INI", g.resolve("doorstop_config.ini").readText())
+            assertTrue(contains(h, "PLAYER INI") || contains(g, "PLAYER INI"))
+            assertEquals("OLD PROXY", g.resolve("winhttp.dll").readText())
+            assertEquals("UNIQUE CORE", core.resolve("player.data").readText())
         }
     }
 

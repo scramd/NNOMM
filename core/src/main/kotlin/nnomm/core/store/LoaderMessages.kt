@@ -4,6 +4,27 @@ package nnomm.core.store
 internal fun loaderFailureHelp(error: Throwable): String {
     val causes = generateSequence(error) { it.cause }.take(12).toList()
     return when {
+        causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
+            "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
+        causes.any {
+            it is java.io.IOException &&
+                (it.message.orEmpty().contains("space", true) ||
+                    it.message.orEmpty().contains("disk full", true))
+        } -> "Free some space on the game and storage drives, then try again."
+        causes.any {
+            it is java.util.zip.ZipException ||
+                it.message.orEmpty().let { message ->
+                    message.contains("SHA-256", true) ||
+                        message.contains("verification", true) ||
+                        message.contains("checksum", true)
+                }
+        } -> "The downloaded loader files could not be checked. Download them again with Retry."
+        causes.any {
+            it is nnomm.core.io.LoaderDownloadFailure ||
+                it is javax.net.ssl.SSLException ||
+                it is java.io.EOFException
+        } -> "Check your connection and try again."
+
         causes.any {
             it is java.net.SocketException ||
                 it is java.net.UnknownHostException ||
@@ -23,20 +44,6 @@ internal fun loaderFailureHelp(error: Throwable): String {
                     }
         } ->
             "Check that NNOMM can change files in the game folder and close programs using them, then try again."
-        causes.any {
-            it is java.nio.file.FileSystemException &&
-                it.reason.orEmpty().let { reason ->
-                    reason.contains("space", true) || reason.contains("disk full", true)
-                }
-        } -> "Free some space on the game and storage drives, then try again."
-        causes.any {
-            it is java.util.zip.ZipException ||
-                it.message.orEmpty().let { message ->
-                    message.contains("SHA-256", true) ||
-                        message.contains("verification", true) ||
-                        message.contains("checksum", true)
-                }
-        } -> "The downloaded loader files could not be checked. Download them again with Retry."
         else -> "Check the game folder and try again."
     }
 }

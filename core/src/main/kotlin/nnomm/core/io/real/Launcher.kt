@@ -129,10 +129,14 @@ class RealGameLauncher(
                 }
                 val ini = safe(game, "doorstop_config.ini")
                 if (withoutMods && ini.exists()) {
-                    val text = ini.readText()
-                    require(Regex("(?im)^\\s*enabled\\s*=").containsMatchIn(text)) {
-                        "Doorstop's enabled setting was not found."
-                    }
+                    val text =
+                        try {
+                            ini.readText()
+                        } catch (e: java.io.IOException) {
+                            throw DoorstopSettingsFailure(e)
+                        }
+                    if (!Regex("(?im)^\\s*enabled\\s*=").containsMatchIn(text))
+                        throw DoorstopSettingsFailure()
                     JsonFile(restoreFile, MapSerializer(String.serializer(), String.serializer()))
                         .write(mapOf("path" to ini.toString(), "text" to text))
                     atomic(

@@ -56,7 +56,10 @@ internal fun LibraryTable(
                 }
             }
             items(keys, key = { it }) { key ->
-                LaunchedEffect(key) { model.store.loadMetadata(setOf(key)) }
+                DisposableEffect(key) {
+        val dispose = model.store.metadataVisible(key)
+        onDispose { dispose() }
+    }
                 TableRow(
                     Modifier.fillMaxWidth(),
                     key in selection.picked,

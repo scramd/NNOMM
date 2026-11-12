@@ -161,8 +161,8 @@ class CoreTest {
             ),
             listOf(0, 1, 3, 14, 60, 610).map(::ago),
         )
-        assertEquals("127 MB", size(130400))
-        assertEquals("1.0 MB", size(1024))
+        assertEquals("127\u00a0MB", size(130400))
+        assertEquals("1.0\u00a0MB", size(1024))
         assertEquals("1.3M", num(1277950))
         assertEquals("117k", num(116910))
         assertEquals("8.4k", num(8420))

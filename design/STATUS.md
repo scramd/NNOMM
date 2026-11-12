@@ -8,7 +8,7 @@ Browse, Library, mod details, Settings, profiles, command search, pack previews,
 
 Real IO supports registry reads and cached lists, verified downloads, stored versions, managed game files, takeover, profiles, Undo, packs and loader preparation. File recovery and ownership rules protect player files. Removal keeps copies that cannot safely be downloaded again. Loader failures give a reason and a working Retry action.
 
-The last message, menu and generator fixes are recorded in [Last findings](notes/LAST-FINDINGS.md). Earlier implementation and sandbox evidence is in [Closing fixes](notes/CLOSING-FIXES.md), [UI follow-ups](notes/UI-CORE-FOLLOWUPS.md) and [Last app fixes](notes/LAST-APP-FIXES.md). The file safety contract is in [Core IO](../core/IO.md).
+The final loader, metadata and wording fixes are recorded in [Final items](notes/FINAL-ITEMS.md). Earlier message, menu and generator fixes are recorded in [Last findings](notes/LAST-FINDINGS.md). Earlier implementation and sandbox evidence is in [Closing fixes](notes/CLOSING-FIXES.md), [UI follow-ups](notes/UI-CORE-FOLLOWUPS.md) and [Last app fixes](notes/LAST-APP-FIXES.md). The file safety contract is in [Core IO](../core/IO.md).
 
 ## What is left
 
@@ -34,6 +34,6 @@ Font shaping, line wrapping and Browse strip spacing still differ in some pictur
 
 Keep local, taken-over and unknown-origin copies when removing mods. Keep previous exported packs without automatic deletion. Included pack files start off. Unknown game versions use the newest registry game version for warnings; unavailable exact mod versions are not substituted.
 
-Removal without a selected folder explains that files left in the previous folder are removed after selecting it again and pressing Play. Loader Retry uses the folder currently selected. Visible metadata requests skip cards that have scrolled away; a request already running can finish. Recovery copies are reused only for the same source version.
+Removal without a selected folder explains how to remove any files left in a game folder, without claiming a folder was previously selected. Loader Retry uses the folder currently selected. Visible metadata requests skip cards that have scrolled away; a request already running can finish. Recovery copies are reused only for the same source version.
 
 No background helper, service or startup change was added. Detailed decisions and checks are linked above.

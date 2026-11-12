@@ -443,4 +443,87 @@ class RealIoTest {
             }
         )
     }
+
+    @Test
+    fun repairRestoresDoorstopKeyWithoutOverwritingUnownedLoaderFiles() = runBlocking {
+        for (adopted in listOf(false, true)) for (unreadable in listOf(false, true)) {
+            val home = temp()
+            Files.createDirectories(home.resolve("staging"))
+            val game = home.resolve("game")
+            Files.createDirectories(game)
+            game.resolve("NuclearOption.exe").writeText("")
+            val archive = home.resolve("loader.zip")
+            val dll = "5.4.23.4".toByteArray(Charsets.UTF_16LE)
+            ZipOutputStream(Files.newOutputStream(archive)).use { zip ->
+                for ((name, bytes) in
+                    mapOf(
+                        "BepInEx/core/BepInEx.dll" to dll,
+                        "doorstop_config.ini" to "[UnityDoorstop]\nenabled=true\n".toByteArray(),
+                        "winhttp.dll" to "proxy".toByteArray(),
+                    )) {
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(bytes)
+                    zip.closeEntry()
+                }
+            }
+            val dl =
+                object : Downloader {
+                    override suspend fun download(
+                        mod: CatalogMod,
+                        version: ModVersion,
+                        progress: (Int) -> Unit,
+                    ) = DownloadedFile(archive.toString())
+                }
+            val folder = RealGameFolder(home, RealModStore(home), dl, running = { false })
+            if (adopted) {
+                Files.createDirectories(game.resolve("BepInEx/core"))
+                game.resolve("BepInEx/core/BepInEx.dll").writeBytes(dll + byteArrayOf(0, 0))
+                game.resolve("winhttp.dll").writeText("player proxy")
+            } else folder.installLoader(game.toString())
+            val old =
+                "[UnityDoorstop]\n# player settings\ntargetAssembly=custom.dll\n[Other]\nplayer=true\n"
+            val oldBytes = if (unreadable) byteArrayOf(0xC3.toByte(), 0x28) else old.toByteArray()
+            game.resolve("doorstop_config.ini").writeBytes(oldBytes)
+            game.resolve("BepInEx/core/player.txt").writeText("player file")
+            val beforeDll = game.resolve("BepInEx/core/BepInEx.dll").readBytes()
+            folder.repairLoader(game.toString())
+            assertEquals(
+                if (unreadable) "[UnityDoorstop]\nenabled=true\n"
+                else old.replace("[UnityDoorstop]", "[UnityDoorstop]\nenabled = true"),
+                game.resolve("doorstop_config.ini").readText(),
+            )
+            assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())
+            assertContentEquals(beforeDll, game.resolve("BepInEx/core/BepInEx.dll").readBytes())
+            if (adopted) assertEquals("player proxy", game.resolve("winhttp.dll").readText())
+            assertTrue(
+                Files.walk(game.resolve(".nnomm/recovery")).use { paths ->
+                    paths.anyMatch {
+                        it.isRegularFile() &&
+                            runCatching { it.readBytes().contentEquals(oldBytes) }
+                                .getOrDefault(false)
+                    }
+                }
+            )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                val launcher =
+                    RealGameLauncher(home, scope, fakeCommand = listOf("true"), detect = { false })
+                launcher.start(
+                    nnomm.core.demo.Demo.state().copy(game = folder.inspect(game.toString())),
+                    true,
+                )
+                withTimeout(5000) {
+                    while (
+                        game.resolve("doorstop_config.ini").readText().contains("enabled = false")
+                    ) delay(10)
+                }
+            } finally {
+                scope.cancel()
+            }
+            val result = folder.removeLoader(game.toString())
+            assertTrue(result.kept)
+            assertTrue(if (adopted) result.removed == 0 else result.removed > 0)
+            assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())
+        }
+    }
 }
