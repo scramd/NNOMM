@@ -22,7 +22,19 @@ internal object DoorstopIni {
                     bytes.copyOfRange(0, 3)
                 else -> byteArrayOf()
             }
-        private val lines = split(String(bytes, prefix.size, bytes.size - prefix.size, encoding))
+        private val lines =
+            split(
+                try {
+                    encoding
+                        .newDecoder()
+                        .decode(
+                            java.nio.ByteBuffer.wrap(bytes, prefix.size, bytes.size - prefix.size)
+                        )
+                        .toString()
+                } catch (e: java.nio.charset.CharacterCodingException) {
+                    throw nnomm.core.io.DoorstopSettingsFailure(e)
+                }
+            )
         private val newline
             get() = lines.firstOrNull { it.end.isNotEmpty() }?.end ?: "\n"
 
@@ -34,21 +46,29 @@ internal object DoorstopIni {
                 .takeWhile { header(lines[it].text) == null }
                 .firstOrNull { keyName(lines[it].text)?.equals(name, true) == true }
 
-        val healthy: Boolean
-            get() = section("General")?.let { key(it, "target_assembly") != null } == true
+        private fun value(at: Int): String {
+            val value = lines[at].text.substringAfter('=').trim(' ', '\t')
+            return if (
+                value.length >= 2 &&
+                    (value.first() == '"' || value.first() == '\'') &&
+                    value.last() == value.first()
+            )
+                value.substring(1, value.lastIndex)
+            else value
+        }
 
+        val healthy: Boolean
+            get() =
+                section("General")
+                    ?.let { key(it, "target_assembly") }
+                    ?.let { value(it).isNotEmpty() } == true
+
+        // Doorstop initializes false and recognizes only true/false; missing keys default true.
         val explicitlyDisabled: Boolean
             get() =
                 section("General")
                     ?.let { key(it, "enabled") }
-                    ?.let {
-                        lines[it]
-                            .text
-                            .substringAfter('=')
-                            .trim()
-                            .trim('"', '\'')
-                            .equals("false", true)
-                    } == true
+                    ?.let { !value(it).equals("true", true) } == true
 
         fun hasEnabled(): Boolean = section("General")?.let { key(it, "enabled") != null } == true
 
@@ -100,18 +120,18 @@ internal object DoorstopIni {
         return lines
     }
 
-    // A line starting with '[' starts a section even if its header is malformed.
+    // An unmatched '[' is a key line, not a section boundary.
     private fun header(text: String): String? {
-        val trimmed = text.trim()
+        val trimmed = text.trim(' ', '\t')
         if (!trimmed.startsWith('[')) return null
         val last = trimmed.lastIndexOf(']')
-        return if (last > 0) trimmed.substring(1, last).trim() else ""
+        return if (last > 0) trimmed.substring(1, last).trim(' ', '\t') else null
     }
 
     private fun keyName(text: String): String? {
-        val trimmed = text.trimStart()
+        val trimmed = text.trimStart(' ', '\t')
         if (trimmed.startsWith(';') || trimmed.startsWith('#') || '=' !in trimmed) return null
-        return trimmed.substringBefore('=').trim()
+        return trimmed.substringBefore('=').trim(' ', '\t')
     }
 
     fun read(bytes: ByteArray) = Document(bytes)

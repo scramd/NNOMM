@@ -6,8 +6,19 @@ internal fun loaderFailureHelp(error: Throwable): String {
     return when {
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
             "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
+        causes.any { it is java.nio.charset.CharacterCodingException } ->
+            "doorstop_config.ini contains invalid UTF-16 text. Its bytes were kept. Restore a valid copy of the file, then try again."
+        causes.any {
+            it is java.io.IOException &&
+                it.message.orEmpty().let { message ->
+                    message.contains("no space left", true) ||
+                        message.contains("not enough space", true) ||
+                        message.contains("disk full", true) ||
+                        message.contains("disk is full", true)
+                }
+        } -> "Free some space on the game and storage drives, then try again."
         causes.any { it is nnomm.core.io.DoorstopSettingsFailure } ->
-            "Close programs that use doorstop_config.ini, check that NNOMM can read it, then try again."
+            "Close programs that use doorstop_config.ini, check that NNOMM can read and change it, then try again."
         causes.any {
             it is java.nio.file.AccessDeniedException ||
                 it is java.nio.file.FileSystemException &&
@@ -24,15 +35,6 @@ internal fun loaderFailureHelp(error: Throwable): String {
                 it.message.orEmpty().contains("Permission denied", true)
         } ->
             "Check that NNOMM can change files in the game folder and in its own storage folder, and close programs using them, then try again."
-        causes.any {
-            it is java.io.IOException &&
-                it.message.orEmpty().let { message ->
-                    message.contains("no space left", true) ||
-                        message.contains("not enough space", true) ||
-                        message.contains("disk full", true) ||
-                        message.contains("disk is full", true)
-                }
-        } -> "Free some space on the game and storage drives, then try again."
         causes.any {
             it is java.util.zip.ZipException ||
                 it.message.orEmpty().let { message ->

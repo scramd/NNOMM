@@ -1303,13 +1303,14 @@ class RealGameFolder(
                     val doorstop = safe(game, "doorstop_config.ini")
                     var replacedDoorstop = false
                     if (repair && doorstop.exists()) {
-                        val old =
+                        val config =
                             try {
-                                readDoorstop(doorstop)
+                                // Strict decoding happens before any loader replacement is
+                                // committed.
+                                DoorstopIni.read(readDoorstop(doorstop))
                             } catch (e: java.io.IOException) {
                                 throw DoorstopSettingsFailure(e)
                             }
-                        val config = DoorstopIni.read(old)
                         val restore =
                             JsonFile(
                                     home.resolve("doorstop-restore.json"),
