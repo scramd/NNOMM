@@ -4,6 +4,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.input.key.*
 import java.io.File
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import nnomm.core.model.ActionKind
 import nnomm.core.model.UiAction
 import nnomm.core.store.AppStore
@@ -39,6 +40,19 @@ class AppModel(
     val overlayFactories: MutableMap<String, (AppModel) -> Overlay> = mutableMapOf(),
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    init {
+        scope.launch {
+            store.state
+                .map { state ->
+                    state.catalog.map { mod ->
+                        mod.id to mod.versions.map { it.version to it.downloadUrl }
+                    }
+                }
+                .distinctUntilChanged()
+                .collect { entries -> store.loadMetadata(entries.map { it.first }.toSet()) }
+        }
+    }
 
     override fun close() {
         scope.cancel()
@@ -76,12 +90,14 @@ class AppModel(
     var openAppReleases: () -> Unit = {}
 
     fun openOverlay(kind: String) {
+        if (!store.state.value.firstStart.complete && kind != "first") return
         val layer = overlayFactories[kind]?.invoke(this) ?: return
         ui.overlayKind = kind
         ui.overlay = layer
     }
 
     fun closeOverlay() {
+        if (ui.overlayKind == "first" && !store.state.value.firstStart.complete) return
         ui.overlay = null
         ui.overlayKind = null
         ui.dragging = false
@@ -104,6 +120,10 @@ class AppModel(
 
     fun shortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
+        if (ui.overlayKind == "first")
+            return event.key == Key.Escape ||
+                ((event.isCtrlPressed || event.isMetaPressed) &&
+                    event.key in listOf(Key.K, Key.Enter, Key.One, Key.Two, Key.Three, Key.Comma))
         val ctrl = event.isCtrlPressed || event.isMetaPressed
         val typing = ui.focusedField != null
         if (
@@ -172,7 +192,8 @@ class AppModel(
                         },
                     )
                 }
-            ActionKind.NAVIGATE -> Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
+            ActionKind.NAVIGATE ->
+                Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
             ActionKind.OPENSETTINGS -> {
                 ui.go(Page.Settings)
                 ui.settings.category = action.id ?: "game"
@@ -208,7 +229,8 @@ class AppModel(
                         )
                     )
                 }
-            ActionKind.OPENGAMEFOLDER -> store.state.value.game.folder?.let { platform.openFolder(File(it)) }
+            ActionKind.OPENGAMEFOLDER ->
+                store.state.value.game.folder?.let { platform.openFolder(File(it)) }
             ActionKind.NEWPROFILE -> openOverlay("newprofile")
             ActionKind.IMPORT -> scope.launch { nnomm.ui.dialogs.choosePackFor(this@AppModel) }
             ActionKind.SHARE,

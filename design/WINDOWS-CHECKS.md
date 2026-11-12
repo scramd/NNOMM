@@ -32,3 +32,15 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Doorstop restoration tied to observed game exit and startup | Steam delayed start, app closes first, app restart while game runs, and Steam URI arguments need real Windows checks. |
 | Process polling every three seconds, executable/argument detection | Verify external Steam starts and exits, CPU usage, and game-close apply timing. |
 | Pinned loader batch repair preserves existing Doorstop INI | Check 5.4.23.4 repair, differing-version refusal and interrupted repair with locked DLLs. |
+
+## Real-mode startup integration
+
+- RealRuntime now opens from the live app on IO before the shell is usable.
+  Verify Windows Steam discovery, missing Steam, first-start folder selection
+  and validation, game-version inspection, and the no-change confirmation boundary.
+- Native close, custom title close and Alt F4 share asynchronous runtime shutdown
+  and placement saving. Verify all three during startup and pending mod writes.
+- Core notices now show as toasts; verify restoration/recovery notices after restart.
+- Settings directory selection uses core settingsHome (APPDATA/NNOMM on Windows),
+  with NNOMM_HOME override. Verify NOMM's settings remain untouched.
+- The launcher, installer and Nucleus updater implementations are unchanged.

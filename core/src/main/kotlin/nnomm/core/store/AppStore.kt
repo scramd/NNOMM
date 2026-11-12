@@ -1180,25 +1180,35 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     }
 
     fun takeOverExistingMods(folder: String) {
-        background {
-            val game = io.gameFolder.inspect(folder)
-            val existing = diskAwait { io.gameFolder.takeOver(folder) }
-            change { s ->
-                val catalog = (s.catalog + existing.map { it.first }).distinctBy { it.id }
-                val installed = s.installed + existing.associate { (mod, m) -> mod.id to m }
-                val on = installed.values.count { it.profiles["default"]?.on == true }
-                s.copy(
-                    game = game,
-                    settings =
-                        s.settings.copy(
-                            general = s.settings.general + ("gamePath" to JsonPrimitive(folder))
-                        ),
-                    catalog = catalog,
-                    installed = installed,
-                    firstStart = FirstStart(false, on, installed.size - on),
-                )
-            }
+        background { adoptExistingMods(folder, false) }
+    }
+
+    /** Await adoption before dismissing first start; failure leaves confirmation available. */
+    suspend fun confirmFirstStart(folder: String) = adoptExistingMods(folder, true)
+
+    private suspend fun adoptExistingMods(folder: String, complete: Boolean) {
+        val game = io.gameFolder.inspect(folder)
+        val existing = diskAwait { io.gameFolder.takeOver(folder) }
+        change { s ->
+            val catalog = (s.catalog + existing.map { it.first }).distinctBy { it.id }
+            val installed = s.installed + existing.associate { (mod, m) -> mod.id to m }
+            val on = installed.values.count { it.profiles["default"]?.on == true }
+            s.copy(
+                game = game,
+                settings =
+                    s.settings.copy(
+                        general = s.settings.general + ("gamePath" to JsonPrimitive(folder))
+                    ),
+                catalog = catalog,
+                installed = installed,
+                firstStart = FirstStart(complete, on, installed.size - on),
+            )
         }
+    }
+
+    /** Notices share the store's toast lifetime and are cancelled with the store. */
+    fun forwardNotices(notices: kotlinx.coroutines.channels.ReceiveChannel<String>) {
+        worker.launch { for (message in notices) toast(message) }
     }
 
     fun completeFirstStart() {
@@ -1459,10 +1469,28 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    private fun mergeCatalog(mods: List<CatalogMod>, s: AppState) =
-        (mods + s.catalog.filter { it.id in s.installed || it.localFile != null }).distinctBy {
-            it.id
-        }
+    private fun mergeCatalog(mods: List<CatalogMod>, s: AppState): List<CatalogMod> {
+        val previous = s.catalog.associateBy { it.id }
+        val enriched =
+            mods.map { mod ->
+                val versions = previous[mod.id]?.versions.orEmpty().associateBy { it.version }
+                mod.copy(
+                    versions =
+                        mod.versions.map { version ->
+                            val old =
+                                versions[version.version]?.takeIf {
+                                    it.downloadUrl == version.downloadUrl
+                                }
+                            version.copy(
+                                sizeKb = version.sizeKb ?: old?.sizeKb,
+                                dateMillis = version.dateMillis ?: old?.dateMillis,
+                            )
+                        }
+                )
+            }
+        return (enriched + s.catalog.filter { it.id in s.installed || it.localFile != null })
+            .distinctBy { it.id }
+    }
 
     private suspend fun drainAndClose() {
         try {
