@@ -233,6 +233,7 @@ class RealGameFolder(
                 loaderComplete = complete,
                 loaderResumeAllowed = resumeAllowed,
                 changedLoaderBinaries = changedLoaderBinaries(game),
+                foreignLoaderBinaries = foreignLoaderBinaries(game),
             )
         }
 
@@ -1327,6 +1328,28 @@ class RealGameFolder(
             .sorted()
     }
 
+    // Use the same presence set for Repair and removal, including unknown core files.
+    private fun loaderFiles(game: Path): List<String> =
+        listOf("doorstop_config.ini", "winhttp.dll", "BepInEx/core")
+            .flatMap { name ->
+                val path = safe(game, name)
+                if (path.isDirectory())
+                    Files.walk(path).use { files ->
+                        files
+                            .filter { it.isRegularFile() }
+                            .map { game.relativize(it).toString().replace('\\', '/') }
+                            .toList()
+                    }
+                else if (path.exists()) listOf(name) else emptyList()
+            }
+            .sorted()
+
+    private fun foreignLoaderBinaries(game: Path): List<String> {
+        val ownership = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
+        val known = ownership?.hashes.orEmpty().keys + ownership?.relinquished.orEmpty()
+        return loaderFiles(game).filter { isLoaderBinary(it) && it !in known }
+    }
+
     private fun writeOwnership(game: Path, hashes: Map<String, String>) {
         val old = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
         if (old == null && hashes.isEmpty() && !loaderRecord(game).path.exists()) return
@@ -1554,18 +1577,7 @@ class RealGameFolder(
                 if (loaderRecord(game).read().orEmpty().isNotEmpty())
                     throw AccessDeniedException(game.toString())
                 DiskFaults.step("loader-removal-published")
-                LoaderRemoval(
-                    removedCount,
-                    listOf("doorstop_config.ini", "winhttp.dll", "BepInEx/core").any {
-                        safe(game, it).let { path ->
-                            if (path.isDirectory())
-                                Files.walk(path).use { files ->
-                                    files.anyMatch { it.isRegularFile() }
-                                }
-                            else path.exists()
-                        }
-                    },
-                )
+                LoaderRemoval(removedCount, loaderFiles(game).isNotEmpty())
             }
         }
 
@@ -1583,31 +1595,27 @@ class RealGameFolder(
                 val recorded = ownedHashes(game)
                 val verified = verifiedOwnership(game)
                 writeOwnership(game, verified)
-                // Only resume the pinned loader while surviving owned binaries are unchanged.
-                if (
-                    !repair &&
-                        (changedLoaderBinaries(game).isNotEmpty() ||
-                            (info.loaderPresent &&
-                                (info.loaderVersion != "5.4.23.4" ||
-                                    verified.isEmpty() ||
-                                    recorded.any { (name, hash) ->
-                                        isLoaderBinary(name) &&
-                                            safe(game, name).exists() &&
-                                            verified[name] != hash
-                                    })))
-                ) {
-                    if (info.changedLoaderBinaries.isNotEmpty())
-                        notice(
-                            "NNOMM did not install the mod loader. " +
-                                LoaderInstallBlocked(info.changedLoaderBinaries).message
-                        )
-                    return@guarded
+                // A present loader can be used as-is, but cannot be mixed with our archive.
+                if (!repair) {
+                    if (!info.loaderPresent) {
+                        if (info.changedLoaderBinaries.isNotEmpty()) {
+                            notice(
+                                "NNOMM did not install the mod loader. " +
+                                    LoaderInstallBlocked(info.changedLoaderBinaries).message
+                            )
+                            return@guarded
+                        }
+                        if (info.foreignLoaderBinaries.isNotEmpty())
+                            throw LoaderInstallBlocked(info.foreignLoaderBinaries, foreign = true)
+                    } else if (!info.loaderResumeAllowed || info.foreignLoaderBinaries.isNotEmpty())
+                        return@guarded
                 }
                 val existingVersion = info.loaderVersion
                 val changedOwned =
                     (recorded.keys - verified.keys) +
                         loaderOwnership(game).read()?.relinquished.orEmpty()
-                if (repair && !info.loaderPresent) throw LoaderNotInstalled()
+                if (repair && !info.loaderPresent && loaderFiles(game).all { it in verified })
+                    throw LoaderNotInstalled()
                 if (repair && existingVersion != "5.4.23.4") {
                     val message =
                         if (existingVersion == null)
@@ -1615,7 +1623,7 @@ class RealGameFolder(
                         else
                             "This folder has BepInEx $existingVersion. Its files were left unchanged."
                     notice(message)
-                    throw LoaderRepairRefused()
+                    throw LoaderRepairRefused(message)
                 }
                 val v =
                     ModVersion(

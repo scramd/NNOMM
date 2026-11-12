@@ -284,6 +284,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     private class LoaderInstallFailure(cause: Exception) : Exception(cause)
 
+    private val incompleteLoaderNotices = mutableSetOf<String>()
+
+    private fun installBlock(game: GameInfo): LoaderInstallBlocked? =
+        if (game.loaderPresent) null
+        else if (game.changedLoaderBinaries.isNotEmpty())
+            LoaderInstallBlocked(game.changedLoaderBinaries)
+        else if (game.foreignLoaderBinaries.isNotEmpty())
+            LoaderInstallBlocked(game.foreignLoaderBinaries, foreign = true)
+        else null
+
     private suspend fun prepareGameFolder(snapshot: AppState, modAction: Boolean = true) {
         val folder = snapshot.game.folder ?: return
         if (snapshot.game.folderMissing) return
@@ -296,17 +306,26 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             if (
                 modAction &&
                     onCount(snapshot) > 0 &&
-                    snapshot.game.changedLoaderBinaries.isNotEmpty()
+                    (snapshot.game.changedLoaderBinaries.isNotEmpty() ||
+                        snapshot.game.foreignLoaderBinaries.isNotEmpty())
             )
                 io.gameFolder.inspect(folder).also { game -> change { it.copy(game = game) } }
             else snapshot.game
-        if (
-            modAction &&
-                onCount(snapshot) > 0 &&
-                (!beforeInstall.loaderPresent || !beforeInstall.loaderComplete) &&
-                beforeInstall.changedLoaderBinaries.isNotEmpty()
-        )
-            throw LoaderInstallFailure(LoaderInstallBlocked(beforeInstall.changedLoaderBinaries))
+        if (modAction && onCount(snapshot) > 0)
+            installBlock(beforeInstall)?.let { throw LoaderInstallFailure(it) }
+        if (onCount(snapshot) > 0) {
+            if (
+                beforeInstall.loaderPresent &&
+                    !beforeInstall.loaderComplete &&
+                    !beforeInstall.loaderResumeAllowed &&
+                    beforeInstall.changedLoaderBinaries.isNotEmpty() &&
+                    incompleteLoaderNotices.add(beforeInstall.folder ?: folder)
+            )
+                toast(
+                    "The mod loader is missing some files, and you changed ${beforeInstall.changedLoaderBinaries.joinToString(", ")}, so NNOMM did not add them. If mods do not load, restore BepInEx 5.4.23.4.",
+                    ms = 30000,
+                )
+        }
         if (
             modAction &&
                 onCount(snapshot) > 0 &&
@@ -322,11 +341,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             }
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
-            if (
-                (!game.loaderPresent || !game.loaderComplete) &&
-                    game.changedLoaderBinaries.isNotEmpty()
-            )
-                throw LoaderInstallFailure(LoaderInstallBlocked(game.changedLoaderBinaries))
+            installBlock(game)?.let { throw LoaderInstallFailure(it) }
             if (game.loaderPresent && game.loaderVersion == "5.4.23.4" && game.loaderComplete)
                 toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
         }
@@ -1051,9 +1066,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 (onCount(state.value) > 0 &&
                                     (!state.value.game.loaderPresent ||
                                         (!state.value.game.loaderComplete &&
-                                            (state.value.game.loaderResumeAllowed ||
-                                                state.value.game.changedLoaderBinaries
-                                                    .isNotEmpty())))))
+                                            state.value.game.loaderResumeAllowed))))
                     )
                         prepareGameFolder(state.value)
                     applying = false
@@ -1606,8 +1619,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         disk {
             try {
                 val before = io.gameFolder.inspect(folder)
-                if (before.changedLoaderBinaries.isNotEmpty())
-                    throw LoaderInstallBlocked(before.changedLoaderBinaries)
+                installBlock(before)?.let { throw it }
                 io.gameFolder.installLoader(folder)
                 val game = io.gameFolder.inspect(folder)
                 change { it.copy(game = game) }
