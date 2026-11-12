@@ -279,7 +279,7 @@ private fun SettingsSelect(options: List<String>, selected: Int, onSelect: (Int)
     val theme = LocalNnTheme.current
     val density = LocalDensity.current
     val width = with(density) {
-        (options.maxOfOrNull { measurer.measure(it, theme.text()).size.width } ?: 0).toDp() + 41.dp
+        (options.maxOfOrNull { measurer.measure(it, theme.text(weight = if (current) 600 else 400)).size.width } ?: 0).toDp() + 41.dp
     }
     Select(options, selected, onSelect, Modifier.width(width), enabled, current = current)
 }

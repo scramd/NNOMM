@@ -44,3 +44,15 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 - Settings directory selection uses core settingsHome (APPDATA/NNOMM on Windows),
   with NNOMM_HOME override. Verify NOMM's settings remain untouched.
 - The launcher, installer and Nucleus updater implementations are unchanged.
+
+## Remaining polish
+
+- Shared kit controls now activate on Tao's typed-only Space on X11. Physical
+  Space remains handled by Compose clickable; an accompanying typed event is
+  consumed until key-up. Check focused buttons, switches, checkboxes, radios,
+  chips, segmented choices and popup menu entries on Windows for one activation.
+- Library and panel settings-file actions now search stored DLLs for serialized
+  BepInPlugin GUIDs and match BepInEx/config/<GUID>.cfg, then exact normalized names.
+  Check a real plugin after one game run, multiple plugin GUIDs in one mod,
+  absent configs and the Windows default editor association. Linux tests use
+  byte-array fixtures and temporary sandbox files only.
