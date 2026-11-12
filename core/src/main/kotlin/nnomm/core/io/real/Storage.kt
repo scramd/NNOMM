@@ -218,6 +218,44 @@ class RealModStore(
         return file.read() ?: hashPayload(version(id, version)).also { file.write(it) }
     }
 
+    // A takeover snapshot contains player files too. Only a verified registry
+    // payload can establish which of those files were shipped by the author.
+    internal fun shippedHashes(id: String, version: String): Map<String, String> {
+        if (provenance(id, version).read()?.origin != PayloadOrigin.TAKEOVER)
+            return hashes(id, version)
+        val verified = registryPayload(id, version).read() ?: return emptyMap()
+        return if (verified.artifactHash != null) verified.payloadHashes else emptyMap()
+    }
+
+    internal fun matchingVersion(
+        path: Path,
+        loose: Boolean,
+        preferred: Pair<String, String>? = null,
+    ): Pair<String, String>? {
+        if (!storeRoot.isDirectory()) return null
+        val actual = treeHash(path)
+        val matches = mutableListOf<Pair<String, String>>()
+        Files.list(storeRoot).use { ids ->
+            ids.filter { it.isDirectory() }
+                .forEach { id ->
+                    Files.list(id).use { versions ->
+                        versions
+                            .filter { it.isDirectory() }
+                            .forEach { version ->
+                                val candidate = if (loose) version.resolve(path.name) else version
+                                if (candidate.exists() && treeHash(candidate) == actual)
+                                    matches += id.name to version.name
+                            }
+                    }
+                }
+        }
+        if (preferred in matches) return preferred
+        require(matches.size <= 1) {
+            "These files match several stored mods. They were left unchanged; keep only the intended version before taking over."
+        }
+        return matches.singleOrNull()
+    }
+
     private fun hashPayload(path: Path): Map<String, String> =
         Files.walk(path).use { files ->
             files
