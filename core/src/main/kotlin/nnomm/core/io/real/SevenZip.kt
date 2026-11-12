@@ -10,6 +10,18 @@ import kotlinx.coroutines.ensureActive
 import net.sf.sevenzipjbinding.*
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
 
+private val sevenZipLoad = Any()
+
+/**
+ * Loads the native library once, one caller at a time. The library's own first-use loading is
+ * not safe for two archives opened together (an install beside a background check), and after
+ * one failure, for example a full temporary folder, it does not try again by itself.
+ */
+private fun loadSevenZip() =
+    synchronized(sevenZipLoad) {
+        if (!SevenZip.isInitializedSuccessfully()) SevenZip.initSevenZipFromPlatformJAR()
+    }
+
 /** Extract in one pass, including solid archives, without trusting native entry paths. */
 internal suspend fun unpackSevenZip(
     file: Path,
@@ -18,6 +30,7 @@ internal suspend fun unpackSevenZip(
 ) {
     val context = currentCoroutineContext()
     context.ensureActive()
+    loadSevenZip()
     RandomAccessFile(file.toFile(), "r").use { input ->
         SevenZip.openInArchive(ArchiveFormat.SEVEN_ZIP, RandomAccessFileInStream(input)).use {
             archive ->

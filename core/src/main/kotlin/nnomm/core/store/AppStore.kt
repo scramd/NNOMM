@@ -2071,10 +2071,19 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    fun retryDownload(id: String) {
+    private fun sameFailedRow(a: Download, b: Download) =
+        a.error != null && a.id == b.id && a.profile == b.profile && a.version == b.version
+
+    /** Starts one failed download again: this row, not another download of the same mod. */
+    fun retryDownload(failed: Download) {
         state.value.downloads
-            .firstOrNull { it.id == id && it.error != null }
+            .firstOrNull { sameFailedRow(it, failed) }
             ?.let { queue(it.id, it.kind, it.profile, it.version, it.quiet) }
+    }
+
+    /** Takes one failed download out of the list. Other downloads of the same mod go on. */
+    fun removeFailedDownload(failed: Download) {
+        change { it.copy(downloads = it.downloads.filterNot { d -> sameFailedRow(d, failed) }) }
     }
 
     fun refreshRegistry(announce: Boolean = false) {

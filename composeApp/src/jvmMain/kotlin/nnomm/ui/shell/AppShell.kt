@@ -696,7 +696,7 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                             IconButton(
                                 NnIcons.refresh,
                                 "Try again",
-                                { model.store.retryDownload(d.id) },
+                                { model.store.retryDownload(d) },
                                 small = true,
                             )
                         if (d.status != DownloadStatus.COMPLETE)
@@ -704,7 +704,11 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
                                 NnIcons.x,
                                 if (d.status == DownloadStatus.FAILED) "Remove from the list"
                                 else "Cancel",
-                                { model.store.cancelDownload(d.id) },
+                                {
+                                    if (d.status == DownloadStatus.FAILED)
+                                        model.store.removeFailedDownload(d)
+                                    else model.store.cancelDownload(d.id)
+                                },
                                 small = true,
                             )
                     }
