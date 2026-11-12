@@ -200,18 +200,10 @@ class RealGameFolder(
                         }
                         .getOrNull()
                 else null
-            // Only accept an explicitly named bundleVersion; guessing arbitrary numeric strings
-            // confuses Unity's engine version with the game version.
             val asset = safe(game, "NuclearOption_Data/globalgamemanagers")
             val version =
                 if (asset.isRegularFile())
-                    runCatching {
-                            Regex("bundleVersion[\\x00\\s:=]+(\\d+\\.\\d+(?:\\.\\d+){0,2})")
-                                .find(String(asset.readBytes(), Charsets.ISO_8859_1))
-                                ?.groupValues
-                                ?.get(1)
-                        }
-                        .getOrNull()
+                    runCatching { gameVersion(asset.readBytes()) }.getOrNull()
                 else null
             val archive = loaderArchive(game).read().orEmpty()
             val hashes = ownedHashes(game)
@@ -1652,7 +1644,7 @@ class RealGameFolder(
                             "The installed BepInEx version could not be identified. Its files were left unchanged."
                         else
                             "This folder has BepInEx $existingVersion. Its files were left unchanged."
-                    notice(message)
+                    // The caller shows this message once; a notice here would show it twice.
                     throw LoaderRepairRefused(message)
                 }
                 val v =
