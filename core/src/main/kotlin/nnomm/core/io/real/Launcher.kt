@@ -108,9 +108,9 @@ class RealGameLauncher(
         get() = DoorstopRestores(home)
 
     // Each folder can recover even if another library is absent or locked.
-    private fun tryRestoreDoorstop(): Exception? {
+    private fun tryRestoreDoorstop(launchGame: Path? = null): Exception? {
         var failure: Exception? = null
-        var announce = false
+        val failedFolders = mutableListOf<Path>()
         try {
             for (record in restores.records()) {
                 val game = Path.of(record.getValue("path")).parent
@@ -120,10 +120,15 @@ class RealGameLauncher(
                         try {
                             restoreDoorstop(game, current)
                         } catch (e: Exception) {
-                            failure = e
+                            if (
+                                launchGame == null ||
+                                    DoorstopLocks.key(game) == DoorstopLocks.key(launchGame)
+                            )
+                                failure = e
                             // A refused atomic edit may not even allow a comparison read.
                             // Do not claim mods were disabled without evidence of a change.
-                            if (restores.read(game)["changed"] != "false") announce = true
+                            if (restores.read(game)["changed"] != "false")
+                                failedFolders += listOf(game)
                         }
                     }
                 }
@@ -131,11 +136,11 @@ class RealGameLauncher(
         } catch (e: Exception) {
             failure = e
         }
-        if (failure == null) restoreNoticeShown = false
-        else if (announce && !restoreNoticeShown) {
+        if (failedFolders.isEmpty()) restoreNoticeShown = false
+        else if (!restoreNoticeShown) {
             restoreNoticeShown = true
             notice(
-                "NNOMM could not turn the mods back on in doorstop_config.ini. Close programs that use the game folder; NNOMM tries again."
+                "NNOMM could not turn the mods back on in doorstop_config.ini in ${failedFolders.joinToString()}. Close programs that use the game folder; NNOMM tries again."
             )
         }
         return failure
@@ -161,7 +166,7 @@ class RealGameLauncher(
                 val game = Path.of(requireNotNull(state.game.folder)).toRealPath()
                 safe(game, "NuclearOption.exe")
                 // Recover an interrupted vanilla launch before deriving this launch mode.
-                tryRestoreDoorstop()?.let { throw DoorstopSettingsFailure(it) }
+                tryRestoreDoorstop(game)?.let { throw DoorstopSettingsFailure(it) }
                 val ini = safe(game, "doorstop_config.ini")
                 try {
                     DoorstopLocks.locked(game) {
