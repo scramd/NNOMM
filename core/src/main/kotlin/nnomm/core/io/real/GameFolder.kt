@@ -1328,7 +1328,7 @@ class RealGameFolder(
                                     )
                                     replacedDoorstop = true
                                 } else Files.write(restored, config.setEnabled(true))
-                                replacements += doorstop to restored
+                                replacements.add(0, doorstop to restored)
                             }
                         }
                         val ownedStaged = staging.resolve("ownership.json")
@@ -1337,6 +1337,13 @@ class RealGameFolder(
                             home.resolve(
                                 "loader-${Integer.toHexString(game.toString().hashCode())}.json"
                             ) to ownedStaged
+                        // The INI must commit before any owned loader file: a mixed batch
+                        // can otherwise hide a failed INI move behind an earlier promotion.
+                        val intendedDoorstop =
+                            replacements
+                                .firstOrNull { it.first == doorstop }
+                                ?.second
+                                ?.let { Files.readAllBytes(it) }
                         replaceTrees(
                             replacements,
                             home.resolve("transactions"),
@@ -1344,6 +1351,14 @@ class RealGameFolder(
                                 check(!running()) { "Game started; loader changes are pending" }
                             },
                         )
+                        if (intendedDoorstop != null) {
+                            try {
+                                if (!readDoorstop(doorstop).contentEquals(intendedDoorstop))
+                                    throw java.nio.file.AccessDeniedException(doorstop.toString())
+                            } catch (e: java.io.IOException) {
+                                throw DoorstopSettingsFailure(e)
+                            }
+                        }
                         if (replacedDoorstop)
                             notice(
                                 "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
