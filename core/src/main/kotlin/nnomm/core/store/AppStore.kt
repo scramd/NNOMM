@@ -1691,7 +1691,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             io.modStore.remove(remove.toList())
             change { it.copy(installed = keep) }
             toast(
-                "Removed managed mods from the game. Local and taken-over mods stay in the Library, turned off, with their stored copies kept. Only loader files installed by NNOMM are removed; adopted loader files and your own files stay."
+                "Removed registry mods and turned off local and taken-over mods."
             )
         }
     }
