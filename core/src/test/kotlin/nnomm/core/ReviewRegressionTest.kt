@@ -406,7 +406,7 @@ class ReviewRegressionTest {
                 io.copy(gameFolder = folder, logger = Logger { _, _ -> }),
                 backgroundScope,
             )
-        a.toggle("minimap")
+        a.setOn(listOf("minimap"), true)
         runCurrent()
         assertEquals(listOf("loader", "apply"), operations)
         assertTrue(

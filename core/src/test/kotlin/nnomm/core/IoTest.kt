@@ -178,7 +178,7 @@ class IoTest {
             }
         val a =
             AppStore(
-                Demo.state().copy(installed = emptyMap()),
+                Demo.state().copy(installed = emptyMap(), firstStart = FirstStart(false)),
                 io.copy(gameFolder = folder),
                 backgroundScope,
             )

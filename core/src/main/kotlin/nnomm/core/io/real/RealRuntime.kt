@@ -59,6 +59,7 @@ private constructor(
                     }
                 HomeLocks.runtimeHomes.add(home.toRealPath())
                 try {
+                    cleanHomePreparation(home)
                     recoverTransactions(
                         home.resolve("transactions"),
                         homeOnly = true,
