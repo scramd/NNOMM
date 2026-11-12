@@ -11,7 +11,7 @@ internal fun loaderFailureHelp(error: Throwable): String {
         causes.any { it is nnomm.core.io.LoaderRecoveryPending } ->
             "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
-            "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
+            causes.first { it is nnomm.core.io.LoaderRepairRefused }.message!!
         causes.any { it is java.nio.charset.CharacterCodingException } ->
             "doorstop_config.ini contains invalid UTF-16 text. Its bytes were kept. Restore a valid copy of the file, then try again."
         causes.any {

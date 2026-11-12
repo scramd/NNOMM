@@ -134,7 +134,7 @@ class LoaderOwnershipV2Test {
         val scenarios =
             listOf(
                 "install-fresh",
-                "install-playerproxy",
+                "install-playerini",
                 "repair-adopted-disabled",
                 "repair-adopted-missing-ini",
                 "repair-owned",
@@ -156,9 +156,12 @@ class LoaderOwnershipV2Test {
                 when (scenario) {
                     "install-fresh",
                     "retry-install" -> fixture(false, null)
-                    "install-playerproxy" ->
+                    "install-playerini" ->
                         fixture(false, null).also {
-                            it.game.resolve("winhttp.dll").writeBytes(data.getValue("winhttp.dll"))
+                            // INI-only foreign files remain eligible for missing-file installation.
+                            it.game
+                                .resolve("doorstop_config.ini")
+                                .writeBytes(data.getValue("doorstop_config.ini"))
                         }
                     "repair-adopted-disabled" ->
                         fixture(

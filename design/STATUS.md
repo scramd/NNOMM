@@ -41,11 +41,14 @@ Every part was reviewed by an Opus agent and a Sol agent, then fixed, several ro
 
 - A recorded recovery rollback accepts a missing previous copy as an already completed move;
   a later player deletion cannot leave recovery pending forever.
-- A changed loader binary (`winhttp.dll` or files under `BepInEx/core`) guards
-  Install even when the detection DLL is missing. The notice names the changed files
-  and asks for BepInEx 5.4.23.4 to be restored or those files removed. Play surfaces
-  that block before launch. An edited INI alone permits missing files to be installed;
-  its bytes stay untouched. Repair without the detection DLL offers Install.
+- Without the detection DLL, changed or foreign loader binaries (`winhttp.dll` or
+  files under `BepInEx/core`) block Install and Play before launch. Foreign-file
+  guidance does not blame the player. A present incomplete loader with changed
+  binaries still allows mod placement and Play, with one warning per game folder
+  per app session; NNOMM adds no loader files. An edited or foreign INI alone permits
+  Install and stays untouched. Repair without the detection DLL offers Install only
+  if no loader files remain except unchanged files this home owns; otherwise it
+  refuses the unidentified loader. Complete unowned BepInEx 5.4.23.4 stays usable.
 - Immediate download Retry replaces a cancelled transfer during its cleanup. Cancelled
   return handover deletes staging; tests await worker cleanup before deleting fixtures.
 - Responses without Content-Length show an indeterminate download bar and “Downloading”.

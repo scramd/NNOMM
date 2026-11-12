@@ -493,11 +493,20 @@ and replacement rules are unchanged. Per-target eligibility defaults to allowing
 mutation for other callers, which keep their existing checks.
 
 Present changed or relinquished loader binaries (`winhttp.dll` and files under
-`BepInEx/core`) keep the presence guard across startup and Retry. An edited INI
-alone does not block filling missing files; Install never overwrites it. A blocked
-Install names the changed binaries and asks the player to restore BepInEx 5.4.23.4
-or remove those files. Play surfaces that block before launch. Repair with no
-BepInEx detection DLL reports that the loader is not installed and offers Install.
+`BepInEx/core`) keep the presence guard across startup and Retry. When the detection
+DLL is absent, those binaries block Install, mod actions that need installation,
+and Play before launch. Unowned binaries use the same block, with a notice naming
+another loader's files rather than claiming the player changed them. Install never
+mixes the pinned archive into a foreign loader. With the detection DLL present,
+a loader that cannot resume is used as-is: mods apply and Play launches. If it is
+incomplete with changed binaries, preparation gives one non-blocking notice per
+canonical game folder per app session naming the files and suggesting restoration
+of BepInEx 5.4.23.4 if mods do not load. It does not announce an installation.
+An edited or foreign INI alone does not block Install and is never overwritten.
+Repair offers Install without the detection DLL only if all remaining loader files
+(the INI, winhttp.dll and files under BepInEx/core) are unchanged and owned by this
+home, or none remain. Otherwise it refuses the unidentified loader and leaves its
+files unchanged. A complete unowned BepInEx 5.4.23.4 remains usable for takeover and Play.
 A pending Play without mods restore defers INI ownership verification and removal until restoration
 finishes. Startup never verifies ownership for a folder with an unfinished relevant
 journal. It retains the record and existing ownership until recovery can finish.

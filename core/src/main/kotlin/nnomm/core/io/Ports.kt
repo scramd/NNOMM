@@ -98,15 +98,18 @@ class LoaderDownloadFailure(cause: Exception) : java.io.IOException(cause)
 class LoaderNotInstalled :
     IllegalStateException("The mod loader is not installed. Use Install to add BepInEx 5.4.23.4.")
 
-class LoaderInstallBlocked(files: List<String>) :
+class LoaderInstallBlocked(files: List<String>, foreign: Boolean = false) :
     IllegalStateException(
-        "You changed ${files.joinToString(", ")}. Restore BepInEx 5.4.23.4 or remove the changed files, then try again."
+        if (foreign)
+            "NNOMM did not install the mod loader because another loader's files are in the game folder: ${files.joinToString(", ")}. Remove them or install BepInEx 5.4.23.4 yourself, then try again."
+        else
+            "You changed ${files.joinToString(", ")}. Restore BepInEx 5.4.23.4 or remove the changed files, then try again."
     )
 
-class LoaderRepairRefused :
-    IllegalStateException(
+class LoaderRepairRefused(
+    message: String =
         "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
-    )
+) : IllegalStateException(message)
 
 data class LoaderRemoval(val removed: Int = 0, val kept: Boolean = false)
 
