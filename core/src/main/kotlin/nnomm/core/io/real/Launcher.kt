@@ -137,8 +137,19 @@ class RealGameLauncher(
         } catch (e: Exception) {
             failure = e
         }
-        val failedKeys = failedFolders.associateBy { DoorstopLocks.key(it).toString() }
-        announcedRestoreFailures.retainAll(failedKeys.keys)
+        // Keys come from the recorded path, so a folder that is absent for a while keeps its key.
+        fun noticeKey(game: Path) = game.toAbsolutePath().normalize().toString()
+        val failedKeys = failedFolders.associateBy { noticeKey(it) }
+        // A folder stays announced until its restore record is gone, also while it is absent.
+        val pendingKeys =
+            runCatching {
+                    restores
+                        .records()
+                        .map { noticeKey(Path.of(it.getValue("path")).parent) }
+                        .toSet()
+                }
+                .getOrElse { announcedRestoreFailures.toSet() }
+        announcedRestoreFailures.retainAll(pendingKeys)
         val newlyFailed = failedKeys.filterKeys { it !in announcedRestoreFailures }.values
         if (newlyFailed.isNotEmpty()) {
             announcedRestoreFailures += failedKeys.keys
