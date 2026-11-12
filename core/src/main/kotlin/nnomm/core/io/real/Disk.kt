@@ -418,7 +418,7 @@ internal fun recoverTransactions(
                 } catch (e: Exception) {
                     if (notice == null) throw e
                     notice(
-                        "Recovery is pending for $journal: ${e.message}. Its files are kept; retry after closing the game."
+                        "Recovery is pending for $journal: ${e.message}. Its files and journal are kept. Other files can still be changed. Restore unavailable storage, then Retry."
                     )
                 }
             }
@@ -576,6 +576,30 @@ internal fun treeHash(root: Path): String =
 internal fun pendingTransactions(folder: Path): Boolean =
     folder.isDirectory() &&
         Files.list(folder).use { paths -> paths.anyMatch { it.name.endsWith(".txn") } }
+
+/**
+ * Unknown home journals stay visible, but cannot identify an affected game entry. Unknown game
+ * journals block game entries because their targets may be in this game.
+ */
+internal fun pendingTouches(folder: Path, target: Path, unknownBlocks: Boolean = false): Boolean {
+    if (!folder.isDirectory()) return false
+    val normalized = target.toAbsolutePath().normalize()
+    return Files.list(folder).use { paths ->
+        paths
+            .filter { it.name.endsWith(".txn") }
+            .anyMatch { journal ->
+                val batch =
+                    runCatching { json.decodeFromString<TransactionBatch>(journal.readText()) }
+                        .getOrNull()
+                if (batch == null) unknownBlocks
+                else
+                    (batch.changes.map { it.target } + listOfNotNull(batch.commitPath)).any {
+                        val pending = Path.of(it).toAbsolutePath().normalize()
+                        pending.startsWith(normalized) || normalized.startsWith(pending)
+                    }
+            }
+    }
+}
 
 /** Runtime owns the lock for its lifetime; direct IO clients lock each operation. */
 internal object HomeLocks {

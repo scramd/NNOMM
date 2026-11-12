@@ -974,7 +974,27 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 change { it.copy(gameStarting = false) }
             } catch (e: Exception) {
                 change { it.copy(gameStarting = false) }
-                throw e
+                if (e is CancellationException) throw e
+                io.logger.error("play", e)
+                val failures = io.gameFolder.applyProblems?.value.orEmpty()
+                val failedProfile = state.value.profileId
+                val reason =
+                    failures.values.distinct().joinToString(" ").ifBlank {
+                        "Some changes are pending. Retry or take over existing mods before Play."
+                    }
+                toast(
+                    "Nuclear Option did not start. $reason",
+                    "Retry",
+                    ms = 30000,
+                    undo = { play(withoutMods) },
+                )
+                if (failures.isNotEmpty())
+                    toast(
+                        "Turn off the mods with failed changes to continue with the other mods.",
+                        "Turn off",
+                        ms = 30000,
+                        undo = { setOn(failures.keys.toList(), false, failedProfile) },
+                    )
             }
         }
     }
@@ -1457,7 +1477,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     fun repairLoader() {
         val folder = state.value.game.folder ?: return
-        background {
+        disk {
             io.gameFolder.repairLoader(folder)
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
