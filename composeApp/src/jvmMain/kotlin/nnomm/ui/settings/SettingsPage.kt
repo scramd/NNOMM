@@ -59,7 +59,7 @@ fun SettingsPage() {
     val rows = playerSettings.filter {
         (if (personal) it.ov else !it.profileOnly) &&
             (it.cat != "servers" || it.key == "showServers") &&
-            (query.isEmpty() || "${it.label} ${settingHelp(it, state)} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
+            (query.isEmpty() || "${it.label} ${displaySettingHelp(it, state, model)} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
             (personal || query.isNotEmpty() || it.cat == view.category)
     }
     val storageVisible = rows.any { it.cat == "storage" }
@@ -213,9 +213,7 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                     if (own && !d.profileOnly) Box(Modifier.size(7.dp).background(c.text, RoundedCornerShape(50)))
                     Mark(d.label, query)
                 }
-                var help = settingHelp(d, state)
-                if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}. Get updates from the releases page."
-                if (d.key == "loader" && model.isDemo) help = d.help
+                val help = displaySettingHelp(d, state, model)
                 if (help.isNotEmpty()) Box(Modifier.padding(top = 2.dp)) { Mark(help, query, true) }
                 if (query.isNotEmpty() && !"${d.label} ${help}".lowercase().contains(query)) {
                     d.options.firstOrNull { it.lowercase().contains(query) }?.let { Mark("Option: $it", query, true) }
@@ -298,4 +296,10 @@ private fun SettingsCategory(title: String, danger: Boolean, current: Boolean, o
                 weight = 500, maxLines = 2)
         }
     }
+}
+
+internal fun displaySettingHelp(d: SettingDefinition, state: AppState, model: AppModel): String = when {
+    d.key == "appUpdate" -> model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}. Get updates from the releases page."
+    d.key == "loader" && model.isDemo -> d.help
+    else -> settingHelp(d, state)
 }

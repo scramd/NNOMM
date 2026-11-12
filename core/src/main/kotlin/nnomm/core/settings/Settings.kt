@@ -3,6 +3,7 @@ package nnomm.core.settings
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import nnomm.core.model.*
+import nnomm.core.rules.size
 
 @Serializable
 data class SettingDefinition(
@@ -55,10 +56,18 @@ fun settingHelp(d: SettingDefinition, s: AppState): String =
             (when (s.storeScanStatus) {
                 LoadStatus.LOADING ->
                     if (s.storeUnusedMb == null) "Calculating… " else "Refreshing… "
-                LoadStatus.FAILED -> "Could not calculate storage use. Retry. "
+                LoadStatus.FAILED -> "Could not calculate storage use. "
                 else -> ""
             } +
-                s.storeUnusedMb?.let { "$it\u00a0MB. " }.orEmpty() +
+                (s.storeUnusedKb ?: s.storeUnusedMb?.times(1024))
+                    ?.let {
+                        when (s.storeScanStatus) {
+                            LoadStatus.FAILED,
+                            LoadStatus.LOADING -> "Last calculated: ${size(it)}. "
+                            else -> "${size(it)}. "
+                        }
+                    }
+                    .orEmpty() +
                 "Old versions and recovery copies. Clear keeps the last copy of every player file.")
         "gamePath" ->
             if (s.game.folderMissing) "Game folder not found."
@@ -67,7 +76,7 @@ fun settingHelp(d: SettingDefinition, s: AppState): String =
                     ?.takeUnless { it == "unknown" }
                     ?.let { "Nuclear Option $it found here." } ?: "Game version is unknown."
         "store" ->
-            "Each version of a mod is stored once here, also when several profiles use it. ${if (s.storeUsedMb > 0) "${s.storeUsedMb}\u00a0MB" else "${(s.storeUsedBytes + 1023) / 1024}\u00a0KB"} used."
+            "Each version of a mod is stored once here, also when several profiles use it. ${if (s.storeScanStatus == LoadStatus.FAILED || s.storeScanStatus == LoadStatus.LOADING) "Last calculated: " else ""}${size(if (s.storeUsedBytes > 0) (s.storeUsedBytes + 1023) / 1024 else s.storeUsedMb * 1024)} used."
         "appUpdate" -> "Version ${s.appVersion}."
         else -> d.help
     }

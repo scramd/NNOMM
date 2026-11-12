@@ -1,0 +1,30 @@
+# Last messages, fix menus and demo data
+
+- L1 / L5: Loader install, repair and removal share plain guidance for connection failures, denied/locked files, full disks and failed verification; unknown errors point to the game folder. Technical details stay in the log. Offline tests cover categories and access-denied install/removal Retry.
+- L2: The loader-removal regression now asserts that game placement is gone, the Library is empty, the persisted snapshot is empty and loader-only Retry leaves that result intact.
+- L3: Placement reports carry the enabled identities sharing each folder name. An off entry offers Retry and Turn off actions for its enabled peers, using their display names. Enabled-entry behavior stays unchanged. Offline regression checks targets and labels.
+- L4: The generator sets report help explicitly, applies the removal label/action/help before writing both resources and regenerates settings and demo data. The mock data source is unchanged.
+- Plurals: Removal uses the shared plural helper for both removed and retained counts; one retained mod is covered by a real action regression.
+- Empty removal: A separate successful loader completion explains that NNOMM-installed loader files were removed and existing files were kept, even with no Library entries.
+- No-folder removal: Drop “Updated the Library”; explain that files left in the previous folder are removed after choosing that folder again and pressing Play. Do not apply game changes on folder selection.
+- Running game: Removal guards use “Close Nuclear Option before removing mods.”
+- Retry text: Missing-folder and failed-placement removal toasts include a working Retry button.
+- Storage: Both rows use size(); unused space keeps KB precision. Failed and refreshing scans label the retained estimate “Last calculated”; failed-scan help has no redundant Retry sentence. Scan failure/retry regression retains the last estimate.
+- Confirmation: Local-only removal does not discuss registry mods. General help explains that some copies cannot be downloaded again without calling them “unverified”.
+- Removal wording: Removed registry entries leave every profile; retained entries stay in the Library off. Completion and help describe the same result.
+- Loader settings: The damaged settings message points to Repair in Settings, Game, without exposing Doorstop terminology.
+- Loader Retry: Success confirms completion; Retry reads the current selected folder. The access-denied regression changes folders before Retry and checks its destination.
+- Save failure: After completed game removal, a failed Library save is reported separately with a save-only Retry. The completed removal remains visible.
+- Recovery reuse: Equal bytes reuse a park only for the same original version; the existing UUID naming scheme identifies the version prefix exactly.
+- Metadata: Foreground requests check the latest visible-card set after acquiring their slot and skip cards scrolled away. An in-progress request finishes. A gated offline regression checks the skipped request.
+- Settings search: Demo and real rows/search share the same presentation help, including the demo loader and updater descriptions.
+- Takeover size: First-start adoption awaits a cheap size refresh after publishing the adopted Library; it does not start a hash scan.
+- Renderer: Run scene creation, drawing and disposal on Swing's event thread to prevent the observed cross-thread snapshot-observer failure.
+- TODO(core): None introduced.
+- Decisions: Explain deferred no-folder removal instead of changing folder-selection behavior; keep in-flight metadata requests; no helper, service or startup change.
+- Limits: Independent Opus/Sol acceptance remains with the parent. This implementation worked alone. Windows checks remain in the Windows checklist. No push, tags, releases or external publication.
+- Checks: `tools/gradlew-locked --max-workers=1 :core:spotlessApply :core:test :composeApp:jvmTest :composeApp:renderShots` passed; `tools/compare-shots` completed. The focused LastFindingsTest pass also passed. Existing FocusRequester render warnings remain.
+- Comparison pictures: `composeApp/build/shots/compare/{04-library,08-settings-game,10-settings-profile,11-settings-search,12-palette,18-light-library,21-narrow-library,26-settings-danger,27-settings-mods,32-settings-registry}.png`; extra `closing-{storage-failed,confirm}-{dark,light}-{wide,narrow}.png` cover the changed help and confirmation in both themes and widths.
+- Desktop: Isolated Xvfb display :81 at 1600 x 1000, demo mode and real mode with a temporary copy of the sandbox game. Checked first-start adoption and immediate Library size, local-only confirmation/removal, KB storage, failed scan and working Retry, keyboard theme selection, narrow light layout, demo search matching its displayed loader help, and Escape dismissal. The demo was also resized to 1360 x 860 and 760 px wide. App instances were closed after checking.
+- Evidence: `composeApp/build/last-findings/` contains desktop screenshots and comparison contact sheets; these are untracked build artifacts. The first live attempt was discarded after a concurrent rebuild replaced its loaded classes. Finished-binary checks were repeated after compilation.
+- Mock differences: Existing font shaping, wrapping, Library fixture sizes and strip spacing remain. Removal/confirmation ownership text and recovery-aware storage help intentionally differ from the old mock. No pixel-equivalence claim.

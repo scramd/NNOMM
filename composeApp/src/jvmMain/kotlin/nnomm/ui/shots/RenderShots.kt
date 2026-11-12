@@ -48,23 +48,33 @@ object Shots {
 }
 
 fun main(args: Array<String>) {
-    val output = File(args.firstOrNull() ?: "composeApp/build/shots").apply { mkdirs() }
-    Shots.registry.forEach { spec ->
-        ImageComposeScene(
-                width = spec.width,
-                height = spec.height,
-                density = Density(1f),
-                content = { NnommTheme(dark = spec.dark, reduceMotion = true) { spec.content() } },
-            )
-            .use { scene ->
-                scene.render(1_000_000_000L).use { image ->
-                    image.encodeToData(EncodedImageFormat.PNG)?.use {
-                        File(output, "${spec.name}.png").writeBytes(it.bytes)
+    try {
+        val output = File(args.firstOrNull() ?: "composeApp/build/shots").apply { mkdirs() }
+        Shots.registry.forEach { spec ->
+            // Compose observes semantics on Swing's thread. Render there too, and let queued
+            // disposal work drain between scenes instead of blocking Swing for the whole batch.
+            javax.swing.SwingUtilities.invokeAndWait {
+                ImageComposeScene(
+                    width = spec.width,
+                    height = spec.height,
+                    density = Density(1f),
+                    content = { NnommTheme(dark = spec.dark, reduceMotion = true) { spec.content() } },
+                ).use { scene ->
+                    scene.render(1_000_000_000L).use { image ->
+                        image.encodeToData(EncodedImageFormat.PNG)?.use {
+                            File(output, "${spec.name}.png").writeBytes(it.bytes)
+                        }
                     }
                 }
             }
-        println("Rendered ${spec.name}: ${spec.width} x ${spec.height}")
+            println("Rendered ${spec.name}: ${spec.width} x ${spec.height}")
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        kotlin.system.exitProcess(1)
     }
+    // This headless CLI has no window to close Swing's event loop.
+    kotlin.system.exitProcess(0)
 }
 
 @Composable

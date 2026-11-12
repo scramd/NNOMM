@@ -353,7 +353,15 @@ data class FixItem(val label: String, val action: UiAction, val danger: Boolean 
 fun problemFixes(s: AppState, id: String, p: Problem): List<FixItem> {
     fun off(q: String) = FixItem("Turn off ${s.mod(q).name}", UiAction("turnOff", q))
     return when (p.key) {
-        "placement" -> listOf(FixItem("Retry", UiAction("retryApply", id)), off(id))
+        "placement" ->
+            listOf(FixItem("Retry", UiAction("retryApply", id))) +
+                (if (isOn(s, id)) listOf(off(id))
+                else
+                    s.placementConflicts[id]
+                        .orEmpty()
+                        .filter { isOn(s, it) }
+                        .sortedBy { s.mod(it).name }
+                        .map(::off))
         "dep" ->
             listOf(
                 FixItem(

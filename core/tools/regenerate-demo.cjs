@@ -10,8 +10,8 @@ const data = JSON.parse(vm.runInNewContext(source + '\n' + extract));
 Object.assign(data.settings.find(s => s.key === 'dzAll'), {
   label: 'Remove all mods',
   actions: ['Remove all mods'],
-  help: 'Registry mods leave every profile. Local, taken-over and unverified mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.'
+  help: 'Mods that can be downloaded again leave every profile. Other mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.'
 });
-data.settings.find(s => s.key === 'logs').help = data.settings.find(s => s.key === 'logs').help.replace('A text with', 'A report with');
+data.settings.find(s => s.key === 'logs').help = 'A report with your mod list, versions and the last game log. NNOMM shows it to you before you send it to anyone.';
 fs.writeFileSync('core/src/main/resources/nnomm/demo.json', JSON.stringify(data));
 fs.writeFileSync('core/src/main/resources/nnomm/settings.json', JSON.stringify({settings:data.settings,categories:data.categories,keys:data.keys}, null, 2) + '\n');

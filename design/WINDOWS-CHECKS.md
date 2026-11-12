@@ -134,3 +134,13 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 - Play without a folder must point to Settings. Failed loader preparation must have its own Retry and plain feedback, without paths or technical exception messages.
 - Replacement pack recovery files now use a readable date/time and a collision suffix beside the destination. Check FileKit replacement, repeated saves in the same minute, locked destinations and recovery-copy permissions.
 - Check serial background takeover verification alongside foreground downloads, and repeated taken-over mod version changes with player edits on NTFS. Stored payloads must not be duplicated into recovery parks.
+
+## Last message and menu pass
+
+- Check loader install, Repair and removal with denied/locked files, a full drive,
+  an invalid archive and no network. Each message must give the matching next step;
+  Retry must work. Loader removal Retry must use the currently selected game folder.
+- Check removal with no Library entries and with only local mods. Confirm that
+  completion describes loader ownership and retained copies accurately.
+- Check an off mod left at a colliding placement name: its fix menu must name the
+  enabled mods sharing that name, and each Turn off action must target that mod.

@@ -249,3 +249,13 @@ scope and conservative handling of unreadable game journals.
   the existing per-mod problem actions.
 - `removeEverything()` commits Library removal only after a successful game apply.
   Local and takeover copies remain available, switched off.
+
+### Last message and menu fixes
+
+`GameFolder.placementConflicts` optionally exposes the enabled ids sharing each
+placement name. `AppState.placementConflicts` supplies off-entry fix menus without
+parsing player messages. `storeUnusedKb` preserves small Clear estimates alongside
+the compatible `storeUnusedMb` field. Both Storage rows use `size()` and mark a
+failed or refreshing estimate as the last calculation. Loader failures use shared
+player guidance; loader-only Retry uses the currently selected folder. See
+[Last findings](../design/notes/LAST-FINDINGS.md) for the complete disposition.

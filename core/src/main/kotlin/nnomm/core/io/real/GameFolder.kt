@@ -47,6 +47,9 @@ class RealGameFolder(
     override var applySucceeded = false
         private set
 
+    private val conflictsFlow =
+        kotlinx.coroutines.flow.MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    override val placementConflicts = conflictsFlow
     private val problemFlow =
         kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
     override val applyProblems: kotlinx.coroutines.flow.StateFlow<Map<String, String>> = problemFlow
@@ -499,6 +502,18 @@ class RealGameFolder(
                         )
                     }
                 }
+                conflictsFlow.value = buildMap {
+                    collisions.forEach { group ->
+                        val ids = group.map { it.second.id }.toSet()
+                        ids.forEach { put(it, ids - it) }
+                        old.entries
+                            .filterKeys { name ->
+                                name.equals(group.first().first, ignoreCase = true)
+                            }
+                            .values
+                            .forEach { put(it.id, ids - it.id) }
+                    }
+                }
                 val collisionNames = collisions.flatten().map { it.first.lowercase() }.toSet()
                 old.entries
                     .filterKeys { it.lowercase() in collisionNames }
@@ -869,7 +884,11 @@ class RealGameFolder(
                                             if (saved.parent.isDirectory())
                                                 Files.list(saved.parent).use { paths ->
                                                     paths.anyMatch {
-                                                        it.isDirectory() && treeHash(it) == hash
+                                                        it.isDirectory() &&
+                                                            it.fileName.toString().dropLast(37) ==
+                                                                (originalVersion?.let(::component)
+                                                                    ?: "unknown-version") &&
+                                                            treeHash(it) == hash
                                                     }
                                                 }
                                             else false
