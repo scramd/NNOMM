@@ -60,7 +60,10 @@ val mockShots =
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {
-            AppModel(mockStore(address), ShotPlatform).also { applyMockAddress(it, address) }
+            AppModel(mockStore(address), ShotPlatform).also {
+                nnomm.ui.settings.registerSettingsOverlays(it)
+                applyMockAddress(it, address)
+            }
         }
         DisposableEffect(model) { onDispose { model.close() } }
         Box(Modifier.fillMaxSize()) {

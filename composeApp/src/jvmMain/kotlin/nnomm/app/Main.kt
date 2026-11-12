@@ -114,7 +114,9 @@ fun main(args: Array<String>) {
                     ),
             )
         val platform = remember { DesktopPlatform() }
-        val model = remember { AppModel(createStore(args), platform) }
+        val model = remember {
+            AppModel(createStore(args), platform).also { nnomm.ui.settings.registerSettingsOverlays(it) }
+        }
         val storeState by model.store.state.collectAsState()
         val scope = rememberCoroutineScope()
         DisposableEffect(Unit) {
