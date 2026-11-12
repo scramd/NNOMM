@@ -36,6 +36,9 @@ internal data class PendingLoaderOwnership(
     val archiveFiles: Set<String> = emptySet(),
 )
 
+@Serializable
+internal data class PendingLoaderRemoval(val gameRoot: String, val names: Set<String>)
+
 class RealGameFolder(
     private val home: Path,
     private val store: RealModStore,
@@ -1268,7 +1271,7 @@ class RealGameFolder(
         home.resolve("loader-removals").resolve(pendingLoaderRecord(game).fileName)
 
     private fun finishLoaderRemoval(path: Path) {
-        val pending = json.decodeFromString<PendingLoaderOwnership>(path.readText())
+        val pending = json.decodeFromString<PendingLoaderRemoval>(path.readText())
         val game = root(pending.gameRoot)
         check(removalRecord(game) == path)
         checkLoaderRecovery(game)
@@ -1279,7 +1282,7 @@ class RealGameFolder(
             else emptySet()
         record.write(
             record.read().orEmpty().filter {
-                it !in pending.hashes || safe(game, it).toString() !in promoted
+                it !in pending.names || safe(game, it).toString() !in promoted
             }
         )
         Files.delete(path)
@@ -1400,10 +1403,7 @@ class RealGameFolder(
                 atomic(
                     removal,
                     json.encodeToString(
-                        PendingLoaderOwnership(
-                            game.toString(),
-                            record.read().orEmpty().associateWith { "removal" },
-                        )
+                        PendingLoaderRemoval(game.toString(), record.read().orEmpty().toSet())
                     ),
                 )
                 DiskFaults.step("loader-removal-prepared")
