@@ -14,7 +14,7 @@ import nnomm.core.rules.cleanTags
     val tags: List<String> = emptyList(),
     val urls: List<RegistryUrl> = emptyList(),
     val authors: List<String> = emptyList(),
-    val artifacts: List<RegistryArtifact>,
+    val artifacts: List<RegistryArtifact> = emptyList(),
     val downloadCount: Long? = null,
     val imageUrl: String? = null,
     val imageHash: String? = null,
@@ -33,7 +33,7 @@ import nnomm.core.rules.cleanTags
         )
     }
 }
-@Serializable data class RegistryUrl(val name: String,val url: String)
+@Serializable data class RegistryUrl(val name: String="",val url: String)
 @Serializable data class RegistryArtifact(
     val fileName: String? = null,
     val version: String,
