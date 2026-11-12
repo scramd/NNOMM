@@ -164,7 +164,9 @@ fun main(args: Array<String>) {
                             if (!store.state.value.firstStart.complete) openOverlay("first")
                         }
                 } catch (e: Exception) {
-                    startupError = "Could not open NNOMM's settings. Your files have been kept."
+                    startupError = if (e is java.nio.channels.OverlappingFileLockException || e.message?.contains("already open", ignoreCase = true) == true)
+                        "NNOMM is already open. Close its other window and try again."
+                    else "Could not open NNOMM's settings. Your files have been kept."
                     System.err.println("NNOMM startup failed: ${e.javaClass.simpleName}")
                 }
             }

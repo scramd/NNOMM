@@ -563,4 +563,38 @@ class Review5ProbeTest {
         assertTrue(g.resolve("BepInEx/plugins/moda/a.dll").exists())
     }
 
+    // K: Play refused because one entry failed: the player must learn why and how to go on.
+    @Test
+    fun playBlockedByFailedEntryExplainsWhy() = runBlocking {
+        val home = temp()
+        val g = game()
+        val store = RealModStore(home)
+        val f = RealGameFolder(home, store, noNet, running = { false })
+        var started = false
+        val launcher =
+            object : GameLauncher {
+                override val running = MutableStateFlow(false)
+
+                override suspend fun start(state: AppState, withoutMods: Boolean) {
+                    started = true
+                }
+            }
+        val a =
+            AppStore(
+                stateWith(g, true, "moda"),
+                Demo.io()
+                    .copy(modStore = store, gameFolder = f, launcher = launcher, persistence = null),
+            )
+        a.play()
+        delay(2000)
+        a.awaitDiskIdle()
+        val toasts = a.state.value.toasts.map { it.text + " [" + it.action + "]" }
+        assertFalse(started)
+        assertTrue(toasts.any { it.contains("stored files are missing") && it.contains("Retry") })
+        val turnOff = a.state.value.toasts.single { it.action == "Turn off" }
+        a.runToast(turnOff.id)
+        a.awaitDiskIdle()
+        assertFalse(a.state.value.installed.getValue("moda").profiles.getValue("default").on)
+        a.shutdown()
+    }
 }
