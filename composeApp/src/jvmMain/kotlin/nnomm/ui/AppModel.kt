@@ -4,6 +4,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.input.key.*
 import java.io.File
 import kotlinx.coroutines.*
+import nnomm.core.model.ActionKind
 import nnomm.core.model.UiAction
 import nnomm.core.store.AppStore
 
@@ -158,7 +159,7 @@ class AppModel(
      */
     fun perform(action: UiAction) {
         when (action.kind) {
-            "openMod" ->
+            ActionKind.OPENMOD ->
                 action.id?.let {
                     ui.openMod(
                         it,
@@ -169,29 +170,29 @@ class AppModel(
                         },
                     )
                 }
-            "navigate" -> Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
-            "openSettings" -> {
+            ActionKind.NAVIGATE -> Page.entries.firstOrNull { it.name.equals(action.id, true) }?.let(ui::go)
+            ActionKind.OPENSETTINGS -> {
                 ui.go(Page.Settings)
                 ui.settings.category = action.id ?: "game"
                 ui.settings.scope = "all"
                 ui.settings.query = ""
             }
-            "useProfile" ->
+            ActionKind.USEPROFILE ->
                 action.id?.let {
                     store.useProfile(it)
                     ui.go(Page.Library)
                 }
-            "install" -> action.id?.let(store::install)
-            "update" -> action.id?.let(store::update)
-            "repair",
-            "repairProblem" -> action.id?.let(store::repair)
-            "turnOn" -> action.id?.let { store.setOn(listOf(it), true) }
-            "turnOff" -> action.id?.let { store.setOn(listOf(it), false) }
-            "paletteToggle" -> action.id?.let(store::paletteToggle)
-            "uninstall" -> action.id?.let { store.uninstall(listOf(it)) }
-            "play" -> store.play()
-            "lookForUpdates" -> store.lookForUpdates()
-            "addFile" ->
+            ActionKind.INSTALL -> action.id?.let(store::install)
+            ActionKind.UPDATE -> action.id?.let(store::update)
+            ActionKind.REPAIR,
+            ActionKind.REPAIRPROBLEM -> action.id?.let(store::repair)
+            ActionKind.TURNON -> action.id?.let { store.setOn(listOf(it), true) }
+            ActionKind.TURNOFF -> action.id?.let { store.setOn(listOf(it), false) }
+            ActionKind.PALETTETOGGLE -> action.id?.let(store::paletteToggle)
+            ActionKind.UNINSTALL -> action.id?.let { store.uninstall(listOf(it)) }
+            ActionKind.PLAY -> store.play()
+            ActionKind.LOOKFORUPDATES -> store.lookForUpdates()
+            ActionKind.ADDFILE ->
                 scope.launch {
                     acceptFiles(
                         platform.chooseFiles(
@@ -201,11 +202,11 @@ class AppModel(
                         )
                     )
                 }
-            "openGameFolder" -> store.state.value.game.folder?.let { platform.openFolder(File(it)) }
-            "newProfile" -> openOverlay("newprofile")
-            "import",
-            "share",
-            "trouble" -> openOverlay(action.kind)
+            ActionKind.OPENGAMEFOLDER -> store.state.value.game.folder?.let { platform.openFolder(File(it)) }
+            ActionKind.NEWPROFILE -> openOverlay("newprofile")
+            ActionKind.IMPORT,
+            ActionKind.SHARE,
+            ActionKind.TROUBLE -> openOverlay(action.kind.name.lowercase())
             else -> Unit
         }
     }

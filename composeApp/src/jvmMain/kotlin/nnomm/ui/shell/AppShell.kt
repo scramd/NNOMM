@@ -439,7 +439,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
                             )
                             Label(
                                 if (d.percent >= 100)
-                                    if (d.kind == "update") "Updated" else "Installed"
+                                    if (d.kind == nnomm.core.model.DownloadKind.UPDATE) "Updated" else "Installed"
                                 else "${d.percent}%",
                                 size = 12f,
                                 color = c.text3,

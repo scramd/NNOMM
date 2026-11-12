@@ -77,11 +77,16 @@ fun mockStore(address: String): AppStore {
             s.copy(
                 downloads =
                     listOf(
-                        Download(id, "update", s.profileId, s.mod(id).newestRelease!!.version, 42)
+                        Download(id, nnomm.core.model.DownloadKind.UPDATE, s.profileId, s.mod(id).newestRelease!!.version, 42)
                     )
             )
     }
-    return AppStore(s, Demo.io())
+    val io = Demo.io()
+    // The store reads "game is running" from the launcher, so the demo launcher starts the game.
+    if (p["running"] == "1") {
+        kotlinx.coroutines.runBlocking { io.launcher.start(s, withoutMods = false) }
+    }
+    return AppStore(s, io)
 }
 
 object ShotPlatform : Platform {
