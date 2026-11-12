@@ -83,6 +83,19 @@ suspend fun createStore(args: Array<String>): AppSession =
         }
     }
 
+/**
+ * The framework's count of "a second NNOMM was started". Its public effect waits for the next
+ * drawn frame, and a minimized window draws none, so the count is read directly. The framework
+ * does not publish it; without it a second start still brings a visible window to the front.
+ */
+private fun restoreRequests(): kotlinx.coroutines.flow.StateFlow<*>? =
+    runCatching {
+            val bus = Class.forName("dev.nucleusframework.application.SingleInstanceRestoreBus")
+            bus.getMethod("getSignal").invoke(bus.getField("INSTANCE").get(null))
+                as kotlinx.coroutines.flow.StateFlow<*>
+        }
+        .getOrNull()
+
 fun main(args: Array<String>) {
     System.setProperty("nucleus.app.id", "io.github.scramd.nnomm")
     System.setProperty("nucleus.app.name", "NNOMM")
@@ -92,6 +105,8 @@ fun main(args: Array<String>) {
         Properties().apply {
             if (placementFile.isFile) placementFile.inputStream().use { load(it) }
         }
+    // A window that was never moved has no position; such a saved value is not a number.
+    fun saved(key: String) = properties.getProperty(key)?.toFloatOrNull()?.takeIf { it.isFinite() }
     val initialPlacement =
         properties.getProperty("placement")?.let { value ->
             WindowPlacement.entries.find { it.name == value }
@@ -129,23 +144,16 @@ fun main(args: Array<String>) {
             rememberWindowState(
                 placement = initialPlacement,
                 position =
-                    if (
-                        properties.getProperty("x")?.toFloatOrNull() != null &&
-                            properties.getProperty("y")?.toFloatOrNull() != null
-                    )
-                        WindowPosition(
-                            properties.getProperty("x").toFloat().dp,
-                            properties.getProperty("y").toFloat().dp,
-                        )
+                    if (saved("x") != null && saved("y") != null)
+                        WindowPosition(saved("x")!!.dp, saved("y")!!.dp)
                     else WindowPosition.PlatformDefault,
                 size =
                     DpSize(
-                        properties.getProperty("width")?.toFloatOrNull()?.coerceAtLeast(720f)?.dp
-                            ?: 1328.dp,
-                        properties.getProperty("height")?.toFloatOrNull()?.coerceAtLeast(560f)?.dp
-                            ?: 792.dp,
+                        saved("width")?.coerceAtLeast(720f)?.dp ?: 1328.dp,
+                        saved("height")?.coerceAtLeast(560f)?.dp ?: 792.dp,
                     ),
             )
+        val openedSize = remember { state.size }
         val platform = remember { DesktopPlatform() }
         val scope = rememberCoroutineScope()
         var session by remember { mutableStateOf<AppSession?>(null) }
@@ -205,15 +213,39 @@ fun main(args: Array<String>) {
             )
         }
         var updateReady by remember { mutableStateOf<kotlinx.coroutines.CompletableDeferred<Unit>?>(null) }
+        var openWindow by remember { mutableStateOf<NucleusWindow?>(null) }
         val saveAndExit: () -> Unit = {
             if (!closing) {
                 closing = true
                 properties.setProperty("placement", state.placement.name)
                 if (state.placement == WindowPlacement.Floating) {
-                    properties.setProperty("width", state.size.width.value.toString())
-                    properties.setProperty("height", state.size.height.value.toString())
-                    properties.setProperty("x", state.position.x.value.toString())
-                    properties.setProperty("y", state.position.y.value.toString())
+                    // The window reports itself up to 1 dp larger than the size it was opened
+                    // with. Keep the opened size unless the player resized, so that the window
+                    // does not grow with every start.
+                    fun kept(now: Float, opened: Float) =
+                        if (kotlin.math.abs(now - opened) <= 1.5f) opened else now
+                    properties.setProperty(
+                        "width",
+                        kept(state.size.width.value, openedSize.width.value).toString(),
+                    )
+                    properties.setProperty(
+                        "height",
+                        kept(state.size.height.value, openedSize.height.value).toString(),
+                    )
+                    // Until the player moves the window, the state holds no position: ask the
+                    // window itself.
+                    val bounds =
+                        if (state.position.isSpecified) null
+                        else runCatching { openWindow?.boundsOnScreen() }.getOrNull()
+                    val x = bounds?.x ?: state.position.x.value
+                    val y = bounds?.y ?: state.position.y.value
+                    if (x.isFinite() && y.isFinite()) {
+                        properties.setProperty("x", x.toString())
+                        properties.setProperty("y", y.toString())
+                    } else {
+                        properties.remove("x")
+                        properties.remove("y")
+                    }
                 }
                 scope.launch {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -295,6 +327,29 @@ fun main(args: Array<String>) {
                 onKeyEvent = { model?.shortcut(it) ?: false },
             ) {
                 val win = nucleusWindow
+                SideEffect { openWindow = win }
+                // A second start of NNOMM shows this window, also when it is minimized. The
+                // signal is collected directly: a minimized window draws no frames, so an
+                // effect that waits for recomposition would not run.
+                DisposableEffect(win) {
+                    val job =
+                        restoreRequests()?.let { requests ->
+                            CoroutineScope(Dispatchers.Default).launch {
+                                var seen = requests.value
+                                requests.collect { count ->
+                                    if (count != seen) {
+                                        seen = count
+                                        withContext(Dispatchers.Main) {
+                                            win.setMinimized(false)
+                                            win.toFront()
+                                            win.requestFocus()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    onDispose { job?.cancel() }
+                }
                 val launchFlow = remember(model) { model?.store?.state?.map { it.gameRunning }?.distinctUntilChanged() }
                 LaunchedEffect(model, win) {
                     var wasRunning = model?.store?.state?.value?.gameRunning ?: false
