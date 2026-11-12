@@ -15,6 +15,8 @@ Every part was reviewed by an Opus agent and a Sol agent, then fixed, several ro
 
 ## Known limits
 
+- Loader changes recheck each file before its rename; another program can still change it in the instant between the check and rename. See `core/IO.md`.
+
 - Windows-only parts are unchecked: native window frame, installer beside NOMM, self-updater, Steam folder search, a real game start with mods, locked files, junctions, home and game on different drives. See [Windows checks](WINDOWS-CHECKS.md).
 - Offline pack import can add the selected bundled files and then refuse to make the profile without a connection.
 - Loose files taken over from the game folder are not later matched to registry mods.

@@ -50,3 +50,13 @@ configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         ktfmt("0.58").kotlinlangStyle()
     }
 }
+
+// Exhaustive second-crash/hand-change probe is explicit, keeping unit test runs short.
+tasks.test { exclude("**/LoaderRecoveryMatrixTest*") }
+
+tasks.register<Test>("loaderRecoveryMatrix") {
+    description = "Runs the offline loader recovery interruption and hand-change matrix"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    include("**/LoaderRecoveryMatrixTest*")
+}

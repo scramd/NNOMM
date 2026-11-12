@@ -462,3 +462,36 @@ The crash/hand-change matrix covers Install, Repair, retries and Remove all mods
 modes, and an optional second interruption during recovery. All archives are local
 fixtures; the matrix does not download or launch the game. Hash equality cannot
 distinguish an identical hand replacement from the bytes NNOMM placed.
+
+## Loader ownership v3
+
+Loader Install, Repair and Uninstall recheck each target immediately before its
+own rename. A new placement requires absence; an owned replacement or removal
+requires the recorded hash. Repair's existing unowned INI exception requires its
+exact preparation bytes, remains unowned, and keeps the old copy in recovery.
+An ineligible or unreadable target is skipped with a notice; other eligible targets
+continue. A partial Install or Repair fails its final completeness check and can
+be retried. A skipped removal retains ownership only if its bytes still match.
+There is a residual race: another program can change a file in the instant between
+this check and the rename. No file system check can exclude that concurrent change.
+Hash equality also cannot identify an identical hand replacement.
+
+Loader rollback rechecks preservation on every recovery run and before each entry:
+a present player target stays in place and the previous NNOMM copy goes to recovery.
+Rollback completion is durably recorded per entry before staging cleanup. A player
+deletion after completion does not leave recovery permanently pending. This
+completion marker also applies to other journal callers; their commit direction
+and replacement rules are unchanged. Per-target eligibility defaults to allowing
+mutation for other callers, which keep their existing checks.
+
+Present relinquished loader names keep the presence guard across startup and Retry;
+only an unchanged incomplete NNOMM installation can resume. A pending Play without
+mods restore defers INI ownership verification and removal until restoration
+finishes. Startup never verifies ownership for a folder with an unfinished relevant
+journal. It retains the record and existing ownership until recovery can finish.
+
+Offline regression probes cover all six v3 findings. `:core:test` includes the
+original crash/hand-change matrix and the focused v3 probes. The slower explicit
+`:core:loaderRecoveryMatrix` task covers a second crash at each staging cleanup
+boundary, followed by hand changes between recovery runs (2,600 cases). Neither
+suite uses the network or a real game installation.
