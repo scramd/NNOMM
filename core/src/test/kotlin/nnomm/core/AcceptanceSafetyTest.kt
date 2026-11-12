@@ -69,6 +69,33 @@ class AcceptanceSafetyTest {
     }
 
     @Test
+    fun clearKeepsVersionsTheRegistryCannotDeliverAgain() = runBlocking {
+        val home = root.resolve("home")
+        val catalog =
+            listOf(
+                CatalogMod(
+                    "reg",
+                    "Registry mod",
+                    versions = listOf(ModVersion("1", downloadUrl = "https://example.org/reg.zip")),
+                )
+            )
+        val store = RealModStore(home, null) { catalog }
+        for ((id, version) in
+            listOf("reg" to "1", "local-file-abc" to "abc", "taken" to "takeover")) {
+            val source = root.resolve("payload-$id").createDirectories()
+            source.resolve("$id.dll").writeText("bytes of $id")
+            store.put(id, version, DownloadedFile(source.toString()))
+        }
+        // None of the three is installed any more; wait out the Undo window.
+        Thread.sleep(9500)
+        store.clearUnused(AppState())
+        val mods = home.resolve("mods")
+        assertFalse(mods.resolve("reg/1").exists(), "a registry version can be cleared")
+        assertTrue(mods.resolve("local-file-abc/abc").exists(), "a local file is the only copy")
+        assertTrue(mods.resolve("taken/takeover").exists(), "a taken-over copy is the only copy")
+    }
+
+    @Test
     fun externalStoreRecoveryCannotCountItselfAsDuplicate() = runBlocking {
         val home = root.resolve("home")
         val external = root.resolve("external-store")

@@ -182,7 +182,9 @@ private constructor(
                     val packs = RealPacks(home, mods, client)
                     app =
                         AppStore(
-                            loaded.copy(catalog = nnomm.core.rules.cleanCatalogTags(loaded.catalog)),
+                            loaded.copy(
+                                catalog = nnomm.core.rules.cleanCatalogTags(loaded.catalog)
+                            ),
                             AppIo(
                                 registry,
                                 RealMetaSource(client, home),

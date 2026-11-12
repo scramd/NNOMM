@@ -146,12 +146,21 @@ object Demo {
     val PACK_IMPORT by lazy {
         val initial = state()
         pack(data.getValue("packImport").jsonObject).let { pack ->
-            pack.copy(items = pack.items.map { item ->
-                if (item.version == null && item.kind != PackKind.LOCAL)
-                    item.copy(version = nnomm.core.rules.verOf(initial, item.id)
-                        ?: initial.catalog.firstOrNull { it.id == item.id }?.installable?.version)
-                else item
-            })
+            pack.copy(
+                items =
+                    pack.items.map { item ->
+                        if (item.version == null && item.kind != PackKind.LOCAL)
+                            item.copy(
+                                version =
+                                    nnomm.core.rules.verOf(initial, item.id)
+                                        ?: initial.catalog
+                                            .firstOrNull { it.id == item.id }
+                                            ?.installable
+                                            ?.version
+                            )
+                        else item
+                    }
+            )
         }
     }
     val PACK_UPDATE by lazy { pack(data.getValue("packUpdate").jsonObject) }

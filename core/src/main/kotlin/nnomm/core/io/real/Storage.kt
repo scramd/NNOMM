@@ -387,9 +387,21 @@ class RealModStore(
                                     .toList()
                             }
                             .sortedWith { a, b -> compareVersions(b.name, a.name) }
+                    // Only a version that the registry can deliver again may be cleared:
+                    // local files and taken-over copies are the player's only copy.
+                    val downloadable =
+                        catalog()
+                            .firstOrNull { it.id == dir.name }
+                            ?.versions
+                            ?.filter { !it.downloadUrl.isNullOrBlank() }
+                            ?.map { it.version }
+                            ?.toSet()
+                            .orEmpty()
                     val spare =
                         versions.filter {
                             it.name !in referenced &&
+                                it.name in downloadable &&
+                                m?.source != ModSource.LOCAL &&
                                 ((undoUntil[dir.name] ?: 0) < System.currentTimeMillis())
                         }
                     spare.drop(if (m == null) 0 else keepOld)

@@ -8,8 +8,15 @@ import nnomm.core.config.*
 class ModConfigFilesTest {
     private lateinit var root: Path
 
-    @BeforeTest fun prepare() { root = Files.createTempDirectory("nnomm-config-test") }
-    @AfterTest fun cleanup() { root.toFile().deleteRecursively() }
+    @BeforeTest
+    fun prepare() {
+        root = Files.createTempDirectory("nnomm-config-test")
+    }
+
+    @AfterTest
+    fun cleanup() {
+        root.toFile().deleteRecursively()
+    }
 
     private fun blob(guid: String): ByteArray {
         val text = guid.toByteArray()
