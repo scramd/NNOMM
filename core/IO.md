@@ -81,10 +81,12 @@ put/Undo protection lasts nine seconds.
 Pack IO uses the runtime's store and HTTP client. Bundled local payload identities
 come from a content hash; a selected pack cannot overwrite the id/version supplied
 by its author. Existing installed associations are kept. Pack settings use an
-allow-list; paths, sources and launch arguments do not travel with packs. Config
-export includes only `.cfg` names found in the selected mods' stored payloads.
-Generated config ownership is not inferred from plugin binaries, so generated
-settings can be omitted rather than exporting another mod's settings.
+allow-list; paths, sources and launch arguments do not travel with packs. Config export uses the selected mods' BepInPlugin GUIDs and the existing conservative
+name mapping to find generated `.cfg` files. Unmatched files are omitted. Imported
+settings are opt-in and go into a new profile's private snapshot before it is selected;
+the normal config ownership transition places them in the game. Existing-profile
+imports do not offer settings replacement. Following uses the same bounded ZIP/JSON
+reader as file previews and removes its staging files after reading.
 
 Portable names reject traversal, drive paths, reserved Windows names, trailing
 spaces/dots, invalid characters, case aliases and symlinks below managed roots.
@@ -111,3 +113,10 @@ are refused. Existing Doorstop config is preserved. The pinned archive SHA-256 i
 Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
 Proton process detection and actual game launches still require platform checks;
 see `design/WINDOWS-CHECKS.md`.
+
+
+The console switch is an explicit safe game-folder operation, serialized with other
+game writes. It preserves unrelated BepInEx.cfg sections and keeps the previous file
+under `console-backups/` before replacing it. Changes while the game runs wait until
+Play applies the profile's selected value. Report building is read-only; the log tail
+is bounded to 64 KiB and the UI shows the report before copying it.

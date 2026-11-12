@@ -22,6 +22,7 @@ import nnomm.ui.theme.LocalNnTheme
 /** Called by both model constructors, before mock addresses can open overlays. */
 fun registerSettingsOverlays(model: AppModel) {
     model.overlayFactories["confirm"] = { SettingsConfirm(it) }
+    model.overlayFactories["report"] = { SettingsReport(it) }
     model.overlayFactories["licences"] = { SettingsLicences(it) }
 }
 
@@ -47,7 +48,7 @@ internal fun performSettingAction(model: AppModel, definition: SettingDefinition
         "Look now" -> model.checkAppUpdates()
         "Open log folder" -> state.game.folder?.let { model.platform.openFolder(File(it, "BepInEx")) }
             ?: feedback(model, "The game log folder is unavailable")
-        "Copy report" -> feedback(model, "Report export is not available yet.")
+        "Copy report" -> model.openOverlay("report")
         "Licences" -> model.openOverlay("licences")
         else -> feedback(model, action)
     }
@@ -107,7 +108,6 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 } else Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in the mock.") else model.store.refreshRegistry() }, size = ControlSize.Small)
             }
         }
-        if (!model.isDemo) Label("Additional registries are not supported yet.", color = c.text2)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingField(address, { address = it }, Modifier.weight(1f), "Address of another registry")
             Button("Add", {
@@ -156,6 +156,25 @@ private class SettingsLicences(private val model: AppModel) : Overlay {
             Spacer(Modifier.height(12.dp))
             Label("Archivo", size = 15f, weight = 650)
             Label(ARCHIVO_LICENCE, size = 12.5f)
+        }
+    }
+}
+
+private class SettingsReport(private val model: AppModel) : Overlay {
+    @Composable
+    override fun Content() {
+        var report by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            report = withContext(Dispatchers.IO) { nnomm.core.io.real.problemReport(model.store.state.value) }
+        }
+        Dialog(true, "Problem report", model::closeOverlay, wide = true, footer = {
+            Button("Close", model::closeOverlay, kind = ButtonKind.Ghost)
+            Button("Copy", { report?.let(model.platform::copyText) }, enabled = report != null, kind = ButtonKind.Strong)
+        }) {
+            Label("Check the report before you send it. It includes your game folder and messages from mods.")
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Label(report ?: "Reading the report…", size = 12.5f)
+            }
         }
     }
 }

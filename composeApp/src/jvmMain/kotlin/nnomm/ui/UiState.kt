@@ -43,6 +43,7 @@ interface Overlay {
  */
 class UiState {
     var updateStatus by mutableStateOf<String?>(null)
+    var onPageChanged: (Page) -> Unit = {}
     var page by mutableStateOf(Page.Browse)
     var panel by mutableStateOf<PanelRef?>(null)
     var overlay by mutableStateOf<Overlay?>(null)
@@ -65,6 +66,7 @@ class UiState {
 
     fun go(to: Page) {
         page = to
+        onPageChanged(to)
         panel = null
     }
 

@@ -237,12 +237,12 @@ fun main(args: Array<String>) {
         model?.checkAppUpdates = {
             if (!isDemo)
                 scope.launch {
-                    updates.check(general["appUpdate"]?.content ?: "Tell me") { message ->
+                    updates.check(general["appUpdate"]?.content ?: "Tell me", general["channel"]?.content == "true") { message ->
                         scope.launch { model?.ui?.updateStatus = message }
                     }
                 }
         }
-        model?.openAppReleases = { platform.openUrl(NNOMM_LATEST_RELEASE_URL) }
+        model?.openAppReleases = { platform.openUrl(if (general["channel"]?.content == "true") "https://github.com/scramd/NNOMM/releases" else NNOMM_LATEST_RELEASE_URL) }
         LaunchedEffect(model) { if (!isDemo) model?.checkAppUpdates?.invoke() }
         val values = general
         val dark =
@@ -282,6 +282,18 @@ fun main(args: Array<String>) {
                 onKeyEvent = { model?.shortcut(it) ?: false },
             ) {
                 val win = nucleusWindow
+                val launchFlow = remember(model) { model?.store?.state?.map { it.gameRunning }?.distinctUntilChanged() }
+                LaunchedEffect(model, win) {
+                    var wasRunning = model?.store?.state?.value?.gameRunning ?: false
+                    launchFlow?.collect { running ->
+                        if (running && !wasRunning) {
+                            val snapshot = model!!.store.state.value
+                            nnomm.ui.gameStartedAction(snapshot.settings.value("onLaunch", snapshot.profileId)?.content,
+                                { win.setMinimized(true) }, saveAndExit)
+                        }
+                        wasRunning = running
+                    }
+                }
                 val drag = Modifier.windowDragArea(window = checkNotNull(win.unsafe.taoWindow))
                 val colors = LocalNnTheme.current.colors
                 val maximized = state.placement == WindowPlacement.Maximized

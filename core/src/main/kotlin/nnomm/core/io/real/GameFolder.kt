@@ -42,6 +42,32 @@ class RealGameFolder(
         notice(text)
     }
 
+    override suspend fun setConsole(folder: String, enabled: Boolean) =
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                if (running()) return@withLock
+                val game = root(folder)
+                val config = safe(game, "BepInEx/config/BepInEx.cfg")
+                Files.createDirectories(config.parent)
+                val text = if (config.exists()) config.readText() else ""
+                val updated = consoleConfig(text, enabled)
+                if (updated != text) {
+                    if (config.exists()) {
+                        val backup = home.resolve("console-backups/${System.nanoTime()}.cfg")
+                        Files.createDirectories(backup.parent)
+                        Files.copy(config, backup)
+                    }
+                    val temporary = Files.createTempFile(config.parent, ".console-", ".tmp")
+                    try {
+                        temporary.writeText(updated)
+                        Files.move(temporary, config, StandardCopyOption.REPLACE_EXISTING)
+                    } finally {
+                        Files.deleteIfExists(temporary)
+                    }
+                }
+            }
+        }
+
     override suspend fun recoverPending() =
         withContext(Dispatchers.IO) {
             mutex.withLock {
@@ -408,7 +434,13 @@ class RealGameFolder(
                                 "Kept changed files for ${m.id} in $kept. They return with this profile."
                             )
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            placementMessage(
+                                catalog().find { it.id == m.id }?.name ?: "this mod",
+                                e,
+                            ),
+                        )
                     }
                 }
                 // Removals first, deepest first. Missing wanted payloads never authorize removal.
@@ -445,7 +477,13 @@ class RealGameFolder(
                         result.remove(name)
                         generations.remove(name)
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            placementMessage(
+                                catalog().find { it.id == m.id }?.name ?: "this mod",
+                                e,
+                            ),
+                        )
                     }
                 }
                 for (name in
@@ -563,7 +601,13 @@ class RealGameFolder(
                             deleteTree(stage)
                         }
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            placementMessage(
+                                catalog().find { it.id == m.id }?.name ?: "this mod",
+                                e,
+                            ),
+                        )
                     }
                 }
                 captured.values.forEach(::deleteTree)

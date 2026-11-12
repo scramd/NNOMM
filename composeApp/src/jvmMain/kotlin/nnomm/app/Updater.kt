@@ -1,5 +1,10 @@
 package nnomm.app
 
+import kotlinx.serialization.json.*
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import dev.nucleusframework.core.runtime.ExecutableRuntime
 import dev.nucleusframework.core.runtime.ExecutableType
 import dev.nucleusframework.core.runtime.Platform
@@ -19,7 +24,9 @@ internal fun requiresManualWindowsUpdate(
 internal fun requiresManualWindowsUpdate(): Boolean =
     requiresManualWindowsUpdate(Platform.Current, ExecutableRuntime.type())
 
-val updater = NucleusUpdater {
+internal fun updaterChannel(testVersions: Boolean) = if (testVersions) "beta" else "latest"
+
+fun createUpdater(testVersions: Boolean = false) = NucleusUpdater {
     provider =
         object : UpdateProvider {
 
@@ -30,7 +37,15 @@ val updater = NucleusUpdater {
             override fun getUpdateMetadataUrl(channel: String, platform: Platform): String {
                 val suffix = platformSuffix(platform)
                 val fileName = if (suffix.isEmpty()) "$channel.yml" else "$channel-$suffix.yml"
-                return "https://github.com/$owner/$repo/releases/latest/download/$fileName"
+                val release = if (channel == "latest") "latest/download" else {
+                    val request = HttpRequest.newBuilder(URI("https://api.github.com/repos/$owner/$repo/releases?per_page=30"))
+                        .timeout(java.time.Duration.ofSeconds(20)).header("Accept", "application/vnd.github+json").build()
+                    val response = HttpClient.newHttpClient().use { it.send(request, HttpResponse.BodyHandlers.ofString()) }
+                    check(response.statusCode() == 200) { "Could not read test releases" }
+                    val tag = testReleaseTag(response.body()) ?: error("No test release is available")
+                    "download/$tag"
+                }
+                return "https://github.com/$owner/$repo/releases/$release/$fileName"
             }
 
             override fun getDownloadUrl(fileName: String, version: String): String =
@@ -53,5 +68,12 @@ val updater = NucleusUpdater {
         }
 
     httpClient = NativeHttpClient.create()
-    channel = "latest"
+    channel = updaterChannel(testVersions)
 }
+
+internal fun testReleaseTag(body: String): String? = Json.parseToJsonElement(body).jsonArray
+    .map { it.jsonObject }
+    .firstOrNull { it["draft"]?.jsonPrimitive?.booleanOrNull != true &&
+        it["prerelease"]?.jsonPrimitive?.booleanOrNull == true &&
+        it["tag_name"]?.jsonPrimitive?.content?.endsWith("-beta") == true }
+    ?.get("tag_name")?.jsonPrimitive?.content

@@ -89,7 +89,7 @@ internal fun Dialog(
                 weight = 650,
                 width = 110f,
             )
-            subtitle?.let { Label(it, Modifier.padding(horizontal = 18.dp), color = c.text2) }
+            subtitle?.let { Label(it, Modifier.padding(horizontal = 18.dp).heightIn(min = 18.2.dp), color = c.text2) }
             Column(
                 Modifier.heightIn(max = (available - 150.dp).coerceAtLeast(0.dp))
                     .verticalScroll(rememberScrollState())
@@ -157,7 +157,7 @@ internal fun OptionCard(
             description,
             selected,
             onClick,
-            Modifier.heightIn(min = 56.dp),
+            Modifier.heightIn(min = 57.dp),
         )
     }
 }

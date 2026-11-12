@@ -862,11 +862,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     fun setSetting(key: String, value: JsonPrimitive, profile: String? = null) {
         val active = state.value.profileId
         if (key == "gamePath") {
-            val revision = synchronized(lock) {
-                gamePathRevision++
-                change { nnomm.core.settings.setSetting(it, key, value, profile) }
-                gamePathRevision
-            }
+            val revision =
+                synchronized(lock) {
+                    gamePathRevision++
+                    change { nnomm.core.settings.setSetting(it, key, value, profile) }
+                    gamePathRevision
+                }
             saveSettings()
             background {
                 val game =
@@ -880,6 +881,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             change { nnomm.core.settings.setSetting(it, key, value, profile) }
             saveSettings()
             if (active != state.value.profileId) applyAndSave()
+            if (key == "console" && (profile == null || profile == state.value.profileId)) {
+                disk {
+                    val current = state.value
+                    current.game.folder?.let {
+                        io.gameFolder.setConsole(
+                            it,
+                            current.settings.bool("console", current.profileId),
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -912,7 +924,14 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 diskAwait {
                     if (!withoutMods && resolvedPlan(state.value) != appliedPlan)
                         prepareGameFolder(state.value, modAction = false)
-                    io.launcher.start(state.value, withoutMods)
+                    val current = state.value
+                    current.game.folder?.let {
+                        io.gameFolder.setConsole(
+                            it,
+                            current.settings.bool("console", current.profileId),
+                        )
+                    }
+                    io.launcher.start(current, withoutMods)
                 }
                 delay(30000)
                 change { it.copy(gameStarting = false) }
@@ -978,6 +997,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         pack: Pack,
         mode: ImportMode = ImportMode.NEW,
         keep: Map<String, String> = emptyMap(),
+        newProfileId: String = java.util.UUID.randomUUID().toString(),
+        packSettings: SettingsValues? = null,
     ) {
         if (state.value.connection.kind == ConnectionKind.OFFLINE) {
             toast("Needs a connection")
@@ -986,10 +1007,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         if (state.value.trouble != null) stopBrokenModTest()
         val rows =
             importRows(state.value, pack, mode).filterNot {
-                it.local || it.kind == PackKind.UNAVAILABLE || (it.packVersion == null && it.kind != PackKind.SAME)
+                it.local ||
+                    it.kind == PackKind.UNAVAILABLE ||
+                    (it.packVersion == null && it.kind != PackKind.SAME)
             }
         if (mode == ImportMode.NEW) {
-            val id = java.util.UUID.randomUUID().toString()
+            val id = newProfileId
             change {
                 it.copy(
                     profiles =
@@ -1011,6 +1034,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 ),
                             ),
                     profileId = id,
+                    settings =
+                        if (packSettings == null) it.settings
+                        else
+                            it.settings.copy(
+                                overrides =
+                                    it.settings.overrides +
+                                        (id to
+                                            (packSettings.general +
+                                                ("ownSettingsP" to JsonPrimitive(true))))
+                            ),
                 )
             }
         }

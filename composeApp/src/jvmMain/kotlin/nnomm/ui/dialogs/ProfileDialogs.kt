@@ -147,7 +147,8 @@ class ShareDialog(private val model: AppModel) : Overlay {
         val scope = rememberCoroutineScope()
         val on = state.installed.keys.filter { isOn(state, it, profile.id) }
         val locals = on.filter { state.installed[it]?.source == ModSource.LOCAL }
-        val problems = on.count { hasProblem(state.copy(profileId = profile.id), it) }
+        val problems = on.count { hasProblem(state.copy(profileId = profile.id,
+                                                game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game), it) }
         Dialog(
             true,
             "Share ${profile.name} as a modpack",
@@ -207,7 +208,8 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                         it.write(
                                             file.toPath(),
                                             pack,
-                                            state.copy(profileId = profile.id),
+                                            state.copy(profileId = profile.id,
+                                                game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game),
                                         )
                                     }
                                     model.store.toast("Saved ${file.name}", "Show the file", undo = { model.platform.openFolder(file.parentFile) })
@@ -234,7 +236,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
             }
             if (locals.isNotEmpty())
                 Note(
-                    "${locals.joinToString(" and ") { state.mod(it).name }} ${if (locals.size == 1) "is a local file" else "are local files"}. With this on, NNOMM puts ${if (locals.size == 1) "it" else "them"} inside the pack file (${size(locals.sumOf { state.mod(it).newestRelease?.sizeKb ?: 0 })}). Players get a warning before they import it.",
+                    "${locals.joinToString(" and ") { state.mod(it).name }} ${if (locals.size == 1) "is a local file" else "are local files"}. With this on, NNOMM puts ${if (locals.size == 1) "it" else "them"} inside the pack file (${if (locals.any { state.mod(it).newestRelease?.sizeKb == null }) "size unknown" else size(locals.sumOf { state.mod(it).newestRelease?.sizeKb ?: 0 })}). Players get a warning before they import it.",
                     action = {
                         ToggleLine(local, { local = it }, "Include", "Include local files")
                     },
