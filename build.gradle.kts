@@ -1,4 +1,5 @@
 plugins {
+    id("com.diffplug.spotless") version "7.2.1" apply false
     // this is necessary to avoid the plugins to be loaded multiple times
     // in each subproject's classloader
     alias(libs.plugins.composeHotReload) apply false

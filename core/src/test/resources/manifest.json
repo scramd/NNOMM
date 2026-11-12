@@ -1,0 +1,632 @@
+[
+  {
+    "id": "1509_PalaFighter1",
+    "displayName": "KR-33 Agni",
+    "description": "The KR-33 Agni. a rank 3 A2A focused multi role jet for PALA.",
+    "tags": [
+      "mod",
+      "Aircraft",
+      "blueprinter",
+      "phoenix1509"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/phoenix15099/KR-33/blob/main/README.md"
+      }
+    ],
+    "authors": [
+      "Phoenix1509",
+      "KermiGodFrog",
+      "Javiairplane",
+      "OliveFox",
+      "the science team (BetaTesters)"
+    ],
+    "githubOwner": "phoenix15099",
+    "githubRepoName": "KR-33",
+    "autoUpdateArtifacts": "True",
+    "artifacts": [
+      {
+        "fileName": "1509_PalaFighter1_1.0.1.nobp",
+        "version": "1.0.1",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/phoenix15099/KR-33/releases/download/V1.0.1/1509_PalaFighter1_1.0.1.nobp",
+        "hash": "sha256:d4bef8d30fb0bb153dfb18c3d13f97237f0ba66e14f1df39c6eeb8a155808092",
+        "extends": {
+          "id": "com.nikkorap.blueprinter",
+          "version": "2.0.1"
+        }
+      },
+      {
+        "fileName": "1509_PalaFighter1_1.0.0.nobp",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/phoenix15099/KR-33/releases/download/V1.0.0/1509_PalaFighter1_1.0.0.nobp",
+        "extends": {
+          "id": "com.nikkorap.blueprinter",
+          "version": "2.0.1"
+        }
+      }
+    ],
+    "downloadCount": 12942,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "A19J",
+    "displayName": "A-19J \u2014 Jet-Powered Brawler",
+    "description": "A separate jet-powered A-19 Brawler variant. Twin conventional jets, complete custom exhaust housings, and the familiar A-19 cockpit, weapons and armour. AI-assisted development. Enforced offline-only test release. Online hosts and remote clients are disabled; flight balance still needs testing.",
+    "tags": [
+      "Aircraft",
+      "blueprinter",
+      "AI assisted",
+      "Work in progress",
+      "Single-player"
+    ],
+    "urls": [
+      {
+        "url": "https://github.com/markus21alpha-dot/A19J",
+        "name": "info"
+      },
+      {
+        "url": "https://markus21alpha-dot.github.io/A19J/",
+        "name": "project page"
+      }
+    ],
+    "authors": [
+      "markus21alpha-dot"
+    ],
+    "githubOwner": "markus21alpha-dot",
+    "githubRepoName": "A19J",
+    "autoUpdateArtifacts": "True",
+    "isAiAssisted": "True",
+    "releaseAssetName": "A19J.dll",
+    "imageUrl": "https://raw.githubusercontent.com/markus21alpha-dot/A19J/main/thumbnail.png",
+    "imageHash": "sha256:8c659630ce6c0f2e7bdd4dc922f2188f19164b56149991245188182791cf847c",
+    "artifacts": [
+      {
+        "fileName": "A19J.dll",
+        "version": "0.2.0",
+        "category": "preRelease",
+        "type": "plugin",
+        "gameVersion": "0.34.6",
+        "downloadUrl": "https://github.com/markus21alpha-dot/A19J/releases/download/v0.2.0/A19J.dll",
+        "hash": "sha256:db0391726dfd8401254d46dd262eab7d83eb42ad51b8403ad7be216adceadf55",
+        "dependencies": [
+          {
+            "id": "com.nikkorap.blueprinter",
+            "version": "2.1.1"
+          }
+        ]
+      },
+      {
+        "fileName": "A19J.dll",
+        "version": "0.1.3",
+        "category": "preRelease",
+        "type": "plugin",
+        "gameVersion": "0.34.6",
+        "downloadUrl": "https://github.com/markus21alpha-dot/A19J/releases/download/v0.1.3/A19J.dll",
+        "hash": "sha256:7eabc38a1965c0c4a117c27170139817350de31afbe0e4e31a3ea0663ac54601",
+        "dependencies": [
+          {
+            "id": "com.nikkorap.blueprinter",
+            "version": "2.1.1"
+          }
+        ]
+      },
+      {
+        "fileName": "A19J.dll",
+        "version": "0.1.2",
+        "category": "preRelease",
+        "type": "plugin",
+        "gameVersion": "0.34.6",
+        "downloadUrl": "https://github.com/markus21alpha-dot/A19J/releases/download/v0.1.2/A19J.dll",
+        "hash": "sha256:25e50f414e51976cc55e53b424a4fa54e76cdb324b6e4413b98546472dfe442d",
+        "dependencies": [
+          {
+            "id": "com.nikkorap.blueprinter",
+            "version": "2.1.1"
+          }
+        ]
+      }
+    ],
+    "downloadCount": 1490
+  },
+  {
+    "id": "com.nikkorap.blueprinter",
+    "displayName": "Blueprinter",
+    "description": "Core framework required for mods utilising blueprinter.",
+    "tags": [
+      "mod",
+      "blueprinter"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NOBlueprinter-Releases/blob/main/README.md"
+      },
+      {
+        "name": "2082 discord",
+        "url": "https://discord.gg/qqMwyr2qxR"
+      }
+    ],
+    "authors": [
+      "nikkorap"
+    ],
+    "githubOwner": "nikkorap",
+    "githubRepoName": "NOBlueprinter-Releases",
+    "autoUpdateArtifacts": "True",
+    "artifacts": [
+      {
+        "fileName": "Blueprinter_2.1.1.dll",
+        "version": "2.1.1",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/2.1.1/Blueprinter_2.1.1.dll",
+        "hash": "sha256:2dbc8e40fef56bea9a0fc2c0242614642c2a832c8062673e50ff47f677d44fe2"
+      },
+      {
+        "fileName": "Blueprinter_2.0.1.dll",
+        "version": "2.0.1",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/2.0.1/Blueprinter_2.0.1.dll",
+        "hash": "sha256:a2cec71bda003824695b5c5b55879a50c4dad579a5597c795600428636f1f7ec"
+      },
+      {
+        "fileName": "Blueprinter_2.0.0.dll",
+        "version": "2.0.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/2.0.0/Blueprinter_2.0.0.dll",
+        "hash": "sha256:5d23fdeb275e07663685467e906dfdc01bc588a7ffb09f756e4fe85f7cc93016"
+      },
+      {
+        "fileName": "Blueprinter_1.8.21.dll",
+        "version": "1.8.21",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.21/Blueprinter_1.8.21.dll",
+        "hash": "sha256:a8dcef9315feac5be3cd30b33308f8b59196a53fca58aafdb663f12a68f9d465"
+      },
+      {
+        "fileName": "Blueprinter_1.8.20.dll",
+        "version": "1.8.20",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.20/Blueprinter_1.8.20.dll",
+        "hash": "sha256:b9903edafbe03b53f29b5be41cbeaa3ee7c1fd4d3356cff88654430f54526926"
+      },
+      {
+        "fileName": "Blueprinter_1.8.19.dll",
+        "version": "1.8.19",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.19/Blueprinter_1.8.19.dll",
+        "hash": "sha256:cfe7863f848421142adecfef203d9b91c05593fe2e729bf9afa9ca072c9c4284"
+      },
+      {
+        "fileName": "Blueprinter_1.8.18.dll",
+        "version": "1.8.18",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.18/Blueprinter_1.8.18.dll",
+        "hash": "sha256:78ddc7ca7735da74991a0b9e6152e043e4d58de4f06f5d21629a440dfe02e4a8"
+      },
+      {
+        "fileName": "Blueprinter_1.8.17.dll",
+        "version": "1.8.17",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.17/Blueprinter_1.8.17.dll",
+        "hash": null
+      },
+      {
+        "fileName": "Blueprinter_1.8.16.dll",
+        "version": "1.8.16",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.16/Blueprinter_1.8.16.dll",
+        "hash": null
+      },
+      {
+        "fileName": "Blueprinter_1.8.16.dll",
+        "version": "1.8.6",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NOBlueprinter-Releases/releases/download/1.8.16/Blueprinter_1.8.16.dll",
+        "hash": "sha256:c5acfa50210aca58ff226b9a07c82f11aed14553c97a31b8d5042862ab0ee1eb"
+      }
+    ],
+    "downloadCount": 117090,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "galaxy2_voice",
+    "displayName": "Galaxy 2",
+    "description": "[Voice Pack] Expanded AWACS Galaxy dialogue pack.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "Nikkorap"
+    ],
+    "artifacts": [
+      {
+        "fileName": "Galaxy2 (by Nikkorap).7z",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/blob/master/VoicePacks/Galaxy2%20(by%20Nikkorap).7z",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "highfleet_ru_voice",
+    "displayName": "Highfleet RU",
+    "description": "[Voice Pack] Russian combat radio chatter style.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "giorno0075"
+    ],
+    "artifacts": [
+      {
+        "fileName": "HighfleetRu (by giorno0075).7z",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/blob/master/VoicePacks/HighfleetRu%20(by%20giorno0075).7z",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "klawshout_voice",
+    "displayName": "KlawShout",
+    "description": "[Voice Pack] High-energy personality for intense combat.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "Klawifiantix"
+    ],
+    "artifacts": [
+      {
+        "fileName": "KlawShout (by Klawifiantix).rar",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/raw/master/VoicePacks/KlawShout%20(by%20Klawifiantix).rar",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "LiveryManager",
+    "displayName": "Livery Manager",
+    "description": "Tiny clientside mod to make dealing with lots of liveries a little less horrible.",
+    "tags": [
+      "mod",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://codeberg.org/maevi/nuclear-option-mods/src/branch/main/livery-manager"
+      }
+    ],
+    "authors": [
+      "maevii"
+    ],
+    "autoUpdateArtifacts": "False",
+    "artifacts": [
+      {
+        "fileName": "livery-manager-1.0.0.zip",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://codeberg.org/maevi/nuclear-option-mods/releases/download/livery-manager-1.0.0/livery-manager-1.0.0.zip",
+        "hash": "sha256:af443d939b0279d83113e3b966821388175f5bc24514d4e4c88414102f143b2e",
+        "dependencies": [
+          {
+            "id": "BepInEx.ConfigurationManager",
+            "version": "18.4.1"
+          }
+        ]
+      },
+      {
+        "fileName": "livery-manager-2.0.0.zip",
+        "version": "2.0.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://codeberg.org/maevi/nuclear-option-mods/releases/download/livery-manager-2.0.0/livery-manager-2.0.0.zip",
+        "hash": "sha256:8153a19ecab7de1600012b38a889a0492cabb7324637b2617a809affb071717e",
+        "dependencies": [
+          {
+            "id": "BepInEx.ConfigurationManager",
+            "version": "18.4.1"
+          }
+        ]
+      },
+      {
+        "fileName": "livery-manager-3.0.0.zip",
+        "version": "3.0.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.33",
+        "downloadUrl": "https://codeberg.org/maevi/nuclear-option-mods/releases/download/livery-manager-3.0.0/livery-manager-3.0.0.zip",
+        "hash": "sha256:7d919c09b4a90075e057dce7d7190efbe220b160c3a04d5388c397af365b554b",
+        "dependencies": [
+          {
+            "id": "BepInEx.ConfigurationManager",
+            "version": "18.4.1"
+          }
+        ]
+      },
+      {
+        "fileName": "livery-manager-3.1.0.zip",
+        "version": "3.1.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.33",
+        "downloadUrl": "https://codeberg.org/maevi/nuclear-option-mods/releases/download/livery-manager-3.1.0/livery-manager-3.1.0.zip",
+        "hash": "sha256:507cb948b6b2f18d4310cb105e11bd611c48996a79cc8de0c7a67dfeb67575e1",
+        "dependencies": [
+          {
+            "id": "BepInEx.ConfigurationManager",
+            "version": "18.4.1"
+          }
+        ]
+      }
+    ],
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "NoMissileIndicators",
+    "displayName": "NO Missile Indicators",
+    "description": "A red arrow on the screen edge toward each incoming missile outside your view, pointing the way to turn. Only missiles the game's missile warning already knows about get one. Off in player-versus-player games unless you allow it.",
+    "tags": [
+      "QoL",
+      "UI"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/baanish/NO-Missile-Indicators"
+      }
+    ],
+    "authors": [
+      "baanish"
+    ],
+    "isClientOrServer": "Client",
+    "githubOwner": "baanish",
+    "githubRepoName": "NO-Missile-Indicators",
+    "autoUpdateArtifacts": "True",
+    "artifacts": [
+      {
+        "fileName": "NoMissileIndicators-v0.2.0-nomm.zip",
+        "version": "0.2.0",
+        "category": "preRelease",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/baanish/NO-Missile-Indicators/releases/download/v0.2.0/NoMissileIndicators-v0.2.0-nomm.zip",
+        "hash": "sha256:85a975b2f888123da42adfe958a92151b54e16802ad7a19cc61f3e6db1106e56"
+      },
+      {
+        "fileName": "NoMissileIndicators-v0.1.0-nomm.zip",
+        "version": "0.1.0",
+        "category": "preRelease",
+        "type": "plugin",
+        "gameVersion": "0.34.2",
+        "downloadUrl": "https://github.com/baanish/NO-Missile-Indicators/releases/download/v0.1.0/NoMissileIndicators-v0.1.0-nomm.zip",
+        "hash": "sha256:b2a46d825f3c3d16fa2d08759e1a76ca05d999ca8999cf58de444e01db6bc7bb"
+      }
+    ],
+    "downloadCount": 291,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "NuclearOptionVRFix",
+    "displayName": "NuclearOptionVRFix",
+    "description": "Nuclear Option Camera Fix for uuvr",
+    "tags": [
+      "mod",
+      "vr"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/FeelSoMoon/NuclearOptionVRFix"
+      }
+    ],
+    "authors": [
+      "FeelSoMoon"
+    ],
+    "githubOwner": "7ep3s",
+    "githubRepoName": "NuclearOptionVRFix",
+    "autoUpdateArtifacts": "False",
+    "artifacts": [
+      {
+        "fileName": "NuclearOptionVRFix.zip",
+        "version": "1.0",
+        "category": "release",
+        "type": "plugin",
+        "gameVersion": "0.33",
+        "downloadUrl": "https://github.com/7ep3s/NuclearOptionVRFix/releases/download/1.0/NuclearOptionVRFix.zip",
+        "hash": "sha256:b3ccd77e1bb78dcb42ee5b1797063252721db4027a7da117ff9914a457a3de9d",
+        "dependencies": [
+          {
+            "id": "uuvr",
+            "version": "0.4.0"
+          }
+        ]
+      }
+    ],
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "pixy_voice",
+    "displayName": "Pixy",
+    "description": "[Voice Pack] Solo Wing Pixy combat dialogue.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "Littlesneez"
+    ],
+    "artifacts": [
+      {
+        "fileName": "Pixy (by Littlesneez).7z",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/raw/master/VoicePacks/Pixy%20(by%20Littlesneez).7z",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "prez_voice",
+    "displayName": "Prez",
+    "description": "[Voice Pack] Classic backseater dialogue lines.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "nikkorap"
+    ],
+    "artifacts": [
+      {
+        "fileName": "Prez (by Nikkorap).7z",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/raw/master/VoicePacks/Prez%20(by%20Nikkorap).7z",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  },
+  {
+    "id": "skyeye_voice",
+    "displayName": "AWACS Sky Eye",
+    "description": "[Voice Pack] Custom AWACS dialogue lines for Sky Eye.",
+    "tags": [
+      "voicepack",
+      "QoL"
+    ],
+    "urls": [
+      {
+        "name": "info",
+        "url": "https://github.com/nikkorap/NO-WSO-Yappinator"
+      }
+    ],
+    "authors": [
+      "Littlesneez"
+    ],
+    "artifacts": [
+      {
+        "fileName": "AWACS Sky Eye (by Littlesneez).7z",
+        "version": "1.0.0",
+        "category": "release",
+        "type": "addon",
+        "gameVersion": "0.32",
+        "downloadUrl": "https://github.com/nikkorap/NO-WSO-Yappinator/raw/master/VoicePacks/AWACS%20Sky%20Eye%20(by%20Littlesneez).7z",
+        "hash": "sha256:4a1b37d5b3cde5ac5b53b86ef85d7c9ad3fe1b88935021cf18eb62f99c69d6bf",
+        "extends": {
+          "id": "WSOYappinator",
+          "version": "2.1.1"
+        }
+      }
+    ],
+    "downloadCount": 0,
+    "isAiAssisted": "False"
+  }
+]
