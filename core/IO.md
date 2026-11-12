@@ -155,7 +155,9 @@ With neither section, `[General]` is inserted at the top after any BOM. Other se
 and duplicate later sections stay unchanged. Decoding and construction of the
 disabled bytes finish before any restore record is written. The original bytes are saved durably as base64 in
 one record under `doorstop-restores/`, keyed by canonical game folder, before mutation.
-Legacy single `doorstop-restore.json` byte/text records migrate on first use;
+Legacy single `doorstop-restore.json` byte/text records migrate once their recorded
+folder exists and can be canonicalised. Until then the legacy path stays intact;
+lookups compare the records' current canonical paths, including symlink aliases;
 several folders can have pending restores without replacing each other.
 Restoration waits for observed exit; startup while the game runs defers it. Startup
 with the game closed, a failed edit, or a failed launch restores the exact bytes.
@@ -163,8 +165,10 @@ Legacy records containing only `text` still restore using the previous byte mapp
 Restore failure never stops startup or leaves the launcher marked running after
 exit. The durable record stays pending; NNOMM retries every three seconds while
 the game is closed, at startup and before the next Play. Play refuses to continue
-if that retry fails. One notice per unresolved failure with evidence that the INI changed asks the player to close
-programs using the game folder. A missing game folder is never recreated: its
+if that retry fails for the selected game folder. A locked restore in another
+folder does not block Play. One notice per unresolved failure with evidence that
+the INI changed names the affected folder(s) and asks the player to close programs
+using them. A missing game folder is never recreated: its
 restore record stays pending,
 without a write, until the folder returns. This also covers unmounted Steam
 libraries. Play in another folder retains the missing folder's record. Restore
@@ -183,8 +187,13 @@ file is set true unless a without-mods restore is pending for this game folder.
 Without a pending restore, an unhealthy file is replaced with the shipped default,
 with the exact current INI kept in transaction recovery under `.nnomm/recovery`
 in the game folder and a result notice explaining that. Without a pending restore, a currently unreadable
-or locked file fails before any replacement, with instructions to close programs
-using it. While this folder has a pending restore, Repair skips the INI entirely
+file fails before any replacement, with instructions to close programs using it.
+When Repair needs to change the INI, it places that replacement first in the
+loader batch: a refused INI move fails before any loader file is promoted.
+After the batch, Repair verifies the INI against its intended bytes before
+reporting success; a mismatch or unreadable result gives access/lock guidance.
+The batch still has per-file recovery, not global atomicity.
+While this folder has a pending restore, Repair skips the INI entirely
 (even if missing, unhealthy or unreadable), repairs the other eligible loader
 files, and asks the player to close programs using the folder and use Repair
 again. It does not change the pending original bytes or claim to have repaired
