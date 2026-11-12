@@ -244,4 +244,26 @@ class LastFindingsTest {
             app.shutdown()
         }
     }
+
+    @Test
+    fun storageAccessFailureDuringDownloadIsNotAConnectionProblem() {
+        val help =
+            loaderFailureHelp(
+                nnomm.core.io.LoaderDownloadFailure(AccessDeniedException("staging/loader.zip"))
+            )
+        assertFalse(help.contains("connection"), help)
+        assertTrue(help.contains("storage folder"), help)
+    }
+
+    @Test
+    fun doorstopEnabledKeyCountsOnlyInTheLoaderSection() {
+        val other = "[UnityDoorstop]\ntargetAssembly=x.dll\n[Other]\nenabled=true\n"
+        assertFalse(nnomm.core.io.real.DoorstopIni.hasEnabled(other))
+        val both = "[General]\nenabled = true\n[Other]\nenabled=true\n"
+        assertTrue(nnomm.core.io.real.DoorstopIni.hasEnabled(both))
+        assertEquals(
+            "[General]\nenabled = false\n[Other]\nenabled=true\n",
+            nnomm.core.io.real.DoorstopIni.setEnabled(both, false),
+        )
+    }
 }

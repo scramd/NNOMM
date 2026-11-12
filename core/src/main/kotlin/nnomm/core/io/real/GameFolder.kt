@@ -1306,7 +1306,7 @@ class RealGameFolder(
                             } catch (_: java.io.IOException) {
                                 null
                             }
-                        if (old == null || !Regex("(?im)^\\s*enabled\\s*=").containsMatchIn(old)) {
+                        if (old == null || !DoorstopIni.hasEnabled(old)) {
                             val restored = staging.resolve("restored-doorstop.ini")
                             restored.writeText(
                                 if (old == null) staging.resolve("doorstop_config.ini").readText()

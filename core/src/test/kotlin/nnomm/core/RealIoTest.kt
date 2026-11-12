@@ -481,7 +481,7 @@ class RealIoTest {
                 game.resolve("winhttp.dll").writeText("player proxy")
             } else folder.installLoader(game.toString())
             val old =
-                "[UnityDoorstop]\n# player settings\ntargetAssembly=custom.dll\n[Other]\nplayer=true\n"
+                "[UnityDoorstop]\n# player settings\ntargetAssembly=custom.dll\n[Other]\nplayer=true\nenabled=true\n"
             val oldBytes = if (unreadable) byteArrayOf(0xC3.toByte(), 0x28) else old.toByteArray()
             game.resolve("doorstop_config.ini").writeBytes(oldBytes)
             game.resolve("BepInEx/core/player.txt").writeText("player file")

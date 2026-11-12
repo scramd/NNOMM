@@ -135,14 +135,10 @@ class RealGameLauncher(
                         } catch (e: java.io.IOException) {
                             throw DoorstopSettingsFailure(e)
                         }
-                    if (!Regex("(?im)^\\s*enabled\\s*=").containsMatchIn(text))
-                        throw DoorstopSettingsFailure()
+                    if (!DoorstopIni.hasEnabled(text)) throw DoorstopSettingsFailure()
                     JsonFile(restoreFile, MapSerializer(String.serializer(), String.serializer()))
                         .write(mapOf("path" to ini.toString(), "text" to text))
-                    atomic(
-                        ini,
-                        text.replace(Regex("(?im)^(\\s*enabled\\s*=)[^\\r\\n]*"), "$1 false"),
-                    )
+                    atomic(ini, DoorstopIni.setEnabled(text, false))
                 }
                 try {
                     val args =

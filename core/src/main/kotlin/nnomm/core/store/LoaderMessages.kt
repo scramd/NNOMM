@@ -7,6 +7,16 @@ internal fun loaderFailureHelp(error: Throwable): String {
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
             "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
         causes.any {
+            it is java.nio.file.AccessDeniedException ||
+                it is java.nio.file.FileSystemException &&
+                    it.reason.orEmpty().let { reason ->
+                        reason.contains("used by another process", true) ||
+                            reason.contains("locked", true) ||
+                            reason.contains("permission denied", true)
+                    }
+        } ->
+            "Check that NNOMM can change files in the game folder and in its own storage folder, and close programs using them, then try again."
+        causes.any {
             it is java.io.IOException &&
                 (it.message.orEmpty().contains("space", true) ||
                     it.message.orEmpty().contains("disk full", true))
@@ -34,16 +44,6 @@ internal fun loaderFailureHelp(error: Throwable): String {
                 it is io.ktor.client.plugins.ResponseException ||
                 it is io.ktor.client.plugins.HttpRequestTimeoutException
         } -> "Check your connection and try again."
-        causes.any {
-            it is java.nio.file.AccessDeniedException ||
-                it is java.nio.file.FileSystemException &&
-                    it.reason.orEmpty().let { reason ->
-                        reason.contains("used by another process", true) ||
-                            reason.contains("locked", true) ||
-                            reason.contains("permission denied", true)
-                    }
-        } ->
-            "Check that NNOMM can change files in the game folder and close programs using them, then try again."
         else -> "Check the game folder and try again."
     }
 }
