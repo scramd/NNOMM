@@ -662,7 +662,9 @@ class LoaderOwnershipV2Test {
         val result =
             try {
                 app.removeEverything()
-                withTimeout(5000) { completed.await() }
+                // Completion comes from the loader port, not a toast or elapsed delay.
+                // Each matrix case can wait behind other builds on the shared machine.
+                withTimeout(180_000) { completed.await() }
             } finally {
                 app.shutdown()
             }

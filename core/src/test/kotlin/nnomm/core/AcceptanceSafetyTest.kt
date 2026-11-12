@@ -194,18 +194,32 @@ class AcceptanceSafetyTest {
                 .redirectErrorStream(true)
                 .redirectOutput(root.resolve("worker.log").toFile())
                 .start()
-        assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS))
-        assertEquals(23, process.exitValue())
-        val loaded = RealPersistence(root).load()!!
-        assertNotNull(loaded.trouble)
-        assertEquals(
-            loaded.trouble!!.saved.toSet(),
-            restoreTrouble(loaded)
-                .installed
-                .keys
-                .filter { isOn(restoreTrouble(loaded), it) }
-                .toSet(),
-        )
+        try {
+            // Process termination is the completion signal; allow for JVM startup under load.
+            assertTrue(
+                process.waitFor(180, java.util.concurrent.TimeUnit.SECONDS),
+                "Guided crash worker did not terminate; log: " +
+                    root.resolve("worker.log").readText(),
+            )
+            assertEquals(23, process.exitValue(), root.resolve("worker.log").readText())
+            assertEquals("saved", root.resolve("worker-persisted").readText())
+            val loaded = RealPersistence(root).load()!!
+            assertNotNull(loaded.trouble)
+            assertEquals(
+                loaded.trouble!!.saved.toSet(),
+                restoreTrouble(loaded)
+                    .installed
+                    .keys
+                    .filter { isOn(restoreTrouble(loaded), it) }
+                    .toSet(),
+            )
+        } finally {
+            // Never let a timed-out child race @AfterTest's directory cleanup.
+            if (process.isAlive) process.destroyForcibly()
+            check(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                "Guided crash worker is still alive after forced termination"
+            }
+        }
     }
 
     @Test
@@ -253,6 +267,8 @@ object GuidedCrashWorker {
         val p = RealPersistence(Path.of(args[0]))
         val next = startTrouble(Demo.state())
         p.save(next)
+        // A small signal proves save returned before the deliberate process halt.
+        Path.of(args[0]).resolve("worker-persisted").writeText("saved")
         Runtime.getRuntime().halt(23)
     }
 }
