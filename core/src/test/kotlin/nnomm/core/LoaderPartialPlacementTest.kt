@@ -72,7 +72,8 @@ class LoaderPartialPlacementTest {
         for (recovery in listOf("startup", "recover", "install", "repair", "uninstall")) {
             val f = fixture(false, null, orders[0])
             // Identical shipped bytes already owned by the player must not be claimed.
-            val player = f.game.resolve("winhttp.dll").apply { writeText("shipped proxy") }
+            // Foreign binaries block Install; a preexisting INI is still allowed.
+            val player = f.game.resolve("doorstop_config.ini").apply { writeBytes(shipped) }
             crashAfterTransaction(f)
             when (recovery) {
                 "startup" -> {
@@ -113,17 +114,17 @@ class LoaderPartialPlacementTest {
             }
             if (recovery != "uninstall") {
                 assertEquals(3, record(f).read()!!.size)
-                assertFalse("winhttp.dll" in record(f).read()!!)
+                assertFalse("doorstop_config.ini" in record(f).read()!!)
                 assertFalse(f.folder.recoveryPending)
             }
             f.folder.removeLoader(f.game.toString())
             for (relative in
                 listOf(
-                    "doorstop_config.ini",
+                    "winhttp.dll",
                     "BepInEx/core/BepInEx.dll",
                     "BepInEx/core/Extra.dll",
                 )) assertFalse(f.game.resolve(relative).exists(), "$recovery: $relative")
-            assertEquals("shipped proxy", player.readText())
+            assertEquals(String(shipped), player.readText())
             assertTrue(f.game.resolve("NuclearOption.exe").exists())
             assertTrue(record(f).read().orEmpty().isEmpty())
         }
@@ -786,7 +787,8 @@ class LoaderPartialPlacementTest {
                 else 1..3
             for (at in counts) {
                 val f = fixture(false, null, orders[0])
-                val player = f.game.resolve("winhttp.dll").apply { writeText("shipped proxy") }
+                // Foreign binaries block Install; a preexisting INI is still allowed.
+                val player = f.game.resolve("doorstop_config.ini").apply { writeBytes(shipped) }
                 var count = 0
                 DiskFaults.step = { if (it == phase && ++count == at) throw Crash() }
                 try {
@@ -796,9 +798,9 @@ class LoaderPartialPlacementTest {
                 }
                 f.folder.recoverPending()
                 f.folder.recoverPending()
-                assertFalse("winhttp.dll" in record(f).read().orEmpty(), "$phase/$at")
+                assertFalse("doorstop_config.ini" in record(f).read().orEmpty(), "$phase/$at")
                 f.folder.removeLoader(f.game.toString())
-                assertEquals("shipped proxy", player.readText(), "$phase/$at")
+                assertEquals(String(shipped), player.readText(), "$phase/$at")
                 assertTrue(f.game.resolve("NuclearOption.exe").exists())
             }
         }
