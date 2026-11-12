@@ -19,6 +19,7 @@ Every part was reviewed by an Opus agent and a Sol agent, then fixed, several ro
 - Offline pack import can add the selected bundled files and then refuse to make the profile without a connection.
 - Loose files taken over from the game folder are not later matched to registry mods.
 - The broken-mod test assumes one cause; two mods that only fail together give an inconclusive result.
+- "Play without mods" and loader Repair edit `doorstop_config.ini`. Their handling of unusual files (a `[UnityDoorstop]` section before `[General]`, UTF-16 files, headers with comments) is being reworked after the last review; until that is merged, these two actions are not safe on such files.
 - No release and no tag exist.
 
 ## Differences from the mock
