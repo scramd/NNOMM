@@ -197,3 +197,15 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 | With an NNOMM-owned 5.4.23.4 loader, deny INI rename without denying reads. Repair both an unhealthy INI and a healthy disabled INI. | The INI replacement is first. A failed move leaves all loader file bytes unchanged, gives close-programs guidance and makes no success or recovery-copy claim. After a successful batch the INI must match the intended bytes before success is reported. |
 | Save a legacy restore through a junction or a differently cased path, disconnect that sandbox library before startup, then reconnect it. | The absent folder is not recreated. The legacy record keeps its recorded path until canonicalisation is possible. Repair finds the pending record through the canonical path; restoration returns the exact saved bytes and clears it. Linux regression covers a symlink; Windows junction and case handling remain unchecked. |
 | Keep restore locked in sandbox A, then use both normal Play and Play without mods in sandbox B. | B launches and its own original restores after exit. A's record and INI remain unchanged, its notice names A, and Play in A still refuses until restoration succeeds. |
+
+## Loader ownership v2
+
+- In a sandbox, replace NNOMM-owned loader files by hand, including the INI, then
+  run Repair, Retry and Remove all mods. The replacements stay at their paths and
+  lose NNOMM ownership. Hold a file without read/delete sharing: refusal must keep
+  ownership evidence until access returns.
+- Interrupt loader installation/removal, hand-install files, then restart twice.
+  Operation-specific reports must not claim replacements or abandon unchanged
+  NNOMM files. A removed parent directory must stay absent after Uninstall.
+- Replace an incomplete owned loader with another BepInEx version. Play must keep
+  its presence guard and must not add pinned-version files or announce installation.

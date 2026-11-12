@@ -393,7 +393,8 @@ class ReviewRegressionTest {
                     operations += "loader"
                 }
 
-                override suspend fun inspect(folder: String) = GameInfo(folder, "0.34.6", true)
+                override suspend fun inspect(folder: String) =
+                    GameInfo(folder, "0.34.6", true, "5.4.23.4")
 
                 override suspend fun apply(plan: GamePlan) {
                     operations += "apply"

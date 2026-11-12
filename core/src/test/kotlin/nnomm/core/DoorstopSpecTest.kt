@@ -604,7 +604,8 @@ class DoorstopSpecTest {
             assertContentEquals(original, ini.readBytes())
             assertFalse(f.notices.any { "shipped defaults" in it })
             if (pending) {
-                assertEquals("shipped proxy", f.game.resolve("winhttp.dll").readText())
+                // A legacy name without a recorded hash is not replacement authority.
+                assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
                 assertEquals(record, DoorstopRestores(f.home).read(f.game))
                 assertTrue(f.notices.any { "use Repair again" in it })
             }

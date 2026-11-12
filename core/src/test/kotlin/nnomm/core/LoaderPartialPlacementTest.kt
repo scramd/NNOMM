@@ -64,7 +64,7 @@ class LoaderPartialPlacementTest {
         owned.forEach { assertFalse(f.game.resolve(it).exists(), it) }
         assertEquals("keep me", player.readText())
         assertTrue(f.game.resolve("NuclearOption.exe").exists())
-        assertTrue(record(f).read()!!.isEmpty())
+        assertTrue(record(f).read().orEmpty().isEmpty())
     }
 
     @Test
@@ -125,7 +125,7 @@ class LoaderPartialPlacementTest {
                 )) assertFalse(f.game.resolve(relative).exists(), "$recovery: $relative")
             assertEquals("shipped proxy", player.readText())
             assertTrue(f.game.resolve("NuclearOption.exe").exists())
-            assertTrue(record(f).read()!!.isEmpty())
+            assertTrue(record(f).read().orEmpty().isEmpty())
         }
     }
 
@@ -202,7 +202,7 @@ class LoaderPartialPlacementTest {
     @Test
     fun interruptedRepairKeepsExistingUnownedIniAndAdoptedBinaries() = runBlocking {
         val f = fixture(true, "[General]\ntarget_assembly=\n".toByteArray(), orders[0])
-        record(f).write(listOf("BepInEx/core/BepInEx.dll"))
+        seedOwnership(f, listOf("BepInEx/core/BepInEx.dll"))
         DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
         try {
             assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
@@ -335,6 +335,22 @@ class LoaderPartialPlacementTest {
             ),
         )
 
+    private fun seedOwnership(f: F, names: List<String>) {
+        record(f).write(names)
+        JsonFile(
+                record(f).path.resolveSibling(record(f).path.fileName.toString() + ".hashes"),
+                LoaderOwnership.serializer(),
+            )
+            .write(
+                LoaderOwnership(
+                    f.game.toString(),
+                    names
+                        .filter { f.game.resolve(it).exists() }
+                        .associateWith { digest(f.game.resolve(it)) },
+                )
+            )
+    }
+
     private fun assertRecordedPlacements(f: F, previous: List<String> = emptyList()) {
         val placed =
             listOf(
@@ -354,7 +370,7 @@ class LoaderPartialPlacementTest {
                         }
                     path.isRegularFile() && path.readBytes().contentEquals(expected)
                 }
-        assertEquals((previous + placed).toSet(), record(f).read()!!.toSet())
+        assertEquals((previous + placed).toSet(), record(f).read().orEmpty().toSet())
     }
 
     // Assertion ports of VerifyTwoProbeTest's laterOwnedMoveFailsAfterIni and
@@ -368,8 +384,10 @@ class LoaderPartialPlacementTest {
                     if (missing) null else "[General]\ntarget_assembly=\n".toByteArray(),
                     order,
                 )
-            val previous = listOf("BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini")
-            record(f).write(previous)
+            val previous =
+                listOf("BepInEx/core/BepInEx.dll", "winhttp.dll") +
+                    if (missing) emptyList() else listOf("doorstop_config.ini")
+            seedOwnership(f, previous)
             val proxy = f.game.resolve("winhttp.dll")
             DiskFaults.beforeMove = { if (it == proxy) throw AccessDeniedException(it.toString()) }
             val failure = assertFails { f.folder.repairLoader(f.game.toString()) }
@@ -421,7 +439,7 @@ class LoaderPartialPlacementTest {
             placed.forEach { assertFalse(f.game.resolve(it).exists(), it) }
             assertEquals("keep me", player.readText())
             assertTrue(f.game.resolve("NuclearOption.exe").exists())
-            assertTrue(record(f).read()!!.isEmpty())
+            assertTrue(record(f).read().orEmpty().isEmpty())
         }
     }
 
@@ -434,7 +452,22 @@ class LoaderPartialPlacementTest {
                     if (repair) "[General]\ntarget_assembly=\n".toByteArray() else null,
                     orders[0],
                 )
-            if (repair) record(f).write(listOf("BepInEx/core/BepInEx.dll", "winhttp.dll"))
+            if (repair) {
+                val names = listOf("BepInEx/core/BepInEx.dll", "winhttp.dll")
+                record(f).write(names)
+                JsonFile(
+                        record(f)
+                            .path
+                            .resolveSibling(record(f).path.fileName.toString() + ".hashes"),
+                        LoaderOwnership.serializer(),
+                    )
+                    .write(
+                        LoaderOwnership(
+                            f.game.toString(),
+                            names.associateWith { digest(f.game.resolve(it)) },
+                        )
+                    )
+            }
             val target = f.game.resolve(if (repair) "winhttp.dll" else "BepInEx/core/BepInEx.dll")
             val io = Demo.io()
             val app =
@@ -516,7 +549,8 @@ class LoaderPartialPlacementTest {
             // Install must not overwrite files already placed, including player edits.
             val core = f.game.resolve("BepInEx/core/BepInEx.dll")
             val playerDll = dll + byteArrayOf(0, 0)
-            core.writeBytes(playerDll)
+            // Keep the owned bytes unchanged here: v2 refuses resume after a hand replacement.
+            val unchangedDll = core.readBytes()
             val retryMoves = mutableListOf<Path>()
             var successBeforeProxy = false
             DiskFaults.beforeMove = {
@@ -542,9 +576,9 @@ class LoaderPartialPlacementTest {
             assertEquals(listOf(proxy), retryMoves)
             assertFalse(successBeforeProxy)
             assertEquals("shipped proxy", proxy.readText())
-            assertContentEquals(playerDll, core.readBytes())
+            assertContentEquals(unchangedDll, core.readBytes())
             assertTrue(order.all { f.game.resolve(it).isRegularFile() })
-            assertEquals(order.toSet(), record(f).read()!!.toSet())
+            assertEquals(order.toSet(), record(f).read().orEmpty().toSet())
         } finally {
             app.shutdown()
             DiskFaults.beforeMove = {}
@@ -575,7 +609,7 @@ class LoaderPartialPlacementTest {
                             "[General]\nenabled=false\ntarget_assembly=player.dll\n".toByteArray()
                     }
                 val f = fixture(true, original, orders[0])
-                if (kind == "owned") record(f).write(listOf("doorstop_config.ini"))
+                if (kind == "owned") seedOwnership(f, listOf("doorstop_config.ini"))
                 if (crash) DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
                 try {
                     if (crash) assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }

@@ -138,11 +138,14 @@ private constructor(
                         initial.settings.general["gamePath"]?.content?.takeIf { it.isNotBlank() }
                             ?: initial.game.folder
                             ?: findGameFolder(initial.settings)
-                    if (launcher.running.value)
+                    if (
+                        launcher.running.value &&
+                            (game.recoveryPending || !initial.firstStart.complete)
+                    )
                         notice(
                             "Close Nuclear Option to recover pending changes and take over existing mods."
                         )
-                    else {
+                    if (!launcher.running.value) {
                         game.recoverPending()
                     }
                     val adopted =
