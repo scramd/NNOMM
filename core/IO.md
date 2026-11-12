@@ -190,16 +190,25 @@ in the game folder and a result notice explaining that. Without a pending restor
 file fails before any replacement, with instructions to close programs using it.
 When Repair needs to change the INI, it places that replacement first in the
 loader batch: a refused INI move fails before any loader file is promoted.
-After the batch, Install and Repair compare every replacement target with its
-staged source, including binaries and any INI change. Existing ownership is kept;
-only verified placements add new ownership. This includes a previously unowned
-INI changed by Repair; adopted binaries remain unowned. The ownership record is
-written atomically after these checks, including for a partial batch, so later Repair or
-Uninstall can handle the files already placed. Any mismatch, missing file or
-unreadable target fails the operation with access/lock guidance before any success
-or "Replaced the damaged mod loader settings" notice. The batch still has per-file
-recovery, not global atomicity. Refusal before any promotion leaves ownership
-unchanged. Ownership publication itself can fail; that failure is also reported.
+Before the batch, Install and Repair durably write a pending ownership record under
+`loader-pending/` in this home's private storage. Its key is the SHA-256 of the
+canonical game path; the record also checks that full path. It lists only selected
+replacement targets and each staged source's SHA-256. Existing files that are not
+selected for replacement are never claimed, even when their bytes match the archive.
+After the batch, ownership publication keeps existing ownership and adds only targets
+whose current bytes match their pending hash. This includes a previously unowned
+INI changed by Repair; adopted binaries remain unowned. Only after the atomic
+ownership write succeeds is the pending record deleted. Publication failure leaves
+it available for retry, even after the file transaction's journal was deleted.
+Startup with the game closed, game exit, and every loader Install, Repair and
+Uninstall recover file transactions before finishing pending ownership from disk.
+Install does this even when BepInEx is already present. Missing game folders and
+failed recovery keep the pending record and expose pending game IO. Repeated
+recovery is safe. Changed, missing or unreadable targets add no new ownership.
+During Install or Repair these mismatches fail with access/lock guidance before
+any success or "Replaced the damaged mod loader settings" notice. The batch still
+has per-file recovery, not global atomicity. Refusal before any promotion adds no
+ownership. Recovery never needs the original download or its staging folder.
 While this folder has a pending restore, Repair skips the INI entirely
 (even if missing, unhealthy or unreadable), repairs the other eligible loader
 files, and asks the player to close programs using the folder and use Repair
