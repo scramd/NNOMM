@@ -86,7 +86,8 @@ class RealGameLauncher(
     private val mutex = Mutex()
     private var launched: Process? = null
     private var pending = false
-    private var restoreNoticeShown = false
+    // Folders whose failed restore was announced; a folder leaves the set when it restores.
+    private val announcedRestoreFailures = mutableSetOf<String>()
 
     init {
         if (!flow.value) tryRestoreDoorstop()
@@ -136,11 +137,14 @@ class RealGameLauncher(
         } catch (e: Exception) {
             failure = e
         }
-        if (failedFolders.isEmpty()) restoreNoticeShown = false
-        else if (!restoreNoticeShown) {
-            restoreNoticeShown = true
+        val failedKeys = failedFolders.associateBy { DoorstopLocks.key(it).toString() }
+        announcedRestoreFailures.retainAll(failedKeys.keys)
+        val newlyFailed = failedKeys.filterKeys { it !in announcedRestoreFailures }.values
+        if (newlyFailed.isNotEmpty()) {
+            announcedRestoreFailures += failedKeys.keys
+            val folders = if (newlyFailed.size == 1) "that game folder" else "those game folders"
             notice(
-                "NNOMM could not turn the mods back on in doorstop_config.ini in ${failedFolders.joinToString()}. Close programs that use the game folder; NNOMM tries again."
+                "NNOMM could not turn the mods back on in doorstop_config.ini in ${newlyFailed.joinToString()}. Close programs that use $folders; NNOMM tries again."
             )
         }
         return failure
