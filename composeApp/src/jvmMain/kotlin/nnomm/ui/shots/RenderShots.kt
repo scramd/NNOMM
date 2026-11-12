@@ -28,6 +28,7 @@ object Shots {
     val registry =
         mutableListOf<ShotSpec>().apply {
             addAll(mockShots.map { it.spec() })
+            add(MockShot("browse-loading", "page=browse&mock=loading").spec())
             for (dark in listOf(true, false)) {
                 val theme = if (dark) "dark" else "light"
                 add(ShotSpec("kit-table-$theme", dark) { WindowShell { KitTableDemo() } })

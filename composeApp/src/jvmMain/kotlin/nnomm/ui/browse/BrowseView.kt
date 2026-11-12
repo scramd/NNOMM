@@ -12,5 +12,6 @@ class BrowseView {
     var kind by mutableStateOf("")
     var game by mutableStateOf("")
     var tagMode by mutableStateOf("any")
+    var allTags by mutableStateOf(false)
     var facetsOpen by mutableStateOf(false)
 }
