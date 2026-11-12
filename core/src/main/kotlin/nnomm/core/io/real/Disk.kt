@@ -297,6 +297,14 @@ internal data class TransactionBatch(
     val commitText: String? = null,
     val promotionReport: String? = null,
     val commitRemovals: Boolean = false,
+    val operationId: String? = null,
+)
+
+@Serializable
+internal data class PromotionReport(
+    val operationId: String?,
+    val targets: List<String>,
+    val preserved: List<String> = emptyList(),
 )
 
 private fun reportPromotions(batch: TransactionBatch) {
@@ -304,9 +312,13 @@ private fun reportPromotions(batch: TransactionBatch) {
         atomic(
             Path.of(report),
             json.encodeToString(
-                batch.changes
-                    .filter { it.phase == "promoted" || it.phase == "recover-commit" }
-                    .map { it.target }
+                PromotionReport(
+                    batch.operationId,
+                    batch.changes
+                        .filter { it.phase == "promoted" || it.phase == "recover-commit" }
+                        .map { it.target },
+                    batch.changes.filter { it.phase == "recover-preserve" }.map { it.target },
+                )
             ),
         )
     }
@@ -423,6 +435,17 @@ internal fun recoverTransactions(
                                                             Path.of(tx.target).exists())
                                                 )
                                                     "recover-commit"
+                                                else if (
+                                                    batch.operationId != null &&
+                                                        Path.of(tx.previous).exists() &&
+                                                        Path.of(tx.target).exists()
+                                                )
+                                                    "recover-preserve"
+                                                else if (
+                                                    tx.phase in listOf("prepared", "copying") &&
+                                                        !Path.of(tx.previous).exists()
+                                                )
+                                                    "recover-unmoved"
                                                 else "recover-rollback"
                                         )
                                 }
@@ -440,6 +463,10 @@ internal fun recoverTransactions(
                                 Files.createDirectories(kept.parent)
                                 Files.move(previous, kept)
                             }
+                        } else if (tx.phase == "recover-preserve") {
+                            // A hand replacement after a loader crash wins over rollback.
+                            Files.createDirectories(kept.parent)
+                            if (previous.exists()) Files.move(previous, kept)
                         } else if (previous.exists()) {
                             if (target.exists()) {
                                 val displaced = kept.resolveSibling("displaced-${previous.name}")
@@ -449,7 +476,9 @@ internal fun recoverTransactions(
                             Files.createDirectories(target.parent)
                             Files.move(previous, target)
                         } else
-                            require(!tx.existed || target.exists()) {
+                            require(
+                                tx.phase == "recover-unmoved" || !tx.existed || target.exists()
+                            ) {
                                 "Transaction storage is unavailable; journal kept at $journal"
                             }
                         tx.staged?.let { deleteTree(Path.of(it)) }
@@ -494,6 +523,7 @@ internal fun replaceTrees(
     beforeMutation: () -> Unit = {},
     promotionReport: Path? = null,
     commitRemovals: Boolean = false,
+    operationId: String? = null,
 ) {
     Files.createDirectories(journals)
     val id = java.util.UUID.randomUUID().toString()
@@ -527,6 +557,7 @@ internal fun replaceTrees(
                         afterCommit?.second,
                         promotionReport?.toString(),
                         commitRemovals,
+                        operationId,
                     )
                 ),
             )
@@ -542,6 +573,7 @@ internal fun replaceTrees(
                     afterCommit?.second,
                     promotionReport?.toString(),
                     commitRemovals,
+                    operationId,
                 )
             ),
         )
@@ -563,6 +595,7 @@ internal fun replaceTrees(
                         afterCommit?.second,
                         promotionReport?.toString(),
                         commitRemovals,
+                        operationId,
                     )
                 ),
             )
@@ -580,12 +613,19 @@ internal fun replaceTrees(
                         afterCommit?.second,
                         promotionReport?.toString(),
                         commitRemovals,
+                        operationId,
                     )
                 ),
             )
             DiskFaults.step("promoted")
         }
-        reportPromotions(TransactionBatch(prepared, promotionReport = promotionReport?.toString()))
+        reportPromotions(
+            TransactionBatch(
+                prepared,
+                promotionReport = promotionReport?.toString(),
+                operationId = operationId,
+            )
+        )
         afterCommit?.let { atomic(it.first, it.second) }
         DiskFaults.step("ownership-published")
         indexRecovery(journals, journal, prepared)
