@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import nnomm.core.demo.demoStore
 import nnomm.core.store.AppStore
 import nnomm.ui.*
+import nnomm.ui.kit.windowInputMode
 import nnomm.ui.shell.*
 import nnomm.ui.shots.KitGallery
 import nnomm.ui.theme.*
@@ -192,7 +193,9 @@ fun main(args: Array<String>) {
                 val drag = Modifier.windowDragArea(window = checkNotNull(win.unsafe.taoWindow))
                 val colors = LocalNnTheme.current.colors
                 val maximized = state.placement == WindowPlacement.Maximized
-                Box(Modifier.fillMaxSize()) {
+                val focusMode = remember { nnomm.ui.kit.FocusMode() }
+                CompositionLocalProvider(nnomm.ui.kit.LocalFocusMode provides focusMode) {
+                Box(Modifier.fillMaxSize().then(Modifier.windowInputMode(focusMode))) {
                     WindowScaffold(
                         modifier =
                             Modifier.fillMaxSize()
@@ -221,6 +224,7 @@ fun main(args: Array<String>) {
                         if ("--kit" in args) KitGallery() else AppShell(model)
                     }
                     if ("--kit" !in args) AppLayers(model)
+                }
                 }
             }
         }
