@@ -640,7 +640,9 @@ internal fun replaceTrees(
             val previous = Path.of(tx.previous)
             DiskFaults.beforeMove(target)
             if (!eligible(target)) {
-                prepared[index] = tx.copy(phase = "recover-preserve")
+                // No move occurred. A refused read is not evidence of a hand replacement.
+                // Keep it distinct from recovery's confirmed conflicting target.
+                prepared[index] = tx.copy(phase = "recover-unmoved")
                 atomic(
                     journal,
                     json.encodeToString(

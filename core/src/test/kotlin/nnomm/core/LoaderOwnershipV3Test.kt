@@ -68,7 +68,12 @@ class LoaderOwnershipV3Test {
         return F(home, game, folder(home, archive, notices), notices)
     }
 
-    private fun folder(home: Path, archive: Path, notices: MutableList<String>) =
+    private fun folder(
+        home: Path,
+        archive: Path,
+        notices: MutableList<String>,
+        readHash: (Path) -> String = ::digest,
+    ) =
         RealGameFolder(
             home,
             RealModStore(home),
@@ -81,7 +86,110 @@ class LoaderOwnershipV3Test {
             },
             running = { false },
             notice = { notices += it },
+            readLoaderHash = readHash,
         )
+
+    // Port of the ownership-v3 review probe: deny only the target's eligibility read,
+    // then restore access. Inject the read failure so this also works with elevated privileges.
+    @Test
+    fun transientUnreadableAtRepairStaysOwnedForUninstall() = runBlocking {
+        for (name in listOf("BepInEx/core/BepInEx.dll", "winhttp.dll")) {
+            val f = fixture(false, null)
+            f.folder.installLoader(f.game.toString())
+            val target = f.game.resolve(name)
+            var deny = false
+            var denied = 0
+            val repair =
+                folder(f.home, f.home.resolve("loader.zip"), f.notices) {
+                    if (it == target && deny) {
+                        deny = false
+                        denied++
+                        throw AccessDeniedException(it.toString())
+                    }
+                    digest(it)
+                }
+            DiskFaults.beforeMove = { deny = it == target }
+            try {
+                assertFailsWith<java.io.IOException> { repair.repairLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.beforeMove = {}
+            }
+            assertEquals(1, denied, name)
+            assertEquals(digestBytes(data.getValue(name)), digest(target))
+            assertTrue(name in record(f).read().orEmpty(), name)
+            val restarted = restart(f)
+            restarted.folder.recoverPending()
+            restarted.folder.removeLoader(f.game.toString())
+            assertFalse(target.exists(), name)
+            assertFalse(restarted.folder.recoveryPending)
+        }
+    }
+
+    @Test
+    fun unreadableSkippedRepairStaysOwnedAndPendingUntilVerification() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        val target = f.game.resolve("winhttp.dll")
+        var deny = false
+        val repair =
+            folder(f.home, f.home.resolve("loader.zip"), f.notices) {
+                if (it == target && deny) throw AccessDeniedException(it.toString())
+                digest(it)
+            }
+        DiskFaults.beforeMove = { if (it == target) deny = true }
+        try {
+            assertFailsWith<java.io.IOException> { repair.repairLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.beforeMove = {}
+        }
+        assertTrue("winhttp.dll" in record(f).read().orEmpty())
+        assertTrue(repair.recoveryPending)
+        repair.recoverPending()
+        assertTrue(repair.recoveryPending)
+        assertTrue("winhttp.dll" in record(f).read().orEmpty())
+        deny = false
+        repair.recoverPending()
+        assertFalse(repair.recoveryPending)
+        repair.removeLoader(f.game.toString())
+        assertFalse(target.exists())
+    }
+
+    @Test
+    fun readableChangedSkippedRepairIsRelinquished() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        val target = f.game.resolve("winhttp.dll")
+        DiskFaults.beforeMove = { if (it == target) target.writeText("player proxy") }
+        try {
+            assertFailsWith<java.io.IOException> { f.folder.repairLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.beforeMove = {}
+        }
+        assertFalse("winhttp.dll" in record(f).read().orEmpty())
+        f.folder.removeLoader(f.game.toString())
+        assertEquals("player proxy", target.readText())
+    }
+
+    @Test
+    fun identicalPlayerReinstallAfterRepairCrashStaysUnowned() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        // The first alphabetical target was moved aside, but promotion was not journaled.
+        DiskFaults.step = { if (it == "old-rename-before-journal") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        val target = f.game.resolve(".doorstop_version")
+        assertFalse(target.exists())
+        target.writeBytes(data.getValue(".doorstop_version"))
+        val restarted = restart(f)
+        restarted.folder.recoverPending()
+        assertFalse(".doorstop_version" in record(f).read().orEmpty())
+        restarted.folder.removeLoader(f.game.toString())
+        assertContentEquals(data.getValue(".doorstop_version"), target.readBytes())
+    }
 
     private fun restart(f: F) =
         F(f.home, f.game, folder(f.home, f.home.resolve("loader.zip"), f.notices), f.notices)

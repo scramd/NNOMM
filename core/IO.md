@@ -205,7 +205,14 @@ promoted entries. Journal failures touching this game folder block loader action
 unrelated home/store journals do not.
 
 After the batch, ownership publication keeps existing ownership and adds only promoted
-targets whose current bytes match their pending hash. Repair claims an INI only when
+targets whose current bytes match their pending hash. Skipping a target during the
+batch does not relinquish existing ownership: matching bytes stay owned, and a
+failed read keeps ownership and the pending record until verification can finish.
+Readable different bytes are relinquished. A confirmed hand replacement after a
+crash is still relinquished, even if the player used identical official bytes.
+Skipped eligibility checks are journaled as unmoved, separately from those
+recovery conflicts. The same verification rule applies to
+skipped removals. Repair claims an INI only when
 it creates a missing file, or keeps its existing ownership. Rewriting a player's
 existing INI never claims it. Changed or missing targets add no ownership and fail
 the active operation before a success notice. Unreadable promoted targets stay in
