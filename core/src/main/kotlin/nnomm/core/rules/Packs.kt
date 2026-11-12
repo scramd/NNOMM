@@ -33,6 +33,7 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
         val k =
             when {
                 i.id !in s.catalog.map { it.id } -> PackKind.UNAVAILABLE
+                i.version == null -> if (have != null) PackKind.SAME else PackKind.UNAVAILABLE
                 have == null -> PackKind.ADD
                 have == i.version -> PackKind.SAME
                 mode == ImportMode.NEW -> PackKind.OTHER
