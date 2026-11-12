@@ -154,6 +154,13 @@ internal suspend fun unpack(file: Path, target: Path) {
     }
 }
 
+@kotlinx.serialization.Serializable
+internal data class PayloadProvenance(
+    val origin: PayloadOrigin = PayloadOrigin.UNKNOWN,
+    val artifactHash: String? = null,
+    val payloadHashes: Map<String, String> = emptyMap(),
+)
+
 class RealModStore(
     val home: Path,
     private val catalogStorePath: String? = null,
@@ -165,6 +172,31 @@ class RealModStore(
 
     init {
         recoverTransactions(home.resolve("transactions"), homeOnly = true, notice = {})
+    }
+
+    private fun provenance(id: String, version: String) =
+        JsonFile(
+            home.resolve("provenance/${component(id)}/${component(version)}.json"),
+            PayloadProvenance.serializer(),
+        )
+
+    private fun registryPayload(id: String, version: String) =
+        JsonFile(
+            home.resolve("registry-payloads/${component(id)}/${component(version)}.json"),
+            PayloadProvenance.serializer(),
+        )
+
+    private fun clearable(id: String, version: String): Boolean {
+        val record = provenance(id, version).read() ?: return false
+        val verified =
+            when (record.origin) {
+                PayloadOrigin.REGISTRY_DOWNLOAD -> record
+                PayloadOrigin.TAKEOVER -> registryPayload(id, version).read() ?: return false
+                else -> return false
+            }
+        return verified.artifactHash != null &&
+            verified.payloadHashes.isNotEmpty() &&
+            hashPayload(version(id, version)) == verified.payloadHashes
     }
 
     private val undoUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -220,6 +252,16 @@ class RealModStore(
                 undoUntil[id] = System.currentTimeMillis() + 9000
                 val source = Path.of(file.path)
                 val target = version(id, version)
+                // Invalidate replaceability before any payload mutation. An interrupted put
+                // must retain bytes, even if its predecessor was a verified download.
+                provenance(id, version).write(PayloadProvenance())
+                val verifiedHash =
+                    file.verifiedHash?.takeIf {
+                        file.origin == PayloadOrigin.REGISTRY_DOWNLOAD &&
+                            source.isRegularFile() &&
+                            it.matches(Regex("[0-9a-f]{64}")) &&
+                            digest(source) == it
+                    }
                 val root = home.resolve("staging")
                 Files.createDirectories(root)
                 val staging = Files.createTempDirectory(root, "unpack-")
@@ -237,7 +279,8 @@ class RealModStore(
                                 String.serializer(),
                             ),
                         )
-                    hashes.write(hashPayload(staging))
+                    val payloadHashes = hashPayload(staging)
+                    hashes.write(payloadHashes)
                     val stamp = Files.createTempFile(root, "generation-", ".txt")
                     try {
                         stamp.writeText(java.util.UUID.randomUUID().toString())
@@ -256,6 +299,9 @@ class RealModStore(
                 } finally {
                     deleteTree(staging)
                 }
+                val record = PayloadProvenance(file.origin, verifiedHash, hashPayload(target))
+                provenance(id, version).write(record)
+                if (verifiedHash != null) registryPayload(id, version).write(record)
                 undoUntil[id] = System.currentTimeMillis() + 9000
             }
         }
@@ -312,7 +358,7 @@ class RealModStore(
                         versions = listOf(ModVersion(v)),
                         localFile = input.fileName.toString(),
                     )
-            put(id, v, DownloadedFile(path))
+            put(id, v, DownloadedFile(path, PayloadOrigin.LOCAL_FILE))
             mod to
                 InstalledMod(
                     id,
@@ -387,20 +433,11 @@ class RealModStore(
                                     .toList()
                             }
                             .sortedWith { a, b -> compareVersions(b.name, a.name) }
-                    // Only a version that the registry can deliver again may be cleared:
-                    // local files and taken-over copies are the player's only copy.
-                    val downloadable =
-                        catalog()
-                            .firstOrNull { it.id == dir.name }
-                            ?.versions
-                            ?.filter { !it.downloadUrl.isNullOrBlank() }
-                            ?.map { it.version }
-                            ?.toSet()
-                            .orEmpty()
+                    // Identity alone cannot prove that these are replaceable bytes.
                     val spare =
                         versions.filter {
                             it.name !in referenced &&
-                                it.name in downloadable &&
+                                clearable(dir.name, it.name) &&
                                 m?.source != ModSource.LOCAL &&
                                 ((undoUntil[dir.name] ?: 0) < System.currentTimeMillis())
                         }

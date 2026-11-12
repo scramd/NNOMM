@@ -88,7 +88,7 @@ private adoption. Repeated takeover skips entries this home owns. Disabled NOMM
 mods retain placement-name hints but are not recorded as placed. Explicit takeover
 creates a new ownership epoch, superseding a foreign home's identities; entry
 commits carry that epoch, including across a crash before adoption publication.
-Game exit alone does not force an apply. Play alone does not install a loader.
+Game exit alone does not force an apply. Play with mods on can install a missing loader.
 
 ## Store, packs and transfers
 
@@ -166,3 +166,35 @@ and session are durable before game changes and survive close or process death.
 Remove everything removes only loader files recorded as installed by this home.
 Its confirmation explicitly lists the adopted loader files and player files that
 remain. No unowned loader deletion is inferred.
+
+## Final core safety findings
+
+Game exit recovers authorized journals, then applies only when
+`AppState.deferredModChange` is true. Mod actions refused during play or by IO set
+and persist that flag; a successful apply clears it. An unknown in-memory applied
+plan after restart does not authorize any game write. The next mod action or Play
+resolves it. Exit never installs BepInEx. Turning on a mod, or Play with mods on,
+can install it. Hidden profiles do not change this authorization rule. Explicit
+takeover preserves an already completed first start.
+
+Each stored version has durable provenance under `provenance/`: verified
+registry download and artifact SHA-256, takeover, local file, pack, or unknown.
+It survives uninstall and Clear. Clear compares actual payload hashes with the
+recorded verified payload hashes before deleting a registry download. A takeover
+can be cleared only if its entire payload matches a previously verified registry
+payload recorded under `registry-payloads/`. Identity and a download URL alone
+never authorize deletion. Legacy payloads without provenance stay. Local files
+and pack payloads stay even when their IDs match the registry. An interrupted
+replacement leaves conservative unknown provenance until put finishes.
+Loose takeover files are not automatically re-identified after the registry loads;
+they retain their local identity.
+
+A saved official registry fallback carries its original read time through
+`RegistrySnapshot`. If every source fails, the app reports offline and does not
+rewrite the cache with the current time. A live source can still serve a merged
+list if another source fails.
+
+A refused link at one mod root is reported for that entry; independent safe
+entries continue. Under the runtime home lock, startup removes abandoned
+`staging/player-*`, `staging/edits-*`, and `staging/config-*` preparation copies
+before recovery. Committed player files and journal-owned staging remain separate.

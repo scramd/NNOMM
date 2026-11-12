@@ -205,7 +205,10 @@ class RealGameFolder(
                                             store.put(
                                                 recognized.id,
                                                 v,
-                                                DownloadedFile(path.toString()),
+                                                DownloadedFile(
+                                                    path.toString(),
+                                                    PayloadOrigin.TAKEOVER,
+                                                ),
                                             )
                                         else
                                             require(
@@ -255,7 +258,14 @@ class RealGameFolder(
                                                 id += "-$suffix"
                                             }
                                             if (!store.hasVersion(id, v))
-                                                store.put(id, v, DownloadedFile(raw.toString()))
+                                                store.put(
+                                                    id,
+                                                    v,
+                                                    DownloadedFile(
+                                                        raw.toString(),
+                                                        PayloadOrigin.TAKEOVER,
+                                                    ),
+                                                )
                                         } finally {
                                             deleteTree(raw)
                                         }
@@ -432,7 +442,9 @@ class RealGameFolder(
                         .filter { name ->
                             val m = wanted[name]
                             m != old.entries[name] ||
-                                (m != null && !safe(plugin, name).exists()) ||
+                                (m != null &&
+                                    runCatching { !safe(plugin, name).exists() }
+                                        .getOrDefault(true)) ||
                                 (m != null && (owners[name] ?: old.profileId) != plan.profileId) ||
                                 (m != null && !store.version(m.id, m.version).isDirectory()) ||
                                 (m != null &&

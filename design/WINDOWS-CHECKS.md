@@ -91,3 +91,17 @@ non-following deletion, home OS file locking (including installed/portable copie
 same-drive game recovery with home on C: and game on D:, and repeated recovery
 under file locks. Core uses NOFOLLOW basic attributes (`isOther`), symbolic-link detection and a
 canonical-parent/entry comparison for junctions reported as directories; native Windows junction coverage is not verified on Linux.
+
+## Final core authorization and retention checks
+
+- Reopen NNOMM, launch the game externally, then exit: no mod placement or loader
+  installation occurs without an authorized pending mod action. Repeat with
+  profiles hidden.
+- Change mod switches during play, close NNOMM, reopen, then exit the game:
+  deferred mod changes apply; BepInEx is not installed by that exit. Play with
+  mods on can install the missing loader.
+- Uninstall and Clear retain personalized recognized takeover files and local or
+  pack payloads. Only payloads with verified registry provenance (or a matching
+  takeover payload) are eligible for Clear.
+- A refused link or junction at one mod root leaves it alone while independent
+  safe entries apply.

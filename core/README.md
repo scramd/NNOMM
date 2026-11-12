@@ -205,3 +205,19 @@ also acquire this lock when no runtime owns it in this process.
 Disk swaps accept an internal `beforeMutation` gate and recover only their own
 journal on an IO failure. Internal crash hooks cover both rename windows,
 ownership publication, journal deletion, and interrupted recovery cleanup.
+
+### Final safety API additions
+
+- `AppState.deferredModChange: Boolean = false` is persisted in state. Only an
+  explicitly deferred mod action authorizes apply on game exit.
+- `Registry.readSnapshot(): RegistrySnapshot` defaults to a live `read()` result
+  for existing implementations. `RegistrySnapshot.savedAtMillis` is non-null
+  for offline fallback; `mods` carries its list. `read()` remains available.
+- `DownloadedFile` adds `origin: PayloadOrigin = UNKNOWN` and
+  `verifiedHash: String? = null` before its final `cleanup` callback. Trailing
+  cleanup lambdas remain valid; use named `cleanup` for positional callback
+  arguments. Real downloads supply REGISTRY_DOWNLOAD and a validated SHA-256.
+  Local, takeover and pack callers declare their own origin. Store put rechecks
+  the artifact hash before recording verified provenance.
+- No UI API changes are required. Offline presentation continues to use
+  `CatalogConnection(OFFLINE, savedTime)`.

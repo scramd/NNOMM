@@ -216,6 +216,7 @@ internal data class SavedState(
     val firstStart: FirstStart,
     val localCatalog: List<CatalogMod>,
     val trouble: TroubleSession? = null,
+    val deferredModChange: Boolean = false,
 )
 
 class RealPersistence(home: Path, notice: (String) -> Unit = {}) : StatePersistence, SettingsFile {
@@ -244,6 +245,7 @@ class RealPersistence(home: Path, notice: (String) -> Unit = {}) : StatePersiste
                     firstStart = it.firstStart,
                     catalog = it.localCatalog,
                     trouble = it.trouble,
+                    deferredModChange = it.deferredModChange,
                 )
             }
         }
@@ -261,6 +263,7 @@ class RealPersistence(home: Path, notice: (String) -> Unit = {}) : StatePersiste
                     state.firstStart,
                     state.catalog.filter { it.localFile != null || it.id in state.installed },
                     state.trouble,
+                    state.deferredModChange,
                 )
             )
         }
@@ -592,5 +595,20 @@ internal object HomeLocks {
                     lock.release()
                 }
             }
+    }
+}
+
+/** These home-only snapshots are copies, never the sole committed player payload. */
+internal fun cleanHomePreparation(home: Path) {
+    val staging = home.resolve("staging")
+    if (!staging.isDirectory() || isLink(staging)) return
+    Files.list(staging).use { paths ->
+        paths
+            .filter { path ->
+                listOf("player-", "edits-", "config-").any {
+                    path.fileName.toString().startsWith(it)
+                }
+            }
+            .forEach(::deleteTree)
     }
 }

@@ -249,6 +249,7 @@ data class AppState(
     val gameRunning: Boolean = false,
     val gameStarting: Boolean = false,
     val gameIoPending: Boolean = false,
+    val deferredModChange: Boolean = false,
     val applyProblems: Map<String, String> = emptyMap(),
     val releaseNotes: Map<String, List<ReleaseNote>> = emptyMap(),
     val notesStatus: Map<String, LoadStatus> = emptyMap(),

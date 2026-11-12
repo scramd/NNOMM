@@ -59,6 +59,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private val transfers = mutableMapOf<String, Deferred<Unit>>()
     private var appliedPlan: GamePlan? = null
     private var applyPending = false
+    private var queuedLoaderRequest = false
 
     // Preserve disk mutation order, including an Undo issued before remove finishes.
     private val diskQueue = Channel<suspend () -> Unit>(Channel.UNLIMITED)
@@ -112,20 +113,24 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     )
                 }
                 if (wasRunning && !running) {
-                    if (state.value.gameIoPending)
-                        worker.launch {
-                            diskAwait { io.gameFolder.recoverPending() }
-                            val folder = state.value.game.folder
-                            if (
-                                folder != null &&
-                                    state.value.firstStart.complete &&
-                                    state.value.installed.isEmpty()
-                            )
-                                Unit // Startup adoption is authorized only by a fresh game/home
-                            // pair.
-                            change { it.copy(gameIoPending = io.gameFolder.recoveryPending) }
+                    disk {
+                        io.gameFolder.recoverPending()
+                        change { it.copy(gameIoPending = io.gameFolder.recoveryPending) }
+                        if (state.value.deferredModChange) {
+                            try {
+                                prepareGameFolder(state.value, modAction = false)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                io.logger.error("deferred apply", e)
+                                toast(
+                                    "Could not apply mod changes. Your files have been kept.",
+                                    "Retry",
+                                    undo = { retryApply() },
+                                )
+                            }
                         }
-                    applyAndSave()
+                    }
                 }
             }
         }
@@ -239,7 +244,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private suspend fun prepareGameFolder(snapshot: AppState, modAction: Boolean = true) {
         val folder = snapshot.game.folder ?: return
         if (snapshot.game.folderMissing) return
-        if (io.launcher.running.value || state.value.gameRunning) return
+        if (io.launcher.running.value || state.value.gameRunning) {
+            change { it.copy(deferredModChange = true) }
+            io.persistence?.save(state.value)
+            return
+        }
         if (modAction && onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
             io.gameFolder.installLoader(folder)
             val game = io.gameFolder.inspect(folder)
@@ -247,30 +256,49 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
         }
         io.gameFolder.apply(gamePlan(snapshot))
-        if (io.gameFolder.applySucceeded) appliedPlan = resolvedPlan(snapshot)
-        else {
+        if (io.gameFolder.applySucceeded) {
+            appliedPlan = resolvedPlan(snapshot)
+            change { it.copy(deferredModChange = false) }
+        } else {
             appliedPlan = null
             error("Some changes are pending. Retry or take over existing mods before Play.")
         }
     }
 
-    private fun applyAndSave(force: Boolean = false) {
+    private fun applyAndSave(force: Boolean = false, allowLoader: Boolean = false) {
         if (io.persistence == null) background { io.settingsFile.write(state.value.settings) }
         synchronized(lock) {
-            if (applyPending || (!force && resolvedPlan(state.value) == appliedPlan)) return
+            queuedLoaderRequest = queuedLoaderRequest || allowLoader
+            if (applyPending) return
+            if (
+                !force &&
+                    resolvedPlan(state.value) == appliedPlan &&
+                    (!queuedLoaderRequest ||
+                        state.value.game.loaderPresent ||
+                        onCount(state.value) == 0)
+            ) {
+                queuedLoaderRequest = false
+                return
+            }
             applyPending = true
             disk {
-                synchronized(lock) { applyPending = false }
+                val installLoader =
+                    synchronized(lock) {
+                        applyPending = false
+                        queuedLoaderRequest.also { queuedLoaderRequest = false }
+                    }
                 try {
-                    prepareGameFolder(state.value)
+                    prepareGameFolder(state.value, modAction = installLoader)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    change { it.copy(deferredModChange = true) }
+                    io.persistence?.save(state.value)
                     io.logger.error("apply", e)
                     toast(
                         "Could not apply mod changes. Your files have been kept.",
                         "Retry",
-                        undo = { applyAndSave(force = true) },
+                        undo = { applyAndSave(force = true, allowLoader = installLoader) },
                     )
                 }
             }
@@ -311,7 +339,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             version = requested,
                         )
                     }
-                    applyAndSave()
+                    applyAndSave(
+                        allowLoader = kind == DownloadKind.INSTALL && p == state.value.profileId
+                    )
                 }
                 return
             }
@@ -501,8 +531,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                     )
                             }
                             applyAndSave(
+                                allowLoader =
+                                    kind == DownloadKind.INSTALL && p == state.value.profileId,
                                 force =
-                                    kind in setOf(DownloadKind.REPAIR, DownloadKind.REPAIRPROBLEM)
+                                    kind in setOf(DownloadKind.REPAIR, DownloadKind.REPAIRPROBLEM),
                             )
                         }
                     } catch (e: CancellationException) {
@@ -615,7 +647,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     applyAndSave()
                 },
             )
-        applyAndSave()
+        applyAndSave(allowLoader = on && p == state.value.profileId)
     }
 
     fun toggle(id: String, p: String = state.value.profileId) =
@@ -914,8 +946,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         background {
             try {
                 diskAwait {
-                    if (!withoutMods && resolvedPlan(state.value) != appliedPlan)
-                        prepareGameFolder(state.value, modAction = false)
+                    if (
+                        !withoutMods &&
+                            (resolvedPlan(state.value) != appliedPlan ||
+                                (onCount(state.value) > 0 && !state.value.game.loaderPresent))
+                    )
+                        prepareGameFolder(state.value)
                     val current = state.value
                     current.game.folder?.let {
                         io.gameFolder.setConsole(
@@ -1233,7 +1269,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             val previous = state.value.installed[id] ?: return@background
             val oldMod = state.value.mod(id)
             val version = "local-" + java.util.UUID.randomUUID().toString()
-            diskAwait { io.modStore.put(id, version, nnomm.core.io.DownloadedFile(path)) }
+            diskAwait {
+                io.modStore.put(
+                    id,
+                    version,
+                    nnomm.core.io.DownloadedFile(path, PayloadOrigin.LOCAL_FILE),
+                )
+            }
             val filename = java.io.File(path).name
             change { s ->
                 val current = s.installed[id] ?: return@change s
@@ -1320,7 +1362,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 "Undo",
                 undo = { uninstallSilently(listOf(mod.id)) },
             )
-            applyAndSave()
+            applyAndSave(allowLoader = true)
         }
     }
 
@@ -1357,7 +1399,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     ),
                 catalog = catalog,
                 installed = installed,
-                firstStart = FirstStart(complete, on, installed.size - on),
+                firstStart = FirstStart(complete || s.firstStart.complete, on, installed.size - on),
             )
         }
     }
@@ -1614,9 +1656,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     fun refreshRegistry(announce: Boolean = false) {
         change { it.copy(connection = CatalogConnection(ConnectionKind.LOADING)) }
         background {
-            val mods =
+            val snapshot =
                 try {
-                    cleanCatalogTags(io.registry.read())
+                    io.registry.readSnapshot()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -1642,6 +1684,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     }
                     return@background
                 }
+            val mods = cleanCatalogTags(snapshot.mods)
+            if (snapshot.savedAtMillis != null) {
+                change {
+                    it.copy(
+                        catalog = mergeCatalog(mods, it),
+                        connection =
+                            CatalogConnection(ConnectionKind.OFFLINE, snapshot.savedAtMillis),
+                    )
+                }
+                return@background
+            }
             val now = io.clock.nowMillis()
             change {
                 it.copy(
