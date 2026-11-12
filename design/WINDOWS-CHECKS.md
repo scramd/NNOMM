@@ -44,3 +44,14 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 - Settings directory selection uses core settingsHome (APPDATA/NNOMM on Windows),
   with NNOMM_HOME override. Verify NOMM's settings remain untouched.
 - The launcher, installer and Nucleus updater implementations are unchanged.
+
+## Second real IO safety round
+
+| Changed behaviour | Windows check |
+| --- | --- |
+| Per-entry rename swaps outside plugin scanning | Lock one mod DLL: that mod reports a problem, others change, all player bytes remain recoverable. Validate same-volume rename and actual destination path limits. |
+| Interrupted promotion rolls forward | Interrupt after each rename, run the game, restart NNOMM: new player files survive. |
+| Startup waits for game exit | Reopen during play with pending recovery/adoption: no game writes; work resumes on observed exit. |
+| Loader Repair refuses unknown/different versions | Test undetected/BepInEx 6 and known 5.4.23.4; only the pinned version can repair. Play alone must not install it. |
+| Inherited vanilla restoration | Reopen NNOMM during Play without mods; Doorstop text returns byte-for-byte on exit. |
+| Add-on order and directory ownership | Parent first, child second; child edits return with profile; empty created folders disappear. |

@@ -142,3 +142,40 @@ fixture/config bytes were lost.
   and regression tests). UI/report changes are in the subsequent integration
   commit containing this document.
   Local commits only; no push, tags, releases, issues, comments or PRs.
+
+## Second IO safety round (2026-11-12)
+
+Repeated steps 1–11 using the built distributable on private Xvfb :61 with xfwm4.
+No use of display :1. New home/game copies were under
+`~/nnomm-sandbox/safety2`; the executable remained an empty fixture.
+Screenshots and SHA-256 snapshots are in that directory (`shots/01` through `28`,
+plus off/on/profile/uninstall/Undo/restart/offline JSON snapshots).
+
+1. Fresh launch showed the missing-game screen. Game matched the baseline exactly.
+2. Native folder choice selected safety2/game, showing 3 existing mods, 2 on and
+   1 off, unknown game version and BepInEx 5.4.23.4. Game bytes were unchanged.
+3. Open my Library adopted the three fixtures. No game files changed.
+4. Browse loaded NOMNOM: 278 records, 275 shown by the server-only filter. No game
+   files changed from viewing the registry or waiting for metadata.
+5. Installed Ace Combat Reloads 1.2.0. Only its requested placement and manager
+   metadata/staging directory were added. Baseline files were unchanged.
+6. Turned that mod off/on. Its DLL left/returned; fixture and config bytes stayed.
+7. Created Safety sandbox with all mods off, then returned to Default. Removed
+   fixture bytes remained in the private store and returned unchanged.
+8. Uninstalled Ace Combat Reloads and clicked Undo. The same DLL returned. Hash
+   checks after both actions found every baseline file in the game or private home.
+9. Closed and restarted. First start did not reappear. Profiles, versions and
+   switches survived. Complete game-file hashes before/after restart were equal.
+10. Used Play without mods with an eight-second sandbox launcher. UI showed Game
+    is running; Doorstop was disabled during play, then restored byte-for-byte.
+    The complete game-file tree after exit equalled the pre-launch tree.
+11. Added unreachable http://127.0.0.1:9/manifest.json, disabled NOMNOM, used Read
+    now, then restarted offline. Saved catalog and Library remained usable with
+    a plain offline banner. No game-file changes from settings, refresh or restart.
+
+After further journal/pack/PE hardening, rebuilt and repeated the offline restart
+and mod off/on checks against the newer distributable. All baseline hashes still
+survived. The last metadata retry, loader-notice and canonical-adoption refinements were
+checked by the locked core/JAR build; the full GUI sequence was not repeated after
+those changes. The sandbox keeps its offline source setting for reproduction.
+The app was closed after checks; the private display/window manager were stopped.

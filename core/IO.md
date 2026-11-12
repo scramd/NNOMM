@@ -1,104 +1,113 @@
 # Real IO and player-file safety
 
-`RealRuntime.open()` owns the real ports. Await `shutdown()` before exit: AppStore
-closes and drains its disk queue, flushes state, then the runtime stops its watchers
-and HTTP client. No Compose dependency, Steam sign-in or helper is used.
+`RealRuntime.open()` owns the real ports. Await `shutdown()` before exit. AppStore
+drains its disk queue and flushes state before the runtime stops its watchers and
+HTTP client. Core has no Compose dependency or Steam sign-in.
 
 ## Private files
 
-`NNOMM_HOME`, or the platform's NNOMM settings directory, contains state.json,
-settings.json, registry.json, head.json and release-notes.json. It never uses NOMM's
-settings directory. `mods/<id>/<version>` holds payloads, or the configured store
-path does. `generations` invalidates same-version repairs. Copies placed in the
-game are independent of the store.
+`NNOMM_HOME`, or NNOMM's platform settings directory, contains state, settings,
+registry, HEAD and release-note caches. NOMM's settings are not used. Payloads live
+in the configured store, once per id/version. Generations invalidate repaired
+payloads. `hashes/<id>/<version>.json` records payload file hashes at storage time.
+Game copies are independent files.
 
 JSON writes force a sibling temporary file before rename and attempt directory
-fsync (unsupported directory channels on Windows are tolerated). Valid prior JSON
-is kept as `.bak`; damaged primaries are preserved. Unreadable primary and backup
-stop loading rather than silently reset state.
+fsync. Windows does not support directory channels. Valid previous JSON is kept
+as `.bak`. Unreadable primary and backup stop loading rather than reset state.
 
-## Transactions and recovery
+## Apply model
 
-Replacement journals live in `transactions/`. All replacement copies are prepared
-beside their targets under `.nnomm-staging`, outside plugins, before moving any
-original. Each journal records all targets, staging paths, prior paths and whether
-an original existed. An interrupted batch rolls back at startup before runtime
-loading and before game inspection/apply. Runtime startup must finish before other
-code accesses these folders. Successful replacements retain indexed recovery
-copies with target, time and reason under `recovery/`.
+Apply compares placed entries with the requested profile's id/version pairs and
+store generations. It leaves unchanged entries, BepInEx logs, cache, config and
+unknown entries alone. Profile-owned config transitions remain a separate snapshot
+operation when the player explicitly switches config ownership/profile.
 
-Apply stages the complete BepInEx tree, including plugins, config and the ownership
-record, then promotes that tree. Config snapshots are copied before the game tree
-changes; an interrupted apply cannot snapshot partial game config on restart.
-Loader replacement batches its files and ownership record. It preserves existing
-Doorstop config and refuses a known different loader version. The pinned archive is
-BepInEx_win_x64_5.4.23.4.zip, SHA-256
-`f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`,
-computed from the official GitHub release asset during this fix round.
+Each changed entry is copied into staging, then promoted by rename through its own
+journal. Final swap staging is a hidden sibling of BepInEx, outside plugin scanning.
+Portable path lengths are checked against the actual game destination. Removing
+an entry renames it out first. Other entries can proceed if one entry fails.
+`AppState.applyProblems` supplies mod problem messages and notices explain failures.
+A missing wanted payload leaves its current placement intact. Add-ons wait for a
+placed parent. Child files are captured before parents move, and NNOMM tracks and
+removes empty ancestor folders it created.
 
-Takeover copies entries verbatim, including inert archives and unknown loose
-files, and writes only private adoption metadata. Repeating it after interruption
-is safe. A plain game folder does not gain BepInEx/plugins during takeover. NOMM
-metadata supplies identity even before registry loading; differing stored bytes
-are left alone with a notice. Duplicate enabled/disabled identities keep the
-enabled association and leave both originals. Store associations merge in AppStore.
-An empty runtime library adopts existing files at startup. A stale game ownership
-record alone cannot authorize removals from a fresh home.
+Before removal/replacement, player-created and edited files are compared with the
+stored payload hashes and saved under `player-files/<profile>/<mod>`. The saved set
+mirrors the most recent removal: deleted extras are not reintroduced. Saved extra
+files return with their profile. Explicit Repair uses shipped files again, while
+keeping edited files aside with a notice giving their location. Unchanged shipped
+files do not get copied to normal apply recovery.
 
-Taken-over placement names stay stable, including loose files. New registry mods
-use their id; add-ons go under their parent's `addons/<id>`, matching NOMM.
-Unmanaged collisions emit notices and permit unrelated placements. New files inside
-managed folders are saved under `player-files/<profile>/<mod>` and return with that
-mod and profile. Edits to distributed payload files remain recoverable in recovery;
-Repair replaces distributed bytes rather than restoring corrupt edits.
+## Recovery and startup
 
-Store usage includes recovery and player files. Clear serializes with store writes
-and AppStore's disk queue. It retains referenced/default versions, configured old
-versions, and recent install/Undo payloads. Recovery trees can be cleared only after
-nine seconds and only if every file also exists with identical bytes outside
-recovery. The last copy is retained; Clear can therefore leave substantial recovery
-data. Recovery indexes are retained. Full-tree apply snapshots favor file safety
-over disk efficiency; large installations need space for staging and recovery.
+Home journals live in `transactions/`; entry swaps use `game-transactions/`.
+Home-only journals recover during startup. Journals with game targets wait for the
+game to close. `inspect()` reads only. `AppState.gameIoPending` exposes deferred
+startup work, with a notice. A completed but empty library can open during play;
+adoption waits until exit. First-start confirmation still controls initial takeover.
 
-## Validation and transfers
+A promoted target rolls forward. Recovery never deletes an existing target to put
+an older copy back: a conflicting target moves to recovery first. Previous copies
+from interrupted promotions are also retained. Legacy multi-target batches can
+recover to a mixture of promoted and unpromoted targets; this is not a global
+all-or-nothing game transaction. Fault tests simulate process interruption, not
+physical power loss or Windows locks.
 
-Roots can have symlinked ancestors; links below managed roots are refused.
-Portable paths reject traversal, drive paths, reserved Windows names, trailing
-spaces/dots, invalid characters, case aliases and paths of 240 characters or more.
-ZIP uses ZipFile, 7z uses Commons Compress, and gzip-compressed TAR uses Commons
-Compress. Archive magic selects the reader; loose DLL/NOBP imports also use their
-manifest filename. Empty archives, links in TAR, duplicate archive paths and
-archives beyond 100,000 entries/2 GiB are rejected. RAR versions show Unavailable
-and a reason before transfer; no RAR dependency was added.
+Recovery indexes record target, time and reason. Normal player-file recovery paths
+identify profile and mod. Recovery directories are trimmed oldest first beyond
+100 copies or 256 MiB after apply, with a notice before removal. Current kept
+player files are separate from those historical copies. Storage usage includes
+recovery and player files. Clear deletes unreferenced payloads and recovery copies
+whose bytes also exist elsewhere; it retains unique recovery files. This can leave
+Clear with less space to free than total recovery usage.
 
-Downloads use the manifest filename, keep the socket timeout, override the overall
-request deadline, retry three times and emit progress only on percentage changes.
-Downloader-owned staging has an explicit close action; pack preview staging remains
-owned by its preview. Supplied SHA-256 hashes are verified. Missing registry hashes
-remain an upstream limitation.
+Takeover copies existing mods without changing game files. Placement names,
+including loose files, are retained. Private adoption records are scoped to the
+canonical game folder, with the full canonical path checked inside the private
+record. Older adoption files without that path require takeover again. A game ownership record without this home's adoption
+record cannot authorize removal. Adoption merges versions and preserves existing
+profile associations. Missing ownership after a previous apply requires takeover.
+Game exit alone does not force an apply. Play alone does not install a loader.
 
-Registry sources fail independently; official entries take precedence. Invalid
-entries/artifacts are skipped. Text responses are limited to 16 MiB. Configured
-external addresses must use HTTPS (loopback HTTP is allowed for tests). Metadata
-uses its own queue; failures cache unknown size/date and do not toast. Atom tags
-are percent-decoded; explicit download tags or declared release prefixes identify
-versions without guessing across a monorepo.
+## Store, packs and transfers
 
-Pack settings use an allow-list on write and read: console, prerelease, autoDeps,
-warnOld, ownSettings and ownSettingsP. Paths, sources and launch arguments never
-cross this boundary. Installed/catalog provenance overrides a pack's claimed kind;
-local files require explicit selection and prepared locals stay off.
+AppStore registers Undo protection before removing references. Clear runs in the
+disk queue and rechecks retention under the store mutex. Recent puts protect even
+unreferenced versions of installed ids. Undo checks that saved versions exist
+before publishing restored records. Active queued downloads also protect their versions until publication. Recent
+put/Undo protection lasts nine seconds.
 
-## Launch and boundaries
+Pack IO uses the runtime's store and HTTP client. Bundled local payload identities
+come from a content hash; a selected pack cannot overwrite the id/version supplied
+by its author. Existing installed associations are kept. Pack settings use an
+allow-list; paths, sources and launch arguments do not travel with packs. Config
+export includes only `.cfg` names found in the selected mods' stored payloads.
+Generated config ownership is not inferred from plugin binaries, so generated
+settings can be omitted rather than exporting another mod's settings.
 
-Missing saved game folders produce `GameInfo.folderMissing`, not startup failure.
-Without-mods launch saves Doorstop's original text before disabling it. Restoration
-waits until the game was seen and exited, or a subsequent runtime starts while the
-game is absent. Shutdown while waiting leaves the restoration record. There is no
-60-second restoration deadline. Process detection checks executable/arguments at
-three-second intervals; Proton and Steam behavior still need real platform checks.
+Portable names reject traversal, drive paths, reserved Windows names, trailing
+spaces/dots, invalid characters, case aliases and symlinks below managed roots.
+ZIP, 7z and gzip TAR are supported with extraction limits. Loose DLL imports need
+a DOS header and a PE signature at its declared offset. This checks the container,
+not whether its code can run. Unsupported RAR
+artifacts remain unavailable with a reason.
 
-Tests use temp sandboxes and local HTTP fixtures. They cover review probes,
-transaction boundary failures, real AppStore actions and runtime restart. Fault
-injection simulates exceptions between disk steps, not physical power loss or
-Windows file locking. Windows checks are in design/WINDOWS-CHECKS.md.
+Downloads trim manifest filenames and clean failed staging. Transfers retry up to
+three times, except HTTP 4xx. HTTPS is required for external addresses; loopback
+HTTP is permitted for offline fixtures. Redirect destinations are checked before
+following them. Text responses are bounded to 16 MiB. Successful official registry
+reads have a separate cache and take precedence over third-party entries if the
+official source later fails. Failed HEAD metadata is retried after five minutes.
+
+## Launch and platform limits
+
+Without-mods launch saves Doorstop text durably before disabling it. Restoration
+waits until observed exit, including when NNOMM reopens while the game runs.
+Loader Repair accepts only detected BepInEx 5.4.23.4. Unknown/different versions
+are refused. Existing Doorstop config is preserved. The pinned archive SHA-256 is
+`f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
+
+Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
+Proton process detection and actual game launches still require platform checks;
+see `design/WINDOWS-CHECKS.md`.
