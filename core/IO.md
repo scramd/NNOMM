@@ -284,3 +284,20 @@ KB formatting below one MB. Player search uses computed setting help, not demo
 storage estimates. Play refuses missing folders before launch and keeps loader
 installation failures distinct from mod placement and launch failures. Technical
 exception messages remain in logs, not Play toasts.
+
+## Final loader and metadata fixes
+
+Repair changes existing loader files only when this home recorded ownership.
+For detected BepInEx 5.4.23.4, it can also restore a missing or unreadable Doorstop
+enabled setting, preserving the previous file in transaction recovery. Readable
+unrelated settings remain. Adopted loader binaries and other unowned files stay
+unchanged. Other loader versions require their original installer; Repair offers
+instructions without Retry. Loader removal reports actual removed files and
+remaining loader files; an empty ownership record cannot claim removal.
+
+Download-phase loader failures carry a distinct exception. Full-disk IO failures
+point to free space on game and storage drives; connection/TLS failures point to
+the connection. First-mod installation uses the same guidance as Play.
+Visible metadata consumers register independently and dispose their registrations
+when leaving composition. Multiple consumers of one mod share a counted identity;
+queued requests for departed consumers are skipped, while in-flight work finishes.

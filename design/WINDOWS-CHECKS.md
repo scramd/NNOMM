@@ -144,3 +144,14 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
   completion describes loader ownership and retained copies accurately.
 - Check an off mod left at a colliding placement name: its fix menu must name the
   enabled mods sharing that name, and each Turn off action must target that mod.
+
+## Final loader fixes
+
+- Repair a missing/unreadable Doorstop enabled key for owned and adopted
+  BepInEx 5.4.23.4. Confirm the old file remains in recovery and unowned binaries
+  and other settings remain unchanged. Check locked/unreadable INI recovery.
+- Play without mods after Repair; verify enabled restoration after observed exit.
+- Full disk during loader download or placement gives free-space guidance; TLS
+  and dropped transfers give connection guidance. First-mod Retry repeats installation.
+- Remove all mods with owned and adopted loaders: confirm completion matches
+  actual removed/retained files. Other-version Repair gives instructions without Retry.
