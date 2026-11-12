@@ -24,10 +24,16 @@ class DoorstopRestoreTest {
     private val original = "[General]\nenabled=true\n".toByteArray()
 
     private fun record(home: Path) =
-        JsonFile(
-            home.resolve("doorstop-restore.json"),
-            MapSerializer(String.serializer(), String.serializer()),
-        )
+        object {
+            fun read() = DoorstopRestores(home).records().firstOrNull()
+
+            fun write(value: Map<String, String>) =
+                JsonFile(
+                        home.resolve("doorstop-restore.json"),
+                        MapSerializer(String.serializer(), String.serializer()),
+                    )
+                    .write(value)
+        }
 
     private fun save(home: Path, ini: Path) =
         record(home)
@@ -351,6 +357,113 @@ class DoorstopRestoreTest {
             assertEquals(0, writes)
             assertContentEquals(malformed, ini.readBytes())
             assertTrue(record(home).read().isNullOrEmpty())
+        } finally {
+            scope.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun matchingLegacyByteAndTextRecordsClearWithoutAnyIniWrite() = runBlocking {
+        for (legacy in listOf(false, true)) {
+            val home = temp()
+            val game = temp()
+            game.resolve("doorstop_config.ini").writeBytes(original)
+            record(home)
+                .write(
+                    mapOf("path" to game.resolve("doorstop_config.ini").toString()) +
+                        if (legacy) mapOf("text" to String(original, DoorstopIni.charset))
+                        else mapOf("bytes" to Base64.getEncoder().encodeToString(original))
+                )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val notices = CopyOnWriteArrayList<String>()
+            try {
+                RealGameLauncher(
+                    home,
+                    scope,
+                    detect = { false },
+                    notice = { notices.add(it) },
+                    writeDoorstop = { _, _ -> fail("Matching original must not be rewritten") },
+                )
+                assertTrue(DoorstopRestores(home).records().isEmpty())
+                assertTrue(notices.isEmpty())
+            } finally {
+                scope.cancelAndJoin()
+            }
+        }
+    }
+
+    // Round 4 S1d: model an exclusive lock without depending on chmod/root semantics.
+    @Test
+    fun refusedEditAndUnreadableRollbackDoNotClaimModsWereTurnedOff() = runBlocking {
+        val home = temp()
+        val game = temp()
+        game.resolve("NuclearOption.exe").writeText("")
+        val ini = game.resolve("doorstop_config.ini").apply { writeBytes(original) }
+        val locked = AtomicBoolean(false)
+        val notices = CopyOnWriteArrayList<String>()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val launcher =
+                RealGameLauncher(
+                    home,
+                    scope,
+                    listOf("sh", "-c", "true"),
+                    detect = { false },
+                    notice = { notices.add(it) },
+                    readDoorstop = { path ->
+                        if (locked.get()) throw AccessDeniedException(path.toString())
+                        Files.readAllBytes(path)
+                    },
+                    writeDoorstop = { path, _ ->
+                        locked.set(true)
+                        throw AccessDeniedException(path.toString())
+                    },
+                )
+            val failure =
+                assertFailsWith<DoorstopSettingsFailure> {
+                    launcher.start(AppState(game = GameInfo(game.toString())), true)
+                }
+            assertIs<AccessDeniedException>(failure.cause)
+            assertEquals(1, failure.suppressed.size)
+            assertTrue(notices.isEmpty())
+            assertTrue(DoorstopRestores(home).read(game).isNotEmpty())
+            assertContentEquals(original, ini.readBytes())
+            locked.set(false)
+            launcher.start(AppState(game = GameInfo(game.toString())), false)
+            assertTrue(DoorstopRestores(home).read(game).isEmpty())
+            assertTrue(notices.isEmpty())
+        } finally {
+            scope.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun missingLibraryRecordSurvivesVanillaPlayInAnotherFolder() = runBlocking {
+        val home = temp()
+        val root = temp()
+        val a = root.resolve("A").createDirectories()
+        val b = root.resolve("B").createDirectories()
+        val bOriginal = "[General]\nenabled=true\n# folder B\n".toByteArray()
+        val aIni = a.resolve("doorstop_config.ini").apply { writeText("disabled A") }
+        val bIni = b.resolve("doorstop_config.ini").apply { writeBytes(bOriginal) }
+        b.resolve("NuclearOption.exe").writeText("")
+        save(home, aIni) // Also exercises migration of the legacy single record.
+        val away = root.resolve("A-away")
+        Files.move(a, away)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val launcher =
+                RealGameLauncher(home, scope, listOf("sh", "-c", "sleep 0.3"), detect = { false })
+            launcher.start(AppState(game = GameInfo(b.toString())), true)
+            assertEquals(2, DoorstopRestores(home).records().size)
+            assertFalse(a.exists())
+            withTimeout(5000) { launcher.running.first { !it } }
+            assertContentEquals(bOriginal, bIni.readBytes())
+            assertEquals(1, DoorstopRestores(home).records().size)
+            Files.move(away, a)
+            awaitCondition { DoorstopRestores(home).records().isEmpty() }
+            assertContentEquals(original, aIni.readBytes())
+            assertContentEquals(bOriginal, bIni.readBytes())
         } finally {
             scope.cancelAndJoin()
         }

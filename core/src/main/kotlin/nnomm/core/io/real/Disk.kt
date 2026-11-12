@@ -301,6 +301,7 @@ internal class DiskCrash : Error("Simulated process interruption")
 
 internal object DiskFaults {
     var step: (String) -> Unit = {}
+    var beforeMove: (Path) -> Unit = {}
 }
 
 private fun isGameTarget(path: Path): Boolean =
@@ -516,6 +517,7 @@ internal fun replaceTrees(
         prepared.toList().forEachIndexed { index, tx ->
             val target = Path.of(tx.target)
             val previous = Path.of(tx.previous)
+            DiskFaults.beforeMove(target)
             if (target.exists()) Files.move(target, previous)
             DiskFaults.step("old-rename-before-journal")
             prepared[index] = tx.copy(phase = "old-moved")
