@@ -525,7 +525,14 @@ class RealIoTest {
             }
             val result = folder.removeLoader(game.toString())
             assertTrue(result.kept)
-            assertTrue(if (adopted) result.removed == 0 else result.removed > 0)
+            // Repair placed the INI even for an adopted loader, so it now owns that file.
+            // The adopted binaries remain unowned and must survive Uninstall.
+            assertTrue(if (adopted) result.removed == 1 else result.removed > 0)
+            assertFalse(game.resolve("doorstop_config.ini").exists())
+            if (adopted) {
+                assertContentEquals(beforeDll, game.resolve("BepInEx/core/BepInEx.dll").readBytes())
+                assertEquals("player proxy", game.resolve("winhttp.dll").readText())
+            }
             assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())
         }
     }

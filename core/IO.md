@@ -190,9 +190,16 @@ in the game folder and a result notice explaining that. Without a pending restor
 file fails before any replacement, with instructions to close programs using it.
 When Repair needs to change the INI, it places that replacement first in the
 loader batch: a refused INI move fails before any loader file is promoted.
-After the batch, Repair verifies the INI against its intended bytes before
-reporting success; a mismatch or unreadable result gives access/lock guidance.
-The batch still has per-file recovery, not global atomicity.
+After the batch, Install and Repair compare every replacement target with its
+staged source, including binaries and any INI change. Existing ownership is kept;
+only verified placements add new ownership. This includes a previously unowned
+INI changed by Repair; adopted binaries remain unowned. The ownership record is
+written atomically after these checks, including for a partial batch, so later Repair or
+Uninstall can handle the files already placed. Any mismatch, missing file or
+unreadable target fails the operation with access/lock guidance before any success
+or "Replaced the damaged mod loader settings" notice. The batch still has per-file
+recovery, not global atomicity. Refusal before any promotion leaves ownership
+unchanged. Ownership publication itself can fail; that failure is also reported.
 While this folder has a pending restore, Repair skips the INI entirely
 (even if missing, unhealthy or unreadable), repairs the other eligible loader
 files, and asks the player to close programs using the folder and use Repair
