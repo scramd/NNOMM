@@ -68,6 +68,7 @@ data class CatalogMod(
     val localFile: String? = null,
     val urls: List<RegistryUrl> = emptyList(),
     val imageHash: String? = null,
+    val firstReleaseMillis: Long? = null,
 ) {
     @kotlinx.serialization.Transient
     val newestRelease =
@@ -90,7 +91,7 @@ data class CatalogMod(
         get() = versions.mapNotNull { it.dateMillis }.maxOrNull()
 
     val added
-        get() = versions.mapNotNull { it.dateMillis }.minOrNull()
+        get() = firstReleaseMillis ?: versions.mapNotNull { it.dateMillis }.minOrNull()
 }
 
 @Serializable

@@ -1149,6 +1149,76 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         applyAndSave()
     }
 
+    /**
+     * Store a new payload under the existing identity and a separate version so Undo never
+     * overwrites the previous file. Profile on/off switches remain unchanged.
+     */
+    fun replaceLocal(id: String, path: String) {
+        if (state.value.installed[id]?.source != ModSource.LOCAL) return
+        background {
+            val previous = state.value.installed[id] ?: return@background
+            val oldMod = state.value.mod(id)
+            val version = "local-" + java.util.UUID.randomUUID().toString()
+            diskAwait { io.modStore.put(id, version, nnomm.core.io.DownloadedFile(path)) }
+            val filename = java.io.File(path).name
+            change { s ->
+                val current = s.installed[id] ?: return@change s
+                s.copy(
+                    catalog =
+                        s.catalog.map { mod ->
+                            if (mod.id == id)
+                                mod.copy(
+                                    localFile = filename,
+                                    versions = mod.versions + ModVersion(version),
+                                )
+                            else mod
+                        },
+                    installed =
+                        s.installed +
+                            (id to
+                                current.copy(
+                                    fileName = filename,
+                                    versions = current.versions + version,
+                                    defaultVersion = version,
+                                    profiles =
+                                        current.profiles.mapValues { (_, pm) ->
+                                            pm.copy(version = version)
+                                        },
+                                    fileMissing = false,
+                                )),
+                )
+            }
+            toast(
+                "Replaced ${oldMod.name}",
+                "Undo",
+                ms = 8000,
+                undo = {
+                    change { s ->
+                        val current = s.installed[id] ?: return@change s
+                        s.copy(
+                            catalog = s.catalog.map { if (it.id == id) oldMod else it },
+                            installed =
+                                s.installed +
+                                    (id to
+                                        previous.copy(
+                                            profiles =
+                                                current.profiles.mapValues { (profile, pm) ->
+                                                    pm.copy(
+                                                        version =
+                                                            previous.profiles[profile]?.version
+                                                                ?: previous.defaultVersion
+                                                    )
+                                                }
+                                        )),
+                        )
+                    }
+                    applyAndSave()
+                },
+            )
+            applyAndSave()
+        }
+    }
+
     fun addLocal(path: String) {
         val p = state.value.profileId
         background {
