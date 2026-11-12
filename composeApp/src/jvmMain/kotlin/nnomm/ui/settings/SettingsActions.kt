@@ -128,7 +128,7 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
 private class SettingsConfirm(private val model: AppModel) : Overlay {
     @Composable
     override fun Content() {
-        val definition = SETTINGS.firstOrNull { it.key == model.ui.settings.confirmKey } ?: return
+        val definition = playerSettings.firstOrNull { it.key == model.ui.settings.confirmKey } ?: return
         val focus = remember { androidx.compose.ui.focus.FocusRequester() }
         Dialog(true, definition.label + "?", model::closeOverlay, initialFocus = focus, footer = {
             Button("Cancel", model::closeOverlay, Modifier.focusRequester(focus), kind = ButtonKind.Ghost)
@@ -139,7 +139,7 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else " Local and taken-over mods stay in the Library, turned off, with their stored copies kept. Loader files that NNOMM did not install stay in the game folder, including adopted BepInEx core files, winhttp.dll and doorstop_config.ini. Player config, logs, unknown files and recovery copies stay too.")
+            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else "")
         }
     }
 }

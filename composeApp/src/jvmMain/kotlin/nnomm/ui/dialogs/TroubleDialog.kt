@@ -158,7 +158,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                             Column {
                                 Label(mod.name, size = 15f, weight = 700)
                                 Label(
-                                    "${mod.authors.joinToString(", ")}, version ${verOf(state, id)}, made for game ${mod.newestRelease?.gameVersion.orEmpty()}"
+                                    "${mod.authors.filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }?.let { "$it, version" } ?: "Version"} ${verOf(state, id)}, made for game ${mod.newestRelease?.gameVersion.orEmpty()}"
                                 )
                             }
                         }

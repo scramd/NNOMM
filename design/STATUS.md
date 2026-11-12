@@ -1,67 +1,50 @@
 # NNOMM build status
 
-NNOMM has the agreed pages and real IO integration. It is still a development build: use a sandbox with an empty `NuclearOption.exe`, never a real game installation. The latest acceptance fixes still need independent Opus and Sol review together with the parallel core safety changes.
+NNOMM has the agreed pages and real IO integration. It is a development build: use an isolated settings home and a sandbox with an empty `NuclearOption.exe`, never a real game installation. The fifth IO round and subsequent acceptance fixes are implemented, but the last-diff findings below still require integration with the parallel core pass and independent Opus/Sol review. Earlier review notes are historical evidence, not current acceptance.
 
 ## Works now
 
-- Compose Desktop shell and component kit, dark/light themes, narrow layout, Browse, Library, mod details, Settings, profiles, command search, pack previews, sharing, first start and the broken-mod test. Servers says “Coming later”, as agreed.
-- Real runtime: registry and cached data, verified downloads, version storage, managed game placement, takeover, persistence, Undo, packs, BepInEx preparation and Steam URI launch. The sandbox checks and earlier safety rounds are recorded in `design/notes/` and `core/IO.md`; these are not Windows certification.
-- Pack imports have separate, initially unchecked Include switches for bundled payloads. Warnings name the files, the summary counts bundled entries, and selected files enter the Library off. Settings import is also optional.
-- Stop following a pack clears that profile's follow address and pending update marker, persists across reopening, and keeps its mods, versions and pack membership. A check already in flight cannot restore the marker after stopping.
-- Beta updater discovery reads published tags from GitHub's releases Atom feed, including numbered beta tags, then uses release metadata assets. It makes no unauthenticated GitHub API call. Stable updates keep the latest-release asset path.
-- Manual “Look now” checks answer even when automatic checks are disabled. Unsupported development/package formats offer the releases page. Startup checks do not announce unsupported formats, failures or an already current version.
-- The danger-zone label and help explain ownership before confirmation: managed mods and loader files NNOMM installed are removed; adopted loader files, player files and recovery copies stay. The completion text uses the same ownership limit.
+- Compose shell and component kit, dark/light themes, narrow layout, Browse, Library, mod details, Settings, profiles, command search, pack previews, sharing, first start and the broken-mod test. Servers says “Coming later”, as agreed.
+- Real registry and cached data, verified downloads, per-version storage, managed placement, takeover, persistence, Undo, packs, loader preparation and Steam URI launch are wired. Earlier sandbox tests cover these paths; Windows behavior remains unverified.
+- Fifth IO round: stored provenance and shipped hashes distinguish registry files from player files; saved extras have version sidecars; Play offers Retry/Turn off; loader repair shares the disk mutation queue. These improvements do not by themselves close the later takeover, legacy-sidecar and failure-reporting findings.
+- Deferred mod changes persist, external game exit needs an authorized pending change, and Clear retains the last recoverable player copy. Recovery journals, home locking and guarded disk swaps are covered by core tests; see `core/IO.md` and the Windows checklist.
+- Pack previews have separate unchecked Include switches for bundled payloads, readable file names and optional settings. Included payloads enter the Library off. Empty pack authors omit the byline and the warning says “Include it only if you trust the source of this pack.” Empty mod authors do not introduce stray punctuation in the broken-mod result.
+- Linux saves resolve the extension before asking to replace a file. No or closing the question leaves the chooser open. Pack export first keeps a uniquely named `.previous-….nommpack` copy beside an existing destination; failed export keeps that copy too. A successful save names the recovery copy in the toast. Windows retains FileKit confirmation and uses the same export backup.
+- Stop following clears the address/update marker, persists, keeps the profile's mods and cannot be undone by an in-flight check.
+- Beta updater discovery uses the releases Atom feed and published metadata assets. Manual Look now bypasses Never for one check, offers a releases-page action in unsupported builds and never auto-installs. Startup checks stay quiet for unsupported/current/failure results.
+- Browse tag chips stay whole; strip scrollbars appear on hover/scroll. Library size counts installed versions, while Storage counts all store/recovery use. No-download and no-update results, registry freshness and relative dates use player wording.
+- Danger-zone row, button and confirmation say “Remove all mods”. Help explains that registry mods leave every profile, local/taken-over mods stay in the Library off, and only NNOMM-installed loader files are removed. The confirmation does not repeat that explanation. Problem-report help starts “A report with your mod list”. Missing-folder first start says “Choose your game folder”; the row still says “Game folder not found”.
 
-## Remaining work
+## Remaining work and integration dependencies
 
-- Review the integrated final core fixes for game-exit apply authorization, takeover preservation, Clear retention and registry freshness. Those changes are present; this acceptance pass does not replace their independent safety review.
-- Independent Opus and Sol review of the final combined code and pictures. This implementation pass runs alone, so it does not supply those reviews.
-- Run the Windows checks below on packaged builds, then perform the final sandbox acceptance pass on the integrated branch.
-- Offline pack imports can add selected bundled files to the Library before the core rejects profile creation with “Needs a connection”. The current core requires a connection for pack import, including local-only packs; this remains a follow-up.
-- Loose takeover payloads are not automatically linked to registry identities by a later hash match. They remain local files unless identified during takeover.
-- The broken-mod test assumes one cause; interacting mods can produce an inconclusive result rather than a guessed culprit.
+- Parallel core last-diff pass: S2 legacy saved-extra sidecars; O1 shipped files versus takeover extras; O2/O3 scan/hash cost; O4 identical stored payload takeover; O5 launch errors; O6 removal state after a failed apply; O8 background catalog dates; O10 contributor/changelog filtering; O11 damaged-journal recovery; O12 acronym tags; O13 colliding mod folders. Do not count these as closed from the app branch alone.
+- O14 completion toast is core-owned and still verbose in this branch. The core pass must make it one sentence and preserve failure reporting. `PlayerSettings.kt` has a marked TODO(core) presentation override for removal/report wording; move it to shared settings definitions when combining the branches so command-search results use the same names. No core files were edited by this app pass.
+- Independent Opus and Sol review must inspect the combined code, running pictures and mock pictures. This implementation agent works alone and does not supply those reviews.
+- Offline imports can add selected bundled files before profile creation is rejected with Needs a connection. Local-only offline pack import remains a core follow-up.
+- Loose takeover files are not later linked to registry identities automatically. The broken-mod test assumes one cause; interacting mods can be inconclusive.
+- Final combined sandbox acceptance and all Windows checks remain. No release, tag or publication is authorized.
 
 ## Windows-only checks
 
-`design/WINDOWS-CHECKS.md` is the detailed checklist. Linux cannot verify the custom native frame, installers and separate application identity, packaged self-update/restart, Steam library discovery or real game launch with mods. Also check Windows locked DLLs, junctions/reparse points, recovery across drives, private config transitions, loader ownership and removal, and delayed process detection. The Atom beta path and manual unsupported-update feedback need packaged Windows checks too. No release or tag is authorized by this status.
+`design/WINDOWS-CHECKS.md` is the detailed checklist: native frame, separate installer identity, packaged updater/restart, Steam library discovery, real launch with mods, locked DLLs, junctions/reparse points, cross-drive recovery, private config transitions, loader ownership/removal and delayed process detection. Check beta assets and manual updater feedback on packaged builds. Check repeated pack replacement, cancellation and recovery-copy permissions through FileKit too. Linux cannot certify these paths.
 
 ## Deviations from the mock
 
-- Servers remains “Coming later”; server joining and the Steam helper are excluded from the first version.
-- Archivo shaping can change line wraps and baselines between Compose and Chromium. Browse strips reserve a footer line and space below cards for the hover scrollbar; their section spacing can be slightly taller than the static mock.
-- Real packs can add optional settings and multiple bundled-file warnings, so their preview is taller than the single-file mock. Bundled files show readable payload names rather than internal content ids; the demo warning no longer repeats `.dll`.
-- Removal wording names the ownership boundary instead of promising a plain game. Stop following now performs the action instead of the mock's no-op.
-- The drop overlay uses native drops and omits mock-only simulation controls; its centered group sits slightly lower.
+- Servers joining, the helper and server settings are excluded from the first version. The sidebar and empty page remain.
+- Archivo shaping changes some wraps/baselines from Chromium. Browse reserves room for hover scrollbars, so strip spacing can be slightly taller. Existing picture differences are not claimed fixed by this pass.
+- Real pack previews can have several bundled warnings and optional settings, making them taller than the single-file mock. Empty authors get a source-based warning rather than an empty trust phrase.
+- Removal wording describes ownership and retained local files instead of promising a plain game. Stop following performs the action instead of the mock's no-op. The drop overlay uses native drops and omits simulation controls.
+- Linux uses Swing choosers. Explicit replacement confirmation and retained pack copies add safety to the mock's Save action. Missing-folder first start gives the next action as its heading.
 
 ## Decisions without the user
 
-- Servers settings retain only sidebar visibility, with “The server list comes in a later version.” The page says “A list of dedicated servers comes in a later version of NNOMM.” The alternative is hiding the category/tab.
-- Unknown game versions compare with the newest version named by the registry. Missing exact mod versions report unavailability instead of substituting downloads.
-- BepInEx installation reports the installed version. Installer vendor is “NNOMM”.
-- Hiding profiles selects Default immediately; placement waits for a mod action or Play. Console preferences save immediately and apply at Play. A start with no observed game process times out with a retry notice.
-- Bundled pack payloads stay off when imported, even after Include; Include authorizes adding them to the Library. Players turn them on separately, matching the design's initial safety state.
-- A manual updater check bypasses “Never” for that request and never auto-installs. Unsupported builds offer the existing releases-page action. Automatic checks retain the saved preference.
+- Keep a separate previous pack for every replacement beside the destination, without automatic deletion, including after export failure. Failure to copy prevents export. No new background process or startup helper is introduced.
+- Preserve named-author warnings; use the source-of-pack sentence only when the author is blank. Empty author slots on cards/panels remain empty rather than inventing an identity.
+- Keep unknown-provenance stored mods alongside local/taken-over mods during removal; a registry id does not prove that the bytes can be downloaded again.
+- Unknown game versions compare with the newest registry version; unavailable exact mod versions are not silently substituted.
+- Included bundled files stay off until the player enables them. Hiding profiles selects Default immediately; placement waits for a mod action or Play. Console preferences apply at Play.
+- Servers settings retain sidebar visibility and a later-version explanation. BepInEx shows its installed version; installer vendor is NNOMM.
 
 ## Reproduce checks
 
-Use JetBrains JDK 25 and `tools/gradlew-locked` for builds. Run `:core:test :composeApp:jvmTest`, then `:composeApp:renderShots` and `tools/compare-shots`. Compare images are under `composeApp/build/shots/compare/`. Run real-mode checks with an isolated settings home and a temporary sandbox game copy; use a separate virtual display when other agents use the desktop. Reports must distinguish exercised behavior from remaining Windows and independent-review work.
-
-## Final acceptance implementation (O1–O5, O7–O12)
-
-- Browse New and First release use the oldest registry version's date, fetched through the single-slot metadata queue and retained in the permanent successful HEAD cache. Unknown first dates stay out of New and show Unknown in the panel.
-- Remove everything keeps local, taken-over and unknown-origin stored mods in the Library, off in every profile. Their stored copies stay. Confirmation and completion say this explicitly; only registry-download-only entries leave the Library.
-- Linux file, folder and save choosers use Swing's event thread from an IO coroutine, avoiding the GTK save implementation. Windows retains FileKit.
-- Card tag rows place only whole chips. Strip scrollbars appear during hover or scrolling with room below the cards.
-- Empty pack authors omit the by phrase in previews and update notices. Release notes omit feed headings and Full Changelog links; release dates use relative wording.
-- Library size counts installed stored versions, excluding hidden/recovery copies. Storage settings still report total disk use. Disk actions refresh both totals; a usage-read failure does not fail the action.
-- Registry tags use sentence case, preserving HUD, UI, QoL, VR, AI, PvP, PvE, FPS, ATC and AWACS. Filter order follows current counts.
-- Zero-update checks say All mods are up to date. Zero-download imports omit the download count. Singular years, registry freshness, report takeover labels, report help, non-breaking storage units and demo-mode notices use player wording. Runtime startup discards transient downloads; an opened empty queue says No downloads.
-- The sandbox launcher is explicitly marked development-only and remains inert without its environment variable and isolated-home guard. Acceptance notes contain no temporary absolute path.
-
-### Decisions for this pass
-
-- First-start heading with a selected folder: “Check your game”. With no folder, or a missing folder: “Game folder not found”, including the game row. This avoids claiming automatic discovery after a hand-picked folder.
-- Unknown stored provenance is retained in the Library by Remove everything, because a registry identity does not prove that its stored bytes can be downloaded again.
-- Feed section headings are omitted rather than restyled. Notes retain the actual release text and relative dates.
-
-These are deliberate wording and behavior deviations from the older mock where it promises removal of every mod, shows mock-only notices or empty author phrases, or keeps a fixed tag-filter order. Existing font shaping/wrapping differences remain. Independent Opus/Sol review and Windows checks remain the lead's work; this implementation agent works alone.
+Use JetBrains JDK 25 and `tools/gradlew-locked`: run `:core:test :composeApp:jvmTest`, then `:composeApp:renderShots` and `tools/compare-shots`. Renders and comparisons are in `composeApp/build/shots/` and its `compare/` directory. The last-app pass uses Xvfb display `:74` at 1600 x 1000 in real mode, an isolated settings home and a temporary copy of the sandbox game. Its checked results and limits are recorded in `design/notes/LAST-APP-FIXES.md`.

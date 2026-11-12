@@ -55,9 +55,9 @@ fun SettingsPage() {
     val personal = showProfiles && view.scope == "profile" && profiles.any { it.id == view.profileId }
     val query = view.query.trim().lowercase()
     fun ownCount(id: String) = state.settings.overrides[id].orEmpty().keys.count { key ->
-        SETTINGS.any { it.key == key && !it.profileOnly }
+        playerSettings.any { it.key == key && !it.profileOnly }
     }
-    val rows = SETTINGS.filter {
+    val rows = playerSettings.filter {
         (if (personal) it.ov else !it.profileOnly) &&
             (it.cat != "servers" || it.key == "showServers") &&
             (query.isEmpty() || "${it.label} ${it.help} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
