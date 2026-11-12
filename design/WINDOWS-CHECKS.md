@@ -1,6 +1,6 @@
 # Checks that need Windows
 
-These parts cannot be checked on the Linux development machine. Check them on Windows before a release. Each entry says what changed from NOMM 5.5.0 (`3dacae5`) and what to check.
+These parts cannot be checked on the Linux development machine. Check them on Windows before a release. Each entry says what changed from NOMM 5.5.0 (`3dacae5`) and what to check. Upstream 5.6.0 (`8786356`, merged) changed none of these Windows-only paths; it added the flatpak runtime pin below.
 
 | Part | Change from NOMM | What to check |
 | --- | --- | --- |
@@ -209,3 +209,9 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
   NNOMM files. A removed parent directory must stay absent after Uninstall.
 - Replace an incomplete owned loader with another BepInEx version. Play must keep
   its presence guard and must not add pinned-version files or announce installation.
+
+## Upstream 5.6.0 (merged)
+
+| Changed behaviour | Check |
+| --- | --- |
+| Flatpak build uses runtime `org.freedesktop.Platform` 24.08 with `org.freedesktop.Sdk` (upstream PR #45, for glibc 2.39 or newer) | Build the flatpak and start it on a current Linux desktop; this needs a release build and is unchecked. |

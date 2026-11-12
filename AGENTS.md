@@ -1,6 +1,6 @@
 # NNOMM agent notes
 
-NNOMM ("New Nuclear Option Mod Manager") is a fork of NOMM, Combat787's Nuclear Option Mod Manager (MIT), started at upstream 5.5.0 (`3dacae5`). It is almost a fresh project on the same stack: the UI, the interactions and the settings are redone, and NOMM's code is reused only where it fits.
+NNOMM ("New Nuclear Option Mod Manager") is a fork of NOMM, Combat787's Nuclear Option Mod Manager (MIT). It started at upstream 5.5.0 (`3dacae5`) and is in sync with upstream 5.6.0 (`8786356`, merged 2026-11-12). It is almost a fresh project on the same stack: the UI, the interactions and the settings are redone, and NOMM's code is reused only where it fits.
 
 Read `design/DESIGN.md` first. The mock in `design/mock/` is the agreed design. The app reproduces its look, behaviour and wording.
 
@@ -31,8 +31,19 @@ A screen is done when it matches the mock in pictures at 1360 x 860 and at 760 p
 ## Build
 
 - The Gradle toolchain needs JetBrains JDK 25 and downloads it. Gradle itself needs a JDK to start.
-- Build: `./gradlew :composeApp:jvmJar`. Tests: `./gradlew :composeApp:jvmTest`. At `3dacae5`, two upstream tests in `TagFilterTest` fail because tests and code disagree.
-- Run: `./gradlew :composeApp:run`. The run task uses `JAVA_HOME`, not the toolchain, so point `JAVA_HOME` at the JDK 25.
+- On the shared development machine, run Gradle only through `tools/gradlew-locked` (it limits parallel builds; memory is tight).
+- Build and tests: `tools/gradlew-locked :core:test :composeApp:jvmJar :composeApp:jvmTest`. Renders of every mock picture: `tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`.
+- Run: `tools/gradlew-locked :composeApp:createDistributable`, then `composeApp/build/compose/binaries/main/app/NNOMM/bin/NNOMM` (`--demo` for the mock's data). `:composeApp:run` uses `JAVA_HOME`, not the toolchain, so point `JAVA_HOME` at the JDK 25 for it.
+
+## Syncing with upstream NOMM
+
+NNOMM replaced most of NOMM's code, but it keeps NOMM's history and merges upstream so that the fork is never behind it and the upstream contributors stay credited.
+
+1. `git fetch --no-tags https://github.com/Combat787/NOMM.git master`. Never fetch or push upstream tags: `.github/workflows/release.yaml` publishes a release for every pushed tag.
+2. Look at the changes since the last synced commit (now `8786356`): `git log <last>..FETCH_HEAD` and `git diff <last> FETCH_HEAD`.
+3. `git merge --no-ff --no-commit FETCH_HEAD`. Resolve for NNOMM: files that NNOMM removed stay removed, NNOMM keeps its own version and change list, and old NOMM code, the Material UI and the Steam helper never come back.
+4. Port each upstream behaviour change by hand into NNOMM's own code, with a test, or record why it does not apply.
+5. Commit the merge with a message that lists the upstream pull requests and what NNOMM did with each; push; update the synced commit in this file.
 
 ## Checks that need Windows
 

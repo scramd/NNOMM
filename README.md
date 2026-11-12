@@ -2,7 +2,7 @@
 
 NNOMM (New Nuclear Option Mod Manager) is a desktop mod manager for Nuclear Option, built with Kotlin and Compose Desktop. It keeps installed mods in one store and lets each profile choose which mods and versions to use.
 
-NNOMM is a fork of [NOMM by Combat787](https://github.com/Combat787/NOMM), starting at version 5.5.0. The interface, interactions and settings are being rebuilt against the agreed mock in `design/mock/`. The mod registry is [NOMNOM by KopterBuzz](https://github.com/KopterBuzz/NOMNOM). Both credits are retained. NNOMM and the reused NOMM code are licensed under the [MIT licence](LICENSE).
+NNOMM is a fork of [NOMM by Combat787](https://github.com/Combat787/NOMM), started at version 5.5.0 and kept in sync with upstream (now 5.6.0). The interface, interactions and settings are being rebuilt against the agreed mock in `design/mock/`. The mod registry is [NOMNOM by KopterBuzz](https://github.com/KopterBuzz/NOMNOM). Both credits are retained. NNOMM and the reused NOMM code are licensed under the [MIT licence](LICENSE).
 
 This version has no server list. The Servers page says “Coming later”. NNOMM never signs in to Steam or runs a Steam helper. It has its own settings directory and can be installed beside NOMM.
 
