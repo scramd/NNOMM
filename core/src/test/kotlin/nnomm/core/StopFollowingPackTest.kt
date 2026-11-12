@@ -15,11 +15,25 @@ class StopFollowingPackTest {
         val home = Files.createTempDirectory("pack-follow-test")
         try {
             val persistence = RealPersistence(home)
-            val original = Demo.state().let { state ->
-                state.copy(profiles = state.profiles.mapIndexed { index, profile ->
-                    if (index == 0) profile.copy(pack = PackInfo("Author", "1", nextVersion = "2", followAddress = "https://example.com/pack")) else profile
-                })
-            }
+            val original =
+                Demo.state().let { state ->
+                    state.copy(
+                        profiles =
+                            state.profiles.mapIndexed { index, profile ->
+                                if (index == 0)
+                                    profile.copy(
+                                        pack =
+                                            PackInfo(
+                                                "Author",
+                                                "1",
+                                                nextVersion = "2",
+                                                followAddress = "https://example.com/pack",
+                                            )
+                                    )
+                                else profile
+                            }
+                    )
+                }
             val target = original.profiles.first().id
             val store = AppStore(original, Demo.io().copy(persistence = persistence))
             store.stopFollowingPack(target)
@@ -30,11 +44,18 @@ class StopFollowingPackTest {
                 val actual = reopened.state.value
                 assertNull(actual.profiles.first().pack?.followAddress)
                 assertNull(actual.profiles.first().pack?.nextVersion)
-                assertEquals(original.profiles.first().pack?.copy(followAddress = null, nextVersion = null), actual.profiles.first().pack)
+                assertEquals(
+                    original.profiles.first().pack?.copy(followAddress = null, nextVersion = null),
+                    actual.profiles.first().pack,
+                )
                 assertEquals(original.installed, actual.installed)
                 assertEquals(original.profiles.drop(1), actual.profiles.drop(1))
                 assertEquals(original.profileId, actual.profileId)
-            } finally { reopened.shutdown() }
-        } finally { deleteTree(home) }
+            } finally {
+                reopened.shutdown()
+            }
+        } finally {
+            deleteTree(home)
+        }
     }
 }

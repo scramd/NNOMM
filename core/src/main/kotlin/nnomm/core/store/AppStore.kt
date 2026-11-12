@@ -1774,7 +1774,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 if (e is CancellationException) throw e
                 io.logger.error("save removal", e)
                 toast(
-                    "Mods were removed from the game, but the Library could not be saved. Try saving again before closing NNOMM.",
+                    if (snapshot.game.folder == null)
+                        "The Library changed, but it could not be saved. Try saving again before closing NNOMM."
+                    else
+                        "Mods were removed from the game, but the Library could not be saved. Try saving again before closing NNOMM.",
                     "Retry",
                     ms = 30000,
                     undo = {

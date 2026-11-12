@@ -6,6 +6,7 @@ import kotlin.test.*
 import kotlinx.coroutines.*
 import nnomm.core.demo.Demo
 import nnomm.core.io.GameFolder
+import nnomm.core.io.StatePersistence
 import nnomm.core.model.*
 import nnomm.core.rules.*
 import nnomm.core.settings.*
@@ -203,6 +204,39 @@ class LastFindingsTest {
             assertFalse(text.contains("1 local"))
             assertFalse(text.contains("Updated the Library"))
             assertTrue(text.contains("press Play"))
+        } finally {
+            app.shutdown()
+        }
+    }
+
+    @Test
+    fun saveFailureWithoutFolderDoesNotClaimGameRemoval() = runBlocking {
+        val s = Demo.state()
+        val failingSave =
+            object : StatePersistence {
+                override suspend fun load(): AppState? = null
+
+                var failures = 1
+
+                override suspend fun save(state: AppState) {
+                    // Fail the save inside the removal; let the shutdown flush succeed.
+                    if (failures-- > 0) throw java.nio.file.AccessDeniedException("state.json")
+                }
+            }
+        val app =
+            AppStore(
+                s.copy(
+                    game = GameInfo(),
+                    installed = mapOf("minimap" to s.installed.getValue("minimap")),
+                ),
+                Demo.io().copy(persistence = failingSave),
+            )
+        try {
+            app.removeEverything()
+            app.awaitDiskIdle()
+            val text = app.state.value.toasts.joinToString { it.text }
+            assertTrue(text.contains("The Library changed, but it could not be saved"), text)
+            assertFalse(text.contains("removed from the game"), text)
         } finally {
             app.shutdown()
         }
