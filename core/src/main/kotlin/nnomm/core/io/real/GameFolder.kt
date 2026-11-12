@@ -136,7 +136,10 @@ class RealGameFolder(
                             val game =
                                 runCatching { root(ownership.gameRoot) }.getOrNull()
                                     ?: return@forEach
-                            runCatching { writeOwnership(game, verifiedOwnership(game)) }
+                            runCatching {
+                                checkLoaderRecovery(game)
+                                writeOwnership(game, verifiedOwnership(game))
+                            }
                         }
                     pendingRemovalRecords().forEach { path ->
                         try {
@@ -216,6 +219,7 @@ class RealGameFolder(
             val resumeAllowed =
                 hashes.isNotEmpty() &&
                     loaderVersion == "5.4.23.4" &&
+                    !hasPresentRelinquished(game) &&
                     hashes.all { (name, hash) ->
                         !safe(game, name).exists() ||
                             runCatching { readLoaderHash(safe(game, name)) == hash }
@@ -1298,9 +1302,19 @@ class RealGameFolder(
         val hashes = ownedHashes(game)
         return hashes.filter { (name, hash) ->
             val target = safe(game, name)
-            target.exists() && readLoaderHash(target) == hash
+            if (name == "doorstop_config.ini" && DoorstopRestores(home).read(game).isNotEmpty())
+                true // Our temporary disabled bytes are not a player edit.
+            else target.exists() && readLoaderHash(target) == hash
         }
     }
+
+    private fun hasPresentRelinquished(game: Path): Boolean =
+        loaderOwnership(game)
+            .read()
+            ?.takeIf { it.gameRoot == game.toString() }
+            ?.relinquished
+            .orEmpty()
+            .any { safe(game, it).exists() }
 
     private fun writeOwnership(game: Path, hashes: Map<String, String>) {
         val old = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
@@ -1497,11 +1511,23 @@ class RealGameFolder(
                     operationId = operationId,
                     beforeMutation = {
                         check(!running()) { "Game started; loader changes are pending" }
-                        val current = verifiedOwnership(game)
-                        writeOwnership(game, current)
-                        check(verified.all { (name, hash) -> current[name] == hash }) {
-                            "Loader files changed while preparing removal. Their current bytes were kept. Retry."
-                        }
+                    },
+                    eligible = { target ->
+                        val name = game.relativize(target).toString().replace('\\', '/')
+                        val allowed =
+                            try {
+                                target.exists() &&
+                                    readLoaderHash(target) == verified[name] &&
+                                    !(name == "doorstop_config.ini" &&
+                                        DoorstopRestores(home).read(game).isNotEmpty())
+                            } catch (_: java.io.IOException) {
+                                false
+                            }
+                        if (!allowed)
+                            notice(
+                                "A loader file changed or still needs restoration. Its current bytes were kept. Retry."
+                            )
+                        allowed
                     },
                 )
                 val report = removal.resolveSibling(removal.fileName.toString() + ".promoted")
@@ -1550,6 +1576,7 @@ class RealGameFolder(
                         info.loaderPresent &&
                         (info.loaderVersion != "5.4.23.4" ||
                             verified.isEmpty() ||
+                            hasPresentRelinquished(game) ||
                             recorded.any { (name, hash) ->
                                 safe(game, name).exists() && verified[name] != hash
                             })
@@ -1621,6 +1648,19 @@ class RealGameFolder(
                             if (doorstop.exists() && "doorstop_config.ini" !in ownedNames)
                                 setOf("doorstop_config.ini")
                             else emptySet()
+                        val originalDoorstopHash =
+                            if (
+                                repair &&
+                                    doorstop.exists() &&
+                                    !pendingRestore &&
+                                    "doorstop_config.ini" !in changedOwned
+                            ) {
+                                try {
+                                    readLoaderHash(doorstop)
+                                } catch (e: java.io.IOException) {
+                                    throw DoorstopSettingsFailure(e)
+                                }
+                            } else null
                         var replacedDoorstop = false
                         if (
                             repair &&
@@ -1661,6 +1701,13 @@ class RealGameFolder(
                                 game.relativize(target).toString().replace('\\', '/') to
                                     digest(source)
                             }
+                        val originalHashes =
+                            replacements.associate { (target, _) ->
+                                val name = game.relativize(target).toString().replace('\\', '/')
+                                target to
+                                    (verified[name]
+                                        ?: if (name in unowned) originalDoorstopHash else null)
+                            }
                         val operationId = java.util.UUID.randomUUID().toString()
                         Files.deleteIfExists(promotionReport(game))
                         atomic(
@@ -1684,21 +1731,23 @@ class RealGameFolder(
                                 operationId = operationId,
                                 beforeMutation = {
                                     check(!running()) { "Game started; loader changes are pending" }
-                                    val current = verifiedOwnership(game)
-                                    writeOwnership(game, current)
-                                    check(
-                                        replacements.all { (target, _) ->
-                                            val name =
-                                                game
-                                                    .relativize(target)
-                                                    .toString()
-                                                    .replace('\\', '/')
-                                            if (name in verified) current[name] == verified[name]
-                                            else name in unowned || !target.exists()
+                                },
+                                eligible = { target ->
+                                    val expected = originalHashes[target]
+                                    val allowed =
+                                        try {
+                                            if (expected == null) !target.exists()
+                                            else
+                                                target.exists() &&
+                                                    readLoaderHash(target) == expected
+                                        } catch (_: java.io.IOException) {
+                                            false
                                         }
-                                    ) {
-                                        "Loader files changed while preparing Repair. Their current bytes were kept. Retry."
-                                    }
+                                    if (!allowed)
+                                        notice(
+                                            "A loader file changed while preparing the change. Its current bytes were kept. Retry."
+                                        )
+                                    allowed
                                 },
                             )
                         } catch (e: Exception) {

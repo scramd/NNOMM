@@ -145,9 +145,10 @@ private constructor(
                         notice(
                             "Close Nuclear Option to recover pending changes and take over existing mods."
                         )
-                    if (!launcher.running.value) {
-                        game.recoverPending()
-                    }
+                    // Recover file journals before verifying loader ownership. A journal
+                    // that cannot finish must retain its folder's ownership for the retry.
+                    // A refused Doorstop restore remains recorded; verification defers its INI.
+                    if (!launcher.running.value) game.recoverPending()
                     val adopted =
                         if (
                             !launcher.running.value &&

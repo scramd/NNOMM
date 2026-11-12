@@ -276,13 +276,11 @@ class LoaderOwnershipV2Test {
             if (claimedPlayer.isNotEmpty()) add("CLAIMED pre-existing player", "$claimedPlayer")
             if (r.folder.recoveryPending) add("recovery stuck", "${newNotices.distinct()}")
             if (
-                newNotices.any { it.contains("pending record is kept") } &&
-                    pendingDir(f, "loader-pending").isEmpty()
+                newNotices.any { it.contains("ownership") || it.contains("removal recovery") } &&
+                    pendingDir(f, "loader-pending").none { it.name.endsWith(".json") } &&
+                    pendingDir(f, "loader-removals").none { it.name.endsWith(".json") }
             )
-                add(
-                    "misleading notice",
-                    "${newNotices.filter { it.contains("pending record is kept") }}",
-                )
+                add("misleading notice", "${newNotices.distinct()}")
             val after = snapshot(f.game)
             val placedUnowned =
                 after.keys.filter {
@@ -397,13 +395,18 @@ class LoaderOwnershipV2Test {
             val proxy = f.game.resolve("winhttp.dll")
             DiskFaults.step = { if (it == "prepared") proxy.writeText("player replacement") }
             try {
-                assertFails {
+                val result = runCatching {
                     when (operation) {
                         "install" -> f.folder.installLoader(f.game.toString())
                         "repair" -> f.folder.repairLoader(f.game.toString())
                         else -> f.folder.removeLoader(f.game.toString())
                     }
                 }
+                if (operation != "uninstall") assertTrue(result.isFailure)
+                else
+                    assertTrue(
+                        result.isSuccess
+                    ) // changed proxy is relinquished; other removals finish
             } finally {
                 DiskFaults.step = {}
             }
@@ -801,5 +804,121 @@ class LoaderOwnershipV2Test {
         println(
             "PROBE10 uninstall after unlock -> files=${data.keys.filter { f.game.resolve(it).exists() }} pending=${g.recoveryPending}"
         )
+    }
+
+    @Test
+    fun independentChangedPinnedLoaderStaysGuardedAfterRestart() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        f.game.resolve("BepInEx/core/Extra.dll").deleteExisting()
+        f.game.resolve("winhttp.dll").writeText("player proxy")
+        val r = restart(f)
+        r.folder.recoverPending()
+        val before = snapshot(f.game)
+        val info = r.folder.inspect(f.game.toString())
+        println(
+            "INDEPENDENT after-restart resume=${info.loaderResumeAllowed} complete=${info.loaderComplete}"
+        )
+        r.folder.installLoader(f.game.toString())
+        assertEquals(
+            before,
+            snapshot(f.game),
+            "Changed loader must keep presence guard after restart",
+        )
+    }
+
+    @Test
+    fun independentChangedPinnedLoaderStaysGuardedOnRetry() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        f.game.resolve("BepInEx/core/Extra.dll").deleteExisting()
+        f.game.resolve("winhttp.dll").writeText("player proxy")
+        val before = snapshot(f.game)
+        f.folder.installLoader(f.game.toString())
+        assertEquals(before, snapshot(f.game))
+        f.folder.installLoader(f.game.toString())
+        assertEquals(before, snapshot(f.game), "Changed loader must keep presence guard on Retry")
+    }
+
+    @Test
+    fun independentPlayerReplacementAfterRecoveryCrashIsKept() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        var oldMoves = 0
+        DiskFaults.step = { if (it == "old-moved" && ++oldMoves == 2) throw Crash() }
+        assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+        DiskFaults.step = { if (it == "recovery-staged-deleted") throw Crash() }
+        assertFailsWith<Crash> { restart(f).folder.recoverPending() }
+        DiskFaults.step = {}
+        val target = f.game.resolve("BepInEx/core/BepInEx.dll")
+        assertFalse(target.exists())
+        target.writeText("player replacement after recovery crash")
+        val r = restart(f)
+        r.folder.recoverPending()
+        assertEquals(
+            "player replacement after recovery crash",
+            target.readText(),
+            "Recovery must not move a newly hand-installed file out of the game",
+        )
+    }
+
+    @Test
+    fun independentPlayerDeletionAfterRollbackCrashDoesNotBlock() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        var oldMoves = 0
+        DiskFaults.step = { if (it == "old-moved" && ++oldMoves == 2) throw Crash() }
+        assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+        var hits = 0
+        DiskFaults.step = { if (it == "recovery-staged-deleted" && ++hits == 4) throw Crash() }
+        assertFailsWith<Crash> { restart(f).folder.recoverPending() }
+        DiskFaults.step = {}
+        val target = f.game.resolve("BepInEx/core/BepInEx.dll")
+        assertTrue(target.exists(), "Rollback must have restored the target before second crash")
+        target.deleteExisting()
+        val r = restart(f)
+        repeat(2) { r.folder.recoverPending() }
+        assertFalse(
+            r.folder.recoveryPending,
+            "Hand-deleted rolled-back file must not block recovery",
+        )
+    }
+
+    @Test
+    fun independentHandChangeBetweenFilePromotionsIsKept() = runBlocking {
+        val failures = mutableListOf<String>()
+        for (operation in listOf("install", "repair", "uninstall")) {
+            val f = fixture(false, null)
+            if (operation != "install") f.folder.installLoader(f.game.toString())
+            var once = false
+            DiskFaults.step = {
+                if (it == "promoted" && !once) {
+                    once = true
+                    f.game.resolve("winhttp.dll").writeText("player replacement during batch")
+                }
+            }
+            try {
+                runCatching {
+                    if (operation == "install") f.folder.installLoader(f.game.toString())
+                    else if (operation == "repair") f.folder.repairLoader(f.game.toString())
+                    else f.folder.removeLoader(f.game.toString())
+                }
+            } finally {
+                DiskFaults.step = {}
+            }
+            val actual = f.game.resolve("winhttp.dll").takeIf { it.exists() }?.readText()
+            println("INDEPENDENT during-$operation proxy=$actual")
+            if (actual != "player replacement during batch") failures += "$operation: proxy=$actual"
+            assertTrue(f.notices.any { it.contains("current bytes were kept") })
+            assertTrue("winhttp.dll" !in record(f).read().orEmpty())
+            if (operation == "uninstall")
+                assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
+            else
+                assertContentEquals(
+                    data.getValue("BepInEx/core/Extra.dll"),
+                    f.game.resolve("BepInEx/core/Extra.dll").readBytes(),
+                )
+        }
+        assertTrue(failures.isEmpty(), failures.joinToString("; "))
     }
 }
