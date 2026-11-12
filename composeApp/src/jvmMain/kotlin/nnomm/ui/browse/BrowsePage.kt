@@ -496,6 +496,7 @@ private fun BrowseCard(
     modifier: Modifier = Modifier,
 ) {
     val model = LocalApp.current
+    LaunchedEffect(row.mod.id, row.mod.newestRelease?.version, row.mod.newerPreRelease?.version) { model.store.loadMetadata(setOf(row.mod.id)) }
     val x = row.mod
     val c = LocalNnTheme.current.colors
     val current = model.ui.panel?.modId == x.id
@@ -584,6 +585,7 @@ private fun age(s: AppState, x: CatalogMod) =
 @Composable
 private fun BrowseRowView(s: AppState, row: BrowseRow) {
     val model = LocalApp.current
+    LaunchedEffect(row.mod.id, row.mod.newestRelease?.version, row.mod.newerPreRelease?.version) { model.store.loadMetadata(setOf(row.mod.id)) }
     val x = row.mod
     val c = LocalNnTheme.current.colors
     BoxWithConstraints {

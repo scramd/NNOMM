@@ -201,6 +201,7 @@ fun main(args: Array<String>) {
                 files.map { if (it.startsWith("file:")) File(java.net.URI(it)) else File(it) }
             )
         }
+        var updateReady by remember { mutableStateOf<kotlinx.coroutines.CompletableDeferred<Unit>?>(null) }
         val saveAndExit: () -> Unit = {
             if (!closing) {
                 closing = true
@@ -224,9 +225,12 @@ fun main(args: Array<String>) {
                     while (session == null && startupError == null) delay(25)
                     try {
                         session?.shutdown()
-                        exitApplication()
+                        val ready = updateReady
+                        if (ready != null) ready.complete(Unit) else exitApplication()
                     } catch (e: Exception) {
                         closing = false
+                        updateReady?.completeExceptionally(e)
+                        updateReady = null
                         startupError = "Could not save your changes. Close NNOMM to try again."
                     }
                 }
@@ -237,9 +241,13 @@ fun main(args: Array<String>) {
         model?.checkAppUpdates = {
             if (!isDemo)
                 scope.launch {
-                    updates.check(general["appUpdate"]?.content ?: "Tell me", general["channel"]?.content == "true") { message ->
-                        scope.launch { model?.ui?.updateStatus = message }
-                    }
+                    updates.check(general["appUpdate"]?.content ?: "Tell me", general["channel"]?.content == "true",
+                        status = { message -> scope.launch { model?.ui?.updateStatus = message } },
+                        beforeInstall = {
+                            val ready = kotlinx.coroutines.CompletableDeferred<Unit>()
+                            withContext(Dispatchers.Main) { updateReady = ready; saveAndExit() }
+                            ready.await()
+                        })
                 }
         }
         model?.openAppReleases = { platform.openUrl(if (general["channel"]?.content == "true") "https://github.com/scramd/NNOMM/releases" else NNOMM_LATEST_RELEASE_URL) }
@@ -275,6 +283,7 @@ fun main(args: Array<String>) {
                     val m = model
                     m != null &&
                         (m.suppressHandledCharacter(event) ||
+                            (m.ui.overlayKind == "palette" && m.shortcut(event)) ||
                             ((event.isCtrlPressed || event.isMetaPressed) &&
                                 event.key == Key.Enter &&
                                 m.shortcut(event)))

@@ -430,7 +430,7 @@ fun Toast(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Label(text, Modifier.weight(1f), color = c.strongInk, weight = 500)
+        Label(text, Modifier.weight(1f, fill = false), color = c.strongInk, weight = 500)
         if (action != null)
             control(Modifier, onClick = onAction) { m, _, _ ->
                 androidx.compose.foundation.text.BasicText(
