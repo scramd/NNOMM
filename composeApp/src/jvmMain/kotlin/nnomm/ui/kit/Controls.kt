@@ -82,10 +82,12 @@ internal fun control(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (enabled && focused && space.typedActivation(event)) {
-                    onClick()
-                    true
-                } else space.consumeDuplicate
+                if (!enabled || !focused) false
+                else {
+                    val activate = space.typedActivation(event)
+                    if (activate) onClick()
+                    activate || space.consumeDuplicate
+                }
             }
             .clickable(
                 source,
