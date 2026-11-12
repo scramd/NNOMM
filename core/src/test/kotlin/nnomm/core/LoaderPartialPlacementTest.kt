@@ -162,7 +162,7 @@ class LoaderPartialPlacementTest {
     }
 
     @Test
-    fun interruptedRepairRecoversNewIniOwnershipAndKeepsAdoptedBinaries() = runBlocking {
+    fun interruptedRepairKeepsExistingUnownedIniAndAdoptedBinaries() = runBlocking {
         val f = fixture(true, "[General]\ntarget_assembly=\n".toByteArray(), orders[0])
         record(f).write(listOf("BepInEx/core/BepInEx.dll"))
         DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
@@ -172,7 +172,7 @@ class LoaderPartialPlacementTest {
             DiskFaults.step = {}
         }
         f.folder.removeLoader(f.game.toString())
-        assertFalse(f.game.resolve("doorstop_config.ini").exists())
+        assertContentEquals(shipped, f.game.resolve("doorstop_config.ini").readBytes())
         assertFalse(f.game.resolve("BepInEx/core/BepInEx.dll").exists())
         assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
         assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
@@ -425,7 +425,7 @@ class LoaderPartialPlacementTest {
                     }
                 )
                 assertTrue(f.notices.isEmpty())
-                assertTrue("doorstop_config.ini" in record(f).read()!!)
+                assertEquals(!repair, "doorstop_config.ini" in record(f).read()!!)
             } finally {
                 app.shutdown()
                 DiskFaults.beforeMove = {}
@@ -512,6 +512,59 @@ class LoaderPartialPlacementTest {
         assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
         assertNull(record(f).read())
         assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
+    }
+
+    // Port of the adopted-loader Repair/Uninstall probe, including recovery
+    // before ownership publication. Only a newly created INI belongs to NNOMM.
+    @Test
+    fun repairOnlyOwnsAnIniItCreated() = runBlocking {
+        for (kind in listOf("disabled", "damaged", "missing", "owned")) {
+            for (crash in listOf(false, true)) {
+                val original =
+                    when (kind) {
+                        "damaged" -> "[General]\ntarget_assembly=\n".toByteArray()
+                        "missing" -> null
+                        else ->
+                            "[General]\nenabled=false\ntarget_assembly=player.dll\n".toByteArray()
+                    }
+                val f = fixture(true, original, orders[0])
+                if (kind == "owned") record(f).write(listOf("doorstop_config.ini"))
+                if (crash) DiskFaults.step = { if (it == "journal-deleted") throw Crash() }
+                try {
+                    if (crash) assertFailsWith<Crash> { f.folder.repairLoader(f.game.toString()) }
+                    else f.folder.repairLoader(f.game.toString())
+                } finally {
+                    DiskFaults.step = {}
+                }
+                val ini = f.game.resolve("doorstop_config.ini")
+                val repaired = ini.readBytes()
+                assertTrue(DoorstopIni.read(repaired).healthy)
+                assertFalse(DoorstopIni.read(repaired).explicitlyDisabled)
+                // A fresh object must recover without the archive or its staging files.
+                val restarted =
+                    RealGameFolder(
+                        f.home,
+                        RealModStore(f.home),
+                        object : Downloader {
+                            override suspend fun download(
+                                mod: CatalogMod,
+                                version: ModVersion,
+                                progress: (Int) -> Unit,
+                            ): DownloadedFile = error("No download during recovery")
+                        },
+                        running = { false },
+                    )
+                restarted.recoverPending()
+                val ownedIni = kind == "missing" || kind == "owned"
+                assertEquals(ownedIni, "doorstop_config.ini" in record(f).read()!!)
+                restarted.removeLoader(f.game.toString())
+                if (ownedIni) assertFalse(ini.exists())
+                else assertContentEquals(repaired, ini.readBytes())
+                assertContentEquals(dll, f.game.resolve("BepInEx/core/BepInEx.dll").readBytes())
+                assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
+                assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
+            }
+        }
     }
 
     @Test

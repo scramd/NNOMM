@@ -196,9 +196,12 @@ canonical game path; the record also checks that full path. It lists only select
 replacement targets and each staged source's SHA-256. Existing files that are not
 selected for replacement are never claimed, even when their bytes match the archive.
 After the batch, ownership publication keeps existing ownership and adds only targets
-whose current bytes match their pending hash. This includes a previously unowned
-INI changed by Repair; adopted binaries remain unowned. Only after the atomic
-ownership write succeeds is the pending record deleted. Publication failure leaves
+whose current bytes match their pending hash. Repair claims an INI only when it
+creates a missing file, or keeps its existing ownership. Rewriting a player's existing INI never claims it: the pending record
+marks it unowned while still verifying its replacement bytes before success.
+Uninstall keeps that repaired INI beside the adopted binaries. Pending records
+from before this distinction retain their recorded ownership semantics. Only after
+the atomic ownership write succeeds is the pending record deleted. Publication failure leaves
 it available for retry, even after the file transaction's journal was deleted.
 Startup with the game closed, game exit, and every loader Install, Repair and
 Uninstall recover file transactions before finishing pending ownership from disk.

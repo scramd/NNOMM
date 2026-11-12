@@ -28,7 +28,12 @@ internal data class Placement(
 )
 
 @Serializable
-internal data class PendingLoaderOwnership(val gameRoot: String, val hashes: Map<String, String>)
+internal data class PendingLoaderOwnership(
+    val gameRoot: String,
+    val hashes: Map<String, String>,
+    // Verify rewritten player files too, but never turn a repair into ownership.
+    val unowned: Set<String> = emptySet(),
+)
 
 class RealGameFolder(
     private val home: Path,
@@ -1263,7 +1268,7 @@ class RealGameFolder(
                             .joinToString("") { "%02x".format(it) }
                     } else digest(target)
                 if (actual != hash) throw AccessDeniedException(target.toString())
-                names += relative
+                if (relative !in pending.unowned) names += relative
             } catch (e: java.io.IOException) {
                 val problem =
                     if (relative == "doorstop_config.ini") DoorstopSettingsFailure(e)
@@ -1389,6 +1394,10 @@ class RealGameFolder(
                                 }
                         }
                         val doorstop = safe(game, "doorstop_config.ini")
+                        val unowned =
+                            if (doorstop.exists() && "doorstop_config.ini" !in ownedNames)
+                                setOf("doorstop_config.ini")
+                            else emptySet()
                         var replacedDoorstop = false
                         if (repair && !pendingRestore && doorstop.exists()) {
                             val config =
@@ -1426,7 +1435,9 @@ class RealGameFolder(
                             }
                         atomic(
                             pendingLoaderRecord(game),
-                            json.encodeToString(PendingLoaderOwnership(game.toString(), hashes)),
+                            json.encodeToString(
+                                PendingLoaderOwnership(game.toString(), hashes, unowned)
+                            ),
                         )
                         replaceTrees(
                             replacements,
