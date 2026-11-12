@@ -29,6 +29,7 @@ internal fun Dialog(
     title: String,
     onDismiss: () -> Unit,
     wide: Boolean = false,
+    subtitle: String? = null,
     initialFocus: FocusRequester? = null,
     leftFooter: @Composable RowScope.() -> Unit = {},
     footer: @Composable RowScope.() -> Unit,
@@ -52,7 +53,6 @@ internal fun Dialog(
                 .focusRequester(focus)
                 .focusProperties { exit = { FocusRequester.Cancel } }
                 .focusGroup()
-                .focusable()
                 .onPreviewKeyEvent {
                     when {
                         it.type != KeyEventType.KeyDown -> false
@@ -61,10 +61,13 @@ internal fun Dialog(
                             true
                         }
                         it.key == Key.Tab -> {
-                            manager.moveFocus(
-                                if (it.isShiftPressed) FocusDirection.Previous
-                                else FocusDirection.Next
-                            )
+                            val direction = if (it.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
+                            if (!manager.moveFocus(direction)) {
+                                focus.requestFocus()
+                                if (it.isShiftPressed) {
+                                    while (manager.moveFocus(FocusDirection.Next)) { /* Last dialog control. */ }
+                                }
+                            }
                             true
                         }
                         else -> false
@@ -86,6 +89,7 @@ internal fun Dialog(
                 weight = 650,
                 width = 110f,
             )
+            subtitle?.let { Label(it, Modifier.padding(horizontal = 18.dp), color = c.text2) }
             Column(
                 Modifier.heightIn(max = (available - 150.dp).coerceAtLeast(0.dp))
                     .verticalScroll(rememberScrollState())

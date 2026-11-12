@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 import kotlin.math.*
+import nnomm.core.model.TroublePhase
 import nnomm.core.model.TroubleChoice
 import nnomm.core.rules.*
 import nnomm.ui.*
@@ -16,7 +17,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
         // Shell Escape and Ctrl K can replace the layer without calling its dismiss callback.
         DisposableEffect(model) { onDispose { model.store.closeBrokenModTest() } }
         val t = state.trouble
-        val phase = t?.phase ?: "intro"
+        val phase = t?.phase
         val on = state.installed.keys.count { isOn(state, it) }
         fun close() {
             model.store.closeBrokenModTest()
@@ -25,13 +26,13 @@ class TroubleDialog(private val model: AppModel) : Overlay {
         Dialog(
             true,
             when (phase) {
-                "found" -> "Found the mod"
-                "nomod" -> "A mod is not the cause"
+                TroublePhase.FOUND -> "Found the mod"
+                TroublePhase.NOMOD -> "A mod is not the cause"
                 else -> "Find the mod that breaks the game"
             },
             ::close,
             leftFooter = {
-                if (phase in listOf("base", "test"))
+                if (phase in listOf(TroublePhase.BASE, TroublePhase.TEST))
                     Button(
                         "Stop and turn my mods back on",
                         {
@@ -40,7 +41,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                         },
                         kind = ButtonKind.Ghost,
                     )
-                if (phase == "found" && t?.found != null)
+                if (phase == TroublePhase.FOUND && t?.found != null)
                     Button(
                         "Open the mod page",
                         {
@@ -52,7 +53,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
             },
             footer = {
                 when (phase) {
-                    "intro" -> {
+                    null -> {
                         Cancel(model)
                         Button(
                             "Start",
@@ -60,8 +61,8 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                             kind = ButtonKind.Strong,
                         )
                     }
-                    "base",
-                    "test" -> {
+                    TroublePhase.BASE,
+                    TroublePhase.TEST -> {
                         Button("Play", { model.store.play() }, icon = NnIcons.play)
                         Button("The problem is gone", { model.store.answerBrokenModTest(false) })
                         Button(
@@ -70,7 +71,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                             kind = ButtonKind.Strong,
                         )
                     }
-                    "found" -> {
+                    TroublePhase.FOUND -> {
                         Button(
                             "Keep it on",
                             {
@@ -100,7 +101,10 @@ class TroubleDialog(private val model: AppModel) : Overlay {
             },
         ) {
             when (phase) {
-                "intro" -> {
+                TroublePhase.INCONCLUSIVE -> {
+                    Label("These mods cannot be split into separate groups because they need each other. This test cannot find the cause. Your mods are on again, as before.")
+                }
+                null -> {
                     Label(
                         "Use this when the game crashes or behaves wrongly and you do not know which mod is the cause."
                     )
@@ -111,9 +115,9 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                     Label(
                         "A mod stays on while another mod in the test needs it. At the end, or when you stop, NNOMM puts ${state.profile().name} back exactly as it is now."
                     )
-                    Label("If the problem needs two mods together, this test cannot find it.")
+                    Label("If the problem needs two mods together, this test cannot find it.", color = nnomm.ui.theme.LocalNnTheme.current.colors.text3)
                 }
-                "base" -> {
+                TroublePhase.BASE -> {
                     Label(
                         "First check: all ${t!!.saved.size} mods are off now. Start the game and do what causes the problem."
                     )
@@ -121,7 +125,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                         "If the problem is still there, a mod is not the cause, and the test stops."
                     )
                 }
-                "test" -> {
+                TroublePhase.TEST -> {
                     Summary(
                         listOf(
                             "${t!!.round} of ${t.rounds}" to "round",
@@ -138,7 +142,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                         t.off.forEach { DiffLine("off", state.mod(it).name) {} }
                     }
                 }
-                "nomod" -> {
+                TroublePhase.NOMOD -> {
                     Label(
                         "The problem is there with all mods off, so a mod is not the cause. Your mods are on again, as before."
                     )
@@ -146,7 +150,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                         "Next steps: \"Verify integrity of game files\" in Steam, or Repair for the mod loader in Settings, Game."
                     )
                 }
-                "found" -> {
+                TroublePhase.FOUND -> {
                     t?.found?.let { id ->
                         val mod = state.mod(id)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

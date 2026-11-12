@@ -54,6 +54,7 @@ class NewProfileDialog(private val model: AppModel) : Overlay {
                         if (from == "pack") scope.launch { model.choosePack() }
                         else {
                             model.store.newProfile(name, from == "copy", own)
+                            model.ui.library.filter = "all"
                             model.ui.go(Page.Library)
                             model.closeOverlay()
                         }
@@ -160,6 +161,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                 "${state.mod(it).name} ${verOf(state, it, profile.id)}"
                             }
                         )
+                        model.store.toast("Copied")
                     },
                     kind = ButtonKind.Ghost,
                 )
@@ -170,6 +172,10 @@ class ShareDialog(private val model: AppModel) : Overlay {
                     "Save the modpack file",
                     {
                         scope.launch {
+                            if (model.isDemo) {
+                                model.store.toast("This does nothing in the mock.")
+                                return@launch
+                            }
                             saving = true
                             try {
                                 val file =
@@ -204,7 +210,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                             state.copy(profileId = profile.id),
                                         )
                                     }
-                                    model.ui.updateStatus = "Saved ${file.name}"
+                                    model.store.toast("Saved ${file.name}", "Show the file", undo = { model.platform.openFolder(file.parentFile) })
                                     model.closeOverlay()
                                 }
                             } catch (e: Exception) {
@@ -242,7 +248,8 @@ class ShareDialog(private val model: AppModel) : Overlay {
                         Button(
                             "Show",
                             {
-                                model.ui.go(Page.Library)
+                                model.ui.library.filter = "all"
+                            model.ui.go(Page.Library)
                                 model.ui.library.filter = "prob"
                                 model.closeOverlay()
                             },
@@ -281,7 +288,7 @@ internal fun Field(
     focus: FocusRequester? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Label(label, Modifier.heightIn(min = 18.dp), weight = 600)
+        Label(label, Modifier.heightIn(min = 18.dp), color = LocalNnTheme.current.colors.text2)
         DialogTextField(
             value,
             set,

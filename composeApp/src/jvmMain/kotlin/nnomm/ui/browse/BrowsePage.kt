@@ -70,6 +70,7 @@ fun BrowsePage() {
                 offlineText(state, model.ui.mock == "offline"),
                 Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp),
                 warn = true,
+                centered = true,
                 action = {
                     Button(
                         "Try again",
@@ -230,7 +231,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
         }
         Column {
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 22.dp).padding(bottom = 5.dp),
+                Modifier.fillMaxWidth().heightIn(min = 18.dp).padding(bottom = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
@@ -241,7 +242,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
                     weight = 600,
                     color = LocalNnTheme.current.colors.text2,
                 )
-                if (b.tags.isNotEmpty()) LinkButton("Clear", { b.tags = emptySet() })
+                if (b.tags.isNotEmpty()) Tooltip("Show all tags again") { LinkButton("Clear", { b.tags = emptySet() }) }
                 if (b.tags.size > 1)
                     Tooltip("A mod must have any, or all, of the tags you select") {
                         SegmentedControl(
@@ -279,7 +280,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
                     SelectionGlyph(b.game.isNotEmpty(), false)
                     Label(
                         "Made for ${effectiveGameVersion(s) ?: "unknown"}",
-                        color = LocalNnTheme.current.colors.text2,
+                        color = if (b.game.isNotEmpty()) LocalNnTheme.current.colors.text else LocalNnTheme.current.colors.text2,
                     )
                 }
             }
@@ -290,7 +291,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
 @Composable
 private fun FacetHeading(title: String, clear: Boolean, onClear: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 22.dp).padding(bottom = 5.dp),
+        Modifier.fillMaxWidth().heightIn(min = 18.dp).padding(bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Label(
@@ -353,7 +354,7 @@ private fun Results(
                     item(span = { GridItemSpan(maxLineSpan) }) { ActiveFilters(s, rows.size) }
                 sections.forEach { section ->
                     item(key = "section-${section.title}", span = { GridItemSpan(maxLineSpan) }) {
-                        Column(Modifier.padding(bottom = 16.dp)) {
+                        Column(Modifier.padding(bottom = 12.dp)) {
                             SectionHeading(section.title, section.subtitle)
                             Spacer(Modifier.height(8.dp))
                             CardStrip(section.mods, { it.id }) {
@@ -474,7 +475,7 @@ private fun ActiveFilters(s: AppState, count: Int) {
 
 @Composable
 private fun FilterChip(text: String, remove: () -> Unit) {
-    Tooltip("Remove this filter") { Chip("$text ×", selected = true, onClick = remove) }
+    Tooltip("Remove this filter") { Chip(text, selected = true, onClick = remove, trailingIcon = NnIcons.x) }
 }
 
 @Composable
@@ -500,7 +501,7 @@ private fun BrowseCard(
     val current = model.ui.panel?.modId == x.id
     val shape = RoundedCornerShape(9.dp)
     control(
-        modifier.fillMaxWidth().heightIn(min = if (strip) 152.dp else 0.dp),
+        modifier.fillMaxWidth().heightIn(min = 0.dp),
         onClick = { model.ui.openMod(x.id) },
     ) { m, hover, _ ->
         Column(
@@ -661,7 +662,7 @@ private fun StateButton(id: String) {
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Icon(NnIcons.check, color = c.on)
-                    Label("On", color = c.on, size = 12f, weight = 600)
+                    Label("On", color = c.on, size = 13f, weight = 600)
                 }
             else ->
                 Button(

@@ -12,6 +12,8 @@ data class MockShot(
     val address: String,
     val width: Int = 1328,
     val height: Int = 792,
+    val seed: (AppModel) -> Unit = {},
+    val initialState: (nnomm.core.model.AppState) -> nnomm.core.model.AppState = { it },
 )
 
 val mockShots =
@@ -61,10 +63,11 @@ val mockShots =
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {
-            AppModel(mockStore(address), ShotPlatform).also {
+            AppModel(mockStore(address, initialState), ShotPlatform).also {
                 nnomm.ui.settings.registerSettingsOverlays(it)
                 it.registerDialogFactories()
                 applyMockAddress(it, address)
+                seed(it)
                 if (address.contains("mock=first")) it.openOverlay("first")
                 if (address.contains("trouble=1")) it.openOverlay("trouble")
             }

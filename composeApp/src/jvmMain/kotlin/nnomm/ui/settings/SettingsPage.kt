@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonPrimitive
 import nnomm.core.model.*
 import nnomm.core.settings.*
@@ -27,8 +28,11 @@ import nnomm.ui.theme.LocalNnTheme
 @Composable
 fun SettingsPage() {
     val model = LocalApp.current
-    val state by model.store.state.collectAsState()
+    val state by remember(model) {
+            model.store.state.map { it.copy(toasts = emptyList(), downloads = emptyList()) }.distinctUntilChanged()
+        }.collectAsState(model.store.state.value)
     GameFolderChooser(model)
+    LaunchedEffect(model) { if (!model.isDemo) model.store.refreshStoreUsage() }
     val view = model.ui.settings
     val colors = LocalNnTheme.current.colors
     val focus = remember { FocusRequester() }
@@ -77,7 +81,7 @@ fun SettingsPage() {
                             view.profileId = it.id
                             view.scope = "profile"
                         }
-                    })
+                    }, current = personal)
                 }
                 Spacer(Modifier.weight(1f))
                 SettingField(view.query, { view.query = it }, Modifier.width(230.dp), "Search settings", focus, NnIcons.search)
@@ -102,13 +106,13 @@ fun SettingsPage() {
                         }
                     }
                 }
-                key(view.category, personal, query) {
+                key(view.category, personal) {
                     val scroll = rememberScrollState()
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 14.dp, end = 22.dp, bottom = 26.dp)) {
                             Column(Modifier.widthIn(max = 740.dp).fillMaxWidth()) {
                                 if (personal) Label("These settings can have their own value in ${profile.name}. A dot marks each one that has. All other settings are the same for every profile.",
-                                    Modifier.padding(top = 4.dp, bottom = 16.dp), color = colors.text2)
+                                    Modifier.widthIn(max = 434.dp).padding(top = 4.dp, bottom = 16.dp), color = colors.text2)
                                 else if (query.isNotEmpty() && rows.isNotEmpty()) Label("${rows.size} ${if (rows.size == 1) "setting" else "settings"} for \"${view.query.trim()}\"", color = colors.text2)
                                 if (rows.isEmpty() && query.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Label("No setting matches", size = 18f, weight = 650)
@@ -122,10 +126,10 @@ fun SettingsPage() {
                                             "servers" -> "The server list comes in a later version."
                                             "danger" -> "NNOMM asks again before each of these."
                                             "profiles" -> "A profile is a list of mods that are on, with the version of each. You can ignore profiles and use only Default."
-                                            "keys" -> "Click a shortcut to change it."
+                                            "keys" -> "Keyboard shortcuts."
                                             else -> null
                                         }
-                                        lead?.let { Label(it, Modifier.padding(bottom = 8.dp), color = colors.text2) }
+                                        lead?.let { Label(it, Modifier.widthIn(max = 434.dp).padding(bottom = 8.dp), color = colors.text2) }
                                     }
                                     Column(if (cat == "danger") Modifier.padding(top = 8.dp).border(1.dp, colors.danger, RoundedCornerShape(9.dp)).padding(horizontal = 14.dp) else Modifier) {
                                         definitions.forEachIndexed { i, definition ->
@@ -181,7 +185,7 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
         KEYS.forEach { (label, shortcut) ->
             Row(Modifier.fillMaxWidth().drawBottomBorder(c.line).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Label(label, Modifier.weight(1f))
-                control(Modifier, onClick = { model.ui.settings.notice = "TODO(core): Change keyboard shortcuts" }) { modifier, _, _ ->
+                control(Modifier, enabled = false, onClick = { model.store.toast("Keyboard shortcuts cannot be changed yet.") }) { modifier, _, _ ->
                     Box(modifier) { KeyCap(shortcut) }
                 }
             }
@@ -189,6 +193,16 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
         return
     }
     val path = d.type == "path"
+    var draft by remember(value) { mutableStateOf(value) }
+    val pathModifier = Modifier.onPreviewKeyEvent {
+        if (it.type == KeyEventType.KeyDown && it.key == Key.Enter) {
+            change(JsonPrimitive(draft))
+            true
+        } else if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
+            draft = value
+            true
+        } else false
+    }.onFocusChanged { if (!it.hasFocus && draft != value) change(JsonPrimitive(draft)) }
     Column(Modifier.fillMaxWidth().then(if (divider) Modifier.drawBottomBorder(c.line) else Modifier).padding(top = 11.dp, bottom = if (divider) 12.dp else 11.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val text: @Composable () -> Unit = {
             Column {
@@ -197,8 +211,9 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                     Mark(d.label, query)
                 }
                 var help = settingHelp(d, state)
-                if (d.key == "appUpdate") help = model.ui.updateStatus ?: "Version ${state.appVersion}."
-                if (d.key == "cache") help = "Old versions that no profile uses. TODO(core): unused file size is unavailable."
+                if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}."
+                if (d.key == "loader" && model.isDemo) help = d.help
+                if (d.key == "cache") help = "${state.storeUnusedMb ?: 0} MB. Old versions that no profile uses."
                 if (help.isNotEmpty()) Box(Modifier.padding(top = 2.dp)) { Mark(help, query, true) }
                 if (query.isNotEmpty() && !"${d.label} ${d.help}".lowercase().contains(query)) {
                     d.options.firstOrNull { it.lowercase().contains(query) }?.let { Mark("Option: $it", query, true) }
@@ -219,17 +234,17 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                     kind = if (own) ButtonKind.Ghost else ButtonKind.Default, size = ControlSize.Small)
                 if (profile == null && d.ov && state.settings.general["showProfiles"]?.content != "false") {
                     val owners = state.profiles.filter { d.key in state.settings.overrides[it.id].orEmpty() }
-                    if (owners.isNotEmpty()) Button(owners.joinToString(", ") { it.name } + if (owners.size == 1) " has its own value" else " have their own value", {
+                    if (owners.isNotEmpty()) LinkButton(owners.joinToString(", ") { it.name } + if (owners.size == 1) " has its own value" else " have their own value", {
                         model.ui.settings.scope = "profile"
                         model.ui.settings.profileId = owners.first().id
-                    }, kind = ButtonKind.Ghost, size = ControlSize.Small)
+                    }, size = 12f)
                 }
             }
         }
-        if (path || narrow || d.type == "sources") {
+        if (path || d.type == "sources") {
             text()
             if (path) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                SettingField(value, { change(JsonPrimitive(it)) }, Modifier.weight(1f).widthIn(max = 620.dp), d.placeholder.orEmpty(), enabled = enabled)
+                SettingField(draft, { draft = it }, Modifier.weight(1f).widthIn(max = 620.dp).then(pathModifier), d.placeholder.orEmpty(), enabled = enabled)
                 d.actions.forEach { action -> Button(action, { performSettingAction(model, d, action) }) }
             } else if (d.type != "sources") controls()
         } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -259,14 +274,14 @@ internal fun SettingField(value: String, onChange: (String) -> Unit, modifier: M
 
 @Composable
 private fun SettingsSelect(options: List<String>, selected: Int, onSelect: (Int) -> Unit,
-    enabled: Boolean = true) {
+    enabled: Boolean = true, current: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val theme = LocalNnTheme.current
     val density = LocalDensity.current
     val width = with(density) {
         (options.maxOfOrNull { measurer.measure(it, theme.text()).size.width } ?: 0).toDp() + 41.dp
     }
-    Select(options, selected, onSelect, Modifier.width(width), enabled)
+    Select(options, selected, onSelect, Modifier.width(width), enabled, current = current)
 }
 
 @Composable
