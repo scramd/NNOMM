@@ -459,7 +459,7 @@ the previous copy goes to recovery instead of replacing the player's target.
 Other callers retain their existing rollback and commit rules.
 
 An incomplete installation resumes only for detected BepInEx 5.4.23.4 with matching
-surviving owned bytes. A different or changed present loader keeps the presence
+surviving owned binaries. A different or changed present loader binary keeps the presence
 guard; Play does not mix the pinned archive into it or announce an installation.
 Startup reports ownership recovery only when an intent remains pending, without
 technical exception paths. Loader recovery failures use dedicated Retry guidance.
@@ -492,9 +492,13 @@ completion marker also applies to other journal callers; their commit direction
 and replacement rules are unchanged. Per-target eligibility defaults to allowing
 mutation for other callers, which keep their existing checks.
 
-Present relinquished loader names keep the presence guard across startup and Retry;
-only an unchanged incomplete NNOMM installation can resume. A pending Play without
-mods restore defers INI ownership verification and removal until restoration
+Present changed or relinquished loader binaries (`winhttp.dll` and files under
+`BepInEx/core`) keep the presence guard across startup and Retry. An edited INI
+alone does not block filling missing files; Install never overwrites it. A blocked
+Install names the changed binaries and asks the player to restore BepInEx 5.4.23.4
+or remove those files. Play surfaces that block before launch. Repair with no
+BepInEx detection DLL reports that the loader is not installed and offers Install.
+A pending Play without mods restore defers INI ownership verification and removal until restoration
 finishes. Startup never verifies ownership for a folder with an unfinished relevant
 journal. It retains the record and existing ownership until recovery can finish.
 
@@ -507,4 +511,4 @@ suite uses the network or a real game installation.
 A persisted rollback with no previous copy has already moved it back. Recovery
 finishes even if the player then deletes that restored target. An original
 `old-moved` record with neither copy available still blocks its targets. A present
-relinquished loader file guards Install even without the BepInEx detection DLL.
+relinquished loader binary guards Install even without the BepInEx detection DLL.

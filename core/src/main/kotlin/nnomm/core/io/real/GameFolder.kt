@@ -219,8 +219,8 @@ class RealGameFolder(
             val resumeAllowed =
                 hashes.isNotEmpty() &&
                     loaderVersion == "5.4.23.4" &&
-                    !hasPresentRelinquished(game) &&
-                    hashes.all { (name, hash) ->
+                    changedLoaderBinaries(game).isEmpty() &&
+                    hashes.filterKeys(::isLoaderBinary).all { (name, hash) ->
                         !safe(game, name).exists() ||
                             runCatching { readLoaderHash(safe(game, name)) == hash }
                                 .getOrDefault(false)
@@ -232,6 +232,7 @@ class RealGameFolder(
                 loaderVersion,
                 loaderComplete = complete,
                 loaderResumeAllowed = resumeAllowed,
+                changedLoaderBinaries = changedLoaderBinaries(game),
             )
         }
 
@@ -1308,13 +1309,23 @@ class RealGameFolder(
         }
     }
 
-    private fun hasPresentRelinquished(game: Path): Boolean =
-        loaderOwnership(game)
-            .read()
-            ?.takeIf { it.gameRoot == game.toString() }
-            ?.relinquished
-            .orEmpty()
-            .any { safe(game, it).exists() }
+    private fun isLoaderBinary(name: String) =
+        name == "winhttp.dll" || name.startsWith("BepInEx/core/")
+
+    private fun changedLoaderBinaries(game: Path): List<String> {
+        val ownership =
+            loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
+                ?: return emptyList()
+        return (ownership.relinquished + ownership.hashes.keys)
+            .filter { name ->
+                isLoaderBinary(name) &&
+                    safe(game, name).exists() &&
+                    (name in ownership.relinquished ||
+                        runCatching { readLoaderHash(safe(game, name)) != ownership.hashes[name] }
+                            .getOrDefault(true))
+            }
+            .sorted()
+    }
 
     private fun writeOwnership(game: Path, hashes: Map<String, String>) {
         val old = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
@@ -1572,22 +1583,28 @@ class RealGameFolder(
                 val recorded = ownedHashes(game)
                 val verified = verifiedOwnership(game)
                 writeOwnership(game, verified)
-                // Only resume the pinned loader while every surviving owned file is unchanged.
+                // Only resume the pinned loader while surviving owned binaries are unchanged.
                 if (
                     !repair &&
-                        (hasPresentRelinquished(game) ||
+                        (changedLoaderBinaries(game).isNotEmpty() ||
                             (info.loaderPresent &&
                                 (info.loaderVersion != "5.4.23.4" ||
                                     verified.isEmpty() ||
                                     recorded.any { (name, hash) ->
-                                        safe(game, name).exists() && verified[name] != hash
+                                        isLoaderBinary(name) &&
+                                            safe(game, name).exists() &&
+                                            verified[name] != hash
                                     })))
-                )
+                ) {
+                    if (info.changedLoaderBinaries.isNotEmpty())
+                        notice(LoaderInstallBlocked(info.changedLoaderBinaries).message!!)
                     return@guarded
+                }
                 val existingVersion = info.loaderVersion
                 val changedOwned =
                     (recorded.keys - verified.keys) +
                         loaderOwnership(game).read()?.relinquished.orEmpty()
+                if (repair && !info.loaderPresent) throw LoaderNotInstalled()
                 if (repair && existingVersion != "5.4.23.4") {
                     val message =
                         if (existingVersion == null)

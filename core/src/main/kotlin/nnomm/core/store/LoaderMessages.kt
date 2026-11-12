@@ -4,6 +4,10 @@ package nnomm.core.store
 internal fun loaderFailureHelp(error: Throwable): String {
     val causes = generateSequence(error) { it.cause }.take(12).toList()
     return when {
+        causes.any { it is nnomm.core.io.LoaderNotInstalled } ->
+            "The mod loader is not installed. Use Install to add BepInEx 5.4.23.4."
+        causes.any { it is nnomm.core.io.LoaderInstallBlocked } ->
+            causes.first { it is nnomm.core.io.LoaderInstallBlocked }.message!!
         causes.any { it is nnomm.core.io.LoaderRecoveryPending } ->
             "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->

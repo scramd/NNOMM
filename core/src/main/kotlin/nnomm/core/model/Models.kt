@@ -157,6 +157,7 @@ data class GameInfo(
     val folderMissing: Boolean = false,
     val loaderComplete: Boolean = true,
     val loaderResumeAllowed: Boolean = true,
+    val changedLoaderBinaries: List<String> = emptyList(),
 )
 
 @Serializable

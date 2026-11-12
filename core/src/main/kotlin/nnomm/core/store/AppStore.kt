@@ -292,11 +292,26 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             io.persistence?.save(state.value)
             return
         }
+        val beforeInstall =
+            if (
+                modAction &&
+                    onCount(snapshot) > 0 &&
+                    snapshot.game.changedLoaderBinaries.isNotEmpty()
+            )
+                io.gameFolder.inspect(folder).also { game -> change { it.copy(game = game) } }
+            else snapshot.game
         if (
             modAction &&
                 onCount(snapshot) > 0 &&
-                (!snapshot.game.loaderPresent ||
-                    (!snapshot.game.loaderComplete && snapshot.game.loaderResumeAllowed))
+                (!beforeInstall.loaderPresent || !beforeInstall.loaderComplete) &&
+                beforeInstall.changedLoaderBinaries.isNotEmpty()
+        )
+            throw LoaderInstallFailure(LoaderInstallBlocked(beforeInstall.changedLoaderBinaries))
+        if (
+            modAction &&
+                onCount(snapshot) > 0 &&
+                (!beforeInstall.loaderPresent ||
+                    (!beforeInstall.loaderComplete && beforeInstall.loaderResumeAllowed))
         ) {
             try {
                 io.gameFolder.installLoader(folder)
@@ -307,6 +322,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             }
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
+            if (
+                (!game.loaderPresent || !game.loaderComplete) &&
+                    game.changedLoaderBinaries.isNotEmpty()
+            )
+                throw LoaderInstallFailure(LoaderInstallBlocked(game.changedLoaderBinaries))
             if (game.loaderPresent && game.loaderVersion == "5.4.23.4" && game.loaderComplete)
                 toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
         }
@@ -1579,6 +1599,31 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         change { it.copy(firstStart = it.firstStart.copy(complete = true)) }
     }
 
+    private fun installMissingLoader() {
+        val folder = state.value.game.folder ?: return
+        disk {
+            try {
+                val before = io.gameFolder.inspect(folder)
+                if (before.changedLoaderBinaries.isNotEmpty())
+                    throw LoaderInstallBlocked(before.changedLoaderBinaries)
+                io.gameFolder.installLoader(folder)
+                val game = io.gameFolder.inspect(folder)
+                change { it.copy(game = game) }
+                if (game.loaderPresent && game.loaderVersion == "5.4.23.4" && game.loaderComplete)
+                    toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                io.logger.error("install loader", e)
+                toast(
+                    "Could not install the mod loader. ${loaderFailureHelp(e)}",
+                    "Retry",
+                    ms = 30000,
+                    undo = { installMissingLoader() },
+                )
+            }
+        }
+    }
+
     fun repairLoader() {
         val folder = state.value.game.folder ?: return
         disk {
@@ -1592,12 +1637,21 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 io.logger.error("repair loader", e)
                 toast(
                     "Could not repair the mod loader. ${loaderFailureHelp(e)}",
-                    if (e is LoaderRepairRefused) null else "Retry",
+                    when (e) {
+                        is LoaderNotInstalled -> "Install"
+                        is LoaderRepairRefused -> null
+                        else -> "Retry"
+                    },
                     ms = 30000,
                     undo =
-                        if (e is LoaderRepairRefused) null
-                        else {
-                            { repairLoader() }
+                        when (e) {
+                            is LoaderNotInstalled -> {
+                                { installMissingLoader() }
+                            }
+                            is LoaderRepairRefused -> null
+                            else -> {
+                                { repairLoader() }
+                            }
                         },
                 )
             }

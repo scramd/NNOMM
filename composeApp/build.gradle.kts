@@ -163,7 +163,12 @@ nucleus.application {
                 runtimeVersion = "24.08" // Forces GLIBC 2.39+ runtime branch
                 sdk = "org.freedesktop.Sdk"
                 finishArgs +=
-                    listOf("--share=network", "--filesystem=home", "--filesystem=xdg-data/Steam")
+                    listOf(
+                        "--share=network",
+                        "--filesystem=home",
+                        "--filesystem=xdg-data/Steam",
+                        "--filesystem=~/.var/app/com.valvesoftware.Steam",
+                    )
             }
         }
 
