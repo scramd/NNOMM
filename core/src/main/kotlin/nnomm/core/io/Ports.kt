@@ -100,7 +100,7 @@ class LoaderNotInstalled :
 
 class LoaderInstallBlocked(files: List<String>) :
     IllegalStateException(
-        "NNOMM did not install the mod loader because you changed ${files.joinToString(", ")}. Restore BepInEx 5.4.23.4 or remove the changed files, then try again."
+        "You changed ${files.joinToString(", ")}. Restore BepInEx 5.4.23.4 or remove the changed files, then try again."
     )
 
 class LoaderRepairRefused :

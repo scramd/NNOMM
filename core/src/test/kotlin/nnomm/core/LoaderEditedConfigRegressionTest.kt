@@ -140,7 +140,7 @@ class LoaderEditedConfigRegressionTest {
         f.game.resolve("BepInEx/core/BepInEx.dll").deleteExisting()
         f.folder.installLoader(f.game.toString())
         assertFalse(f.game.resolve("BepInEx/core/BepInEx.dll").exists())
-        assertTrue(f.notices.single().contains("because you changed winhttp.dll"))
+        assertTrue(f.notices.single().contains("NNOMM did not install the mod loader. You changed winhttp.dll."))
         val demo = nnomm.core.demo.Demo.io()
         var launched = false
         val app =
@@ -165,7 +165,7 @@ class LoaderEditedConfigRegressionTest {
             withTimeout(10000) {
                 while (
                     app.state.value.toasts.none {
-                        it.text.contains("because you changed winhttp.dll")
+                        it.text.contains("Could not install the mod loader. You changed winhttp.dll.")
                     }
                 ) delay(10)
             }
@@ -217,5 +217,43 @@ class LoaderEditedConfigRegressionTest {
         } finally {
             app.shutdown()
         }
+    }
+    @Test
+    fun changedBinaryAndIncompleteLoaderBlocksPlayAfterApply() = runBlocking {
+        val f = fixture()
+        f.folder.installLoader(f.game.toString())
+        f.game.resolve("winhttp.dll").writeText("player binary")
+        f.game.resolve("BepInEx/core/Extra.dll").deleteExisting()
+        val info = f.folder.inspect(f.game.toString())
+        assertTrue(info.loaderPresent)
+        assertFalse(info.loaderComplete)
+        assertFalse(info.loaderResumeAllowed)
+        assertEquals(listOf("winhttp.dll"), info.changedLoaderBinaries)
+        val demo = nnomm.core.demo.Demo.io()
+        var launched = false
+        val app = nnomm.core.store.AppStore(
+            nnomm.core.demo.Demo.state().copy(game = info),
+            demo.copy(
+                gameFolder = object : GameFolder by demo.gameFolder {
+                    override suspend fun inspect(folder: String) = f.folder.inspect(folder)
+                    override suspend fun installLoader(folder: String) = f.folder.installLoader(folder)
+                },
+                persistence = null,
+                launcher = object : GameLauncher by demo.launcher {
+                    override suspend fun start(state: nnomm.core.model.AppState, withoutMods: Boolean) { launched = true }
+                },
+            ),
+        )
+        try {
+            // A mod-only retry/deferred apply establishes the current placement plan.
+            app.retryApply()
+            app.awaitDiskIdle()
+            app.play()
+            withTimeout(10000) {
+                while (!launched && app.state.value.toasts.none { it.text.contains("You changed winhttp.dll") }) delay(10)
+            }
+            assertFalse(launched, "Play launched despite a known changed binary and incomplete loader")
+            assertTrue(app.state.value.toasts.any { it.text.contains("Could not install the mod loader. You changed winhttp.dll.") })
+        } finally { app.shutdown() }
     }
 }

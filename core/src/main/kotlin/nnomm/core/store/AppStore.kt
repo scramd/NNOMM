@@ -1051,7 +1051,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 (onCount(state.value) > 0 &&
                                     (!state.value.game.loaderPresent ||
                                         (!state.value.game.loaderComplete &&
-                                            state.value.game.loaderResumeAllowed))))
+                                            (state.value.game.loaderResumeAllowed ||
+                                                state.value.game.changedLoaderBinaries
+                                                    .isNotEmpty())))))
                     )
                         prepareGameFolder(state.value)
                     applying = false

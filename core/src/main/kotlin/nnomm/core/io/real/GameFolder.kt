@@ -1597,7 +1597,10 @@ class RealGameFolder(
                                     })))
                 ) {
                     if (info.changedLoaderBinaries.isNotEmpty())
-                        notice(LoaderInstallBlocked(info.changedLoaderBinaries).message!!)
+                        notice(
+                            "NNOMM did not install the mod loader. " +
+                                LoaderInstallBlocked(info.changedLoaderBinaries).message
+                        )
                     return@guarded
                 }
                 val existingVersion = info.loaderVersion
