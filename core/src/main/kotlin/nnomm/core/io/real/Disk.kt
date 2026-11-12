@@ -420,7 +420,14 @@ internal fun recoverTransactions(
                         batch.copy(
                             changes =
                                 batch.changes.map { tx ->
-                                    if (tx.phase.startsWith("recover-")) tx
+                                    if (
+                                        batch.operationId != null &&
+                                            tx.phase == "recover-rollback" &&
+                                            Path.of(tx.previous).exists() &&
+                                            Path.of(tx.target).exists()
+                                    )
+                                        tx.copy(phase = "recover-preserve")
+                                    else if (tx.phase.startsWith("recover-")) tx
                                     else
                                         tx.copy(
                                             phase =
@@ -454,11 +461,33 @@ internal fun recoverTransactions(
                     val committed = batch.changes.any { it.phase == "recover-commit" }
                     reportPromotions(batch)
                     indexRecovery(folder, journal, batch.changes)
-                    batch.changes.asReversed().forEach { tx ->
+                    batch.changes.indices.reversed().forEach { index ->
+                        var tx = batch.changes[index]
+                        // Recheck at the mutation too: another recovery entry may have run
+                        // since the direction was saved, or this recovery may be resuming.
+                        if (
+                            batch.operationId != null &&
+                                tx.phase == "recover-rollback" &&
+                                Path.of(tx.previous).exists() &&
+                                (Path.of(tx.target).exists() || !Path.of(tx.target).parent.exists())
+                        ) {
+                            tx = tx.copy(phase = "recover-preserve")
+                            batch =
+                                batch.copy(
+                                    changes =
+                                        batch.changes.mapIndexed { i, entry ->
+                                            if (i == index) tx else entry
+                                        }
+                                )
+                            atomic(journal, json.encodeToString(batch))
+                            reportPromotions(batch)
+                        }
                         val target = Path.of(tx.target)
                         val previous = Path.of(tx.previous)
                         val kept = recoveryPath(folder, journal, tx)
-                        if (tx.phase == "recover-commit") {
+                        if (tx.phase == "recover-rollback-done") {
+                            // A later deletion belongs to the player. Never restore it again.
+                        } else if (tx.phase == "recover-commit") {
                             if (previous.exists()) {
                                 Files.createDirectories(kept.parent)
                                 Files.move(previous, kept)
@@ -481,6 +510,18 @@ internal fun recoverTransactions(
                             ) {
                                 "Transaction storage is unavailable; journal kept at $journal"
                             }
+                        if (tx.phase == "recover-rollback") {
+                            batch =
+                                batch.copy(
+                                    changes =
+                                        batch.changes.mapIndexed { i, entry ->
+                                            if (i == index)
+                                                entry.copy(phase = "recover-rollback-done")
+                                            else entry
+                                        }
+                                )
+                            atomic(journal, json.encodeToString(batch))
+                        }
                         tx.staged?.let { deleteTree(Path.of(it)) }
                         DiskFaults.step("recovery-staged-deleted")
                     }
@@ -524,6 +565,7 @@ internal fun replaceTrees(
     promotionReport: Path? = null,
     commitRemovals: Boolean = false,
     operationId: String? = null,
+    eligible: (Path) -> Boolean = { true },
 ) {
     Files.createDirectories(journals)
     val id = java.util.UUID.randomUUID().toString()
@@ -583,6 +625,24 @@ internal fun replaceTrees(
             val target = Path.of(tx.target)
             val previous = Path.of(tx.previous)
             DiskFaults.beforeMove(target)
+            if (!eligible(target)) {
+                prepared[index] = tx.copy(phase = "recover-preserve")
+                atomic(
+                    journal,
+                    json.encodeToString(
+                        TransactionBatch(
+                            prepared,
+                            afterCommit?.first?.toString(),
+                            afterCommit?.second,
+                            promotionReport?.toString(),
+                            commitRemovals,
+                            operationId,
+                        )
+                    ),
+                )
+                tx.staged?.let { deleteTree(Path.of(it)) }
+                return@forEachIndexed
+            }
             if (target.exists()) Files.move(target, previous)
             DiskFaults.step("old-rename-before-journal")
             prepared[index] = tx.copy(phase = "old-moved")
