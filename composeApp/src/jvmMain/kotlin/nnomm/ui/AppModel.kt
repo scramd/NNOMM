@@ -194,6 +194,10 @@ class AppModel(
             ActionKind.UNINSTALL -> action.id?.let { store.uninstall(listOf(it)) }
             ActionKind.PLAY -> store.play()
             ActionKind.LOOKFORUPDATES -> store.lookForUpdates()
+            ActionKind.LIBRARYFILTER -> {
+                ui.go(Page.Library)
+                ui.library.filter = action.id ?: action.value ?: "all"
+            }
             ActionKind.ADDFILE ->
                 scope.launch {
                     acceptFiles(
