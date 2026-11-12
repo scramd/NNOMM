@@ -115,7 +115,7 @@ private constructor(
                             { current().catalog },
                         )
                     val downloader = RealDownloader(client, home)
-                    val launcher = RealGameLauncher(home, scope, fakeLauncher)
+                    val launcher = RealGameLauncher(home, scope, fakeLauncher, notice = notice)
                     val game =
                         RealGameFolder(
                             home,
