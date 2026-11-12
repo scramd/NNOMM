@@ -35,6 +35,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     notesStatus = emptyMap(),
                     metadataStatus = emptyMap(),
                     storeUnusedMb = null,
+                    storeUnusedKb = null,
                     storeScanStatus = LoadStatus.IDLE,
                     storeUsedBytes = 0,
                     gameStarting = false,
@@ -108,6 +109,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         return result.await()
     }
 
+    private val conflictObserver =
+        io.gameFolder.placementConflicts?.let { flow ->
+            worker.launch {
+                flow.collect { value -> change { it.copy(placementConflicts = value) } }
+            }
+        }
     private val placementObserver =
         io.gameFolder.applyProblems?.let { flow ->
             worker.launch { flow.collect { value -> change { it.copy(applyProblems = value) } } }
@@ -1007,7 +1014,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 io.logger.error("play", e)
                 if (e is LoaderInstallFailure) {
                     toast(
-                        "Could not install the mod loader: check your connection and try again.",
+                        "Could not install the mod loader. ${loaderFailureHelp(e.cause ?: e)}",
                         "Retry",
                         ms = 30000,
                         undo = { play(withoutMods) },
@@ -1024,7 +1031,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         else
                             when (e.message) {
                                 "Doorstop's enabled setting was not found." ->
-                                    "Doorstop's enabled setting was not found."
+                                    "The mod loader’s settings file is damaged. Use Repair for the mod loader in Settings, Game."
                                 "Nuclear Option is already running." ->
                                     "Nuclear Option is already running."
                                 else -> "Check that the game is installed and try Play again."
@@ -1498,6 +1505,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 firstStart = FirstStart(complete || s.firstStart.complete, on, installed.size - on),
             )
         }
+        try {
+            diskAwait { updateStoreUsage() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            io.logger.error("takeover size", e)
+        }
     }
 
     /** Notices share the store's toast lifetime and are cancelled with the store. */
@@ -1527,11 +1541,25 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     fun repairLoader() {
         val folder = state.value.game.folder ?: return
         disk {
-            io.gameFolder.repairLoader(folder)
-            val game = io.gameFolder.inspect(folder)
-            change { it.copy(game = game) }
+            try {
+                io.gameFolder.repairLoader(folder)
+                val game = io.gameFolder.inspect(folder)
+                change { it.copy(game = game) }
+                toast("Repaired the mod loader.")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                io.logger.error("repair loader", e)
+                toast(
+                    "Could not repair the mod loader. ${loaderFailureHelp(e)}",
+                    "Retry",
+                    ms = 30000,
+                    undo = { repairLoader() },
+                )
+            }
         }
     }
+
+    @Volatile private var visibleMetadataIds: Set<String> = emptySet()
 
     private fun requestMetadata(key: String): Boolean =
         synchronized(metadataRequested) {
@@ -1546,6 +1574,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         ids: Set<String> = state.value.catalog.map { it.id }.toSet(),
         backgroundLoad: Boolean = false,
     ) {
+        if (!backgroundLoad) visibleMetadataIds = ids.toSet()
         val snapshot = state.value
         snapshot.catalog
             .filter { it.id in ids }
@@ -1557,6 +1586,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             background {
                                 (if (backgroundLoad) backgroundMetadataSlots else metadataSlots)
                                     .withPermit {
+                                        if (!backgroundLoad && mod.id !in visibleMetadataIds)
+                                            return@withPermit
                                         if (!requestMetadata("${mod.id}/${version.version}"))
                                             return@withPermit
                                         val key = "${mod.id}/${version.version}"
@@ -1674,13 +1705,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
      */
     fun removeEverything() {
         if (state.value.gameRunning) {
-            toast("Close Nuclear Option before removing mods and the mod loader.")
+            toast("Close Nuclear Option before removing mods.")
             return
         }
         state.value.installed.keys.forEach(::cancelDownload)
         disk {
             if (io.launcher.running.value || state.value.gameRunning) {
-                toast("Close Nuclear Option before removing mods and the mod loader.")
+                toast("Close Nuclear Option before removing mods.")
                 return@disk
             }
             val snapshot = state.value
@@ -1727,24 +1758,49 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 else
                                     "The game folder needs attention. Retry or take over existing mods."
                             }
-                toast("Could not remove all mods. $reason")
+                toast(
+                    "Could not remove all mods. $reason",
+                    "Retry",
+                    ms = 30000,
+                    undo = { removeEverything() },
+                )
                 return@disk
             }
             // Publish the completed mod removal before the independent loader operation.
             change { it.copy(installed = keep, deferredModChange = false) }
-            io.persistence?.save(state.value)
+            try {
+                io.persistence?.save(state.value)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                io.logger.error("save removal", e)
+                toast(
+                    "Mods were removed from the game, but the Library could not be saved. Try saving again before closing NNOMM.",
+                    "Retry",
+                    ms = 30000,
+                    undo = {
+                        background {
+                            flush()
+                            toast("Saved the Library.")
+                        }
+                    },
+                )
+            }
             io.modStore.remove(remove.toList())
             val result =
                 buildList {
                         if (remove.isNotEmpty())
-                            add("Removed ${remove.size} registry mods from the Library.")
+                            add(
+                                "Removed ${plural(remove.size, "registry mod", "registry mods")} from every profile."
+                            )
                         if (keep.isNotEmpty())
                             add(
-                                "Kept ${keep.size} local, taken-over or unverified mods in the Library, turned off."
+                                "Kept ${plural(keep.size, "mod", "mods")} in the Library, turned off, because ${if (keep.size == 1) "its files may" else "their files may"} not be available to download again."
                             )
                         if (snapshot.installed.isEmpty()) add("There are no mods to remove.")
                         if (snapshot.game.folder == null)
-                            add("Updated the Library. No game folder is selected.")
+                            add(
+                                "No game folder is selected. Mods left in the previously selected game folder will be removed when you choose that folder again and press Play."
+                            )
                     }
                     .joinToString(" ")
             toast(result)
@@ -1758,15 +1814,21 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             io.gameFolder.removeLoader(folder)
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
+            toast("NNOMM-installed mod loader files were removed. Existing loader files were kept.")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             io.logger.error("remove loader", e)
             toast(
-                "Mod removal is complete. Could not remove the mod loader. Close the game and try again.",
+                "Mod removal is complete. Could not remove the mod loader. ${loaderFailureHelp(e)}",
                 "Retry",
                 ms = 30000,
-                undo = { disk { removeLoaderAfterMods(folder) } },
+                undo = {
+                    disk {
+                        state.value.game.folder?.let { removeLoaderAfterMods(it) }
+                            ?: toast("Choose the game folder in Settings first.")
+                    }
+                },
             )
         }
     }
@@ -1783,14 +1845,15 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         val bytes = io.modStore.usedBytes()
         val installed = io.modStore.installedBytes(snapshot)
         val unused =
-            if (includeClearEstimate) io.modStore.unusedBytes(snapshot) / 1024 / 1024
-            else snapshot.storeUnusedMb
+            if (includeClearEstimate) (io.modStore.unusedBytes(snapshot) + 1023) / 1024
+            else snapshot.storeUnusedKb ?: snapshot.storeUnusedMb?.times(1024)
         change {
             it.copy(
                 storeUsedMb = bytes / 1024 / 1024,
                 storeUsedBytes = bytes,
                 storeUsedKb = (installed + 1023) / 1024,
-                storeUnusedMb = unused,
+                storeUnusedMb = unused?.div(1024),
+                storeUnusedKb = unused,
             )
         }
     }

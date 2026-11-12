@@ -250,11 +250,7 @@ class Review6ProbeTest {
         a.play(withoutMods = true)
         delay(1500)
         a.awaitDiskIdle()
-        assertTrue(
-            a.state.value.toasts.any {
-                it.text.contains("Doorstop's enabled setting was not found.")
-            }
-        )
+        assertTrue(a.state.value.toasts.any { it.text.contains("settings file is damaged") })
         assertFalse(a.state.value.toasts.any { it.text.contains("Some changes are pending") })
         println("PROBE P4 toasts ${a.state.value.toasts.map { it.text + " [" + it.action + "]" }}")
         a.shutdown()
@@ -679,6 +675,15 @@ class Review6ProbeTest {
                     error("Loader file is locked")
                 }
             }
+        var saved: AppState? = null
+        val persistence =
+            object : StatePersistence {
+                override suspend fun load(): AppState? = saved
+
+                override suspend fun save(state: AppState) {
+                    saved = state
+                }
+            }
         val a =
             AppStore(
                 state(g, listOf("reg")),
@@ -687,7 +692,7 @@ class Review6ProbeTest {
                         modStore = store,
                         gameFolder = failLoader,
                         launcher = launcher(),
-                        persistence = null,
+                        persistence = persistence,
                     ),
             )
         try {
@@ -703,12 +708,19 @@ class Review6ProbeTest {
                     " toasts=" +
                     a.state.value.toasts.map { it.text }
             )
+            assertFalse(g.resolve("BepInEx/plugins/reg").exists())
+            assertTrue(a.state.value.installed.isEmpty())
             assertTrue(
-                g.resolve("BepInEx/plugins/reg").exists() ||
-                    a.state.value.installed["reg"]?.profiles?.get("default")?.on != true ||
-                    a.state.value.deferredModChange,
-                "UI claims mod is on after it was removed, with no pending change",
+                a.state.value.toasts.any {
+                    it.text.contains("Removed 1 registry mod from every profile.")
+                }
             )
+            assertNotNull(saved)
+            assertTrue(saved!!.installed.isEmpty())
+            val retry = a.state.value.toasts.last { it.action == "Retry" }
+            a.runToast(retry.id)
+            a.awaitDiskIdle()
+            assertTrue(a.state.value.installed.isEmpty())
         } finally {
             a.shutdown()
         }
@@ -891,13 +903,13 @@ class Review6ProbeTest {
             withTimeout(5000) {
                 while (
                     other.state.value.toasts.none {
-                        it.text.startsWith("Could not install the mod loader:")
+                        it.text.startsWith("Could not install the mod loader.")
                     }
                 ) delay(10)
             }
             assertTrue(
                 other.state.value.toasts.any {
-                    it.text.startsWith("Could not install the mod loader:") && it.action == "Retry"
+                    it.text.startsWith("Could not install the mod loader.") && it.action == "Retry"
                 }
             )
             assertTrue(
@@ -1028,7 +1040,7 @@ class Review6ProbeTest {
                 nnomm.core.settings.SETTINGS.first { it.key == "store" },
                 state,
             )
-        assertTrue(help.contains("53\u00a0KB"))
+        assertTrue(help.contains("53 KB"))
         assertFalse(help.contains("438"))
     }
 }

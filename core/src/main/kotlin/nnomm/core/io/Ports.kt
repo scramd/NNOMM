@@ -88,6 +88,9 @@ interface ModStore {
 
 /** Only managed files can be changed; takeover copies existing files without changing the game. */
 interface GameFolder {
+    val placementConflicts: StateFlow<Map<String, Set<String>>>?
+        get() = null
+
     val applyProblems: StateFlow<Map<String, String>>?
         get() = null
 
