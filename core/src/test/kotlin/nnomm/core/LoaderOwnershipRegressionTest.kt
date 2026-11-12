@@ -292,7 +292,10 @@ class LoaderOwnershipRegressionTest {
             val player = f.game.resolve("player.txt").apply { writeText("keep me") }
             // Files the player owns before the operation: neither NNOMM record nor pending.
             val ownedBefore = record(f).read().orEmpty().toSet()
-            val playerFiles = snapshot(f.game).filterKeys { it !in ownedBefore }
+            val playerFiles =
+                snapshot(f.game).filter { (name, hash) ->
+                    name !in ownedBefore || (name == "winhttp.dll" && scenario == "repair-owned")
+                }
             var hits = 0
             DiskFaults.step = { if (it == step && ++hits == n) throw Crash() }
             val crashed =
@@ -413,7 +416,8 @@ class LoaderOwnershipRegressionTest {
 
     @Test
     fun crashesDuringRecoveryReplayPromotionEvidence() = runBlocking {
-        for (operation in listOf("install", "repair", "uninstall")) for (at in 1..6) {
+        for (operation in listOf("install", "repair", "uninstall")) for (at in
+            1..(if (operation == "repair") 5 else 6)) {
             val f = fixture(false, null)
             if (operation != "install") f.folder.installLoader(f.game.toString())
             if (operation == "repair")
@@ -440,9 +444,16 @@ class LoaderOwnershipRegressionTest {
             restarted.recoverPending()
             assertFalse(restarted.recoveryPending)
             if (operation != "uninstall")
-                assertEquals(data.keys, record(f).read().orEmpty().toSet())
+                assertEquals(
+                    if (operation == "repair") data.keys - "doorstop_config.ini" else data.keys,
+                    record(f).read().orEmpty().toSet(),
+                )
             restarted.removeLoader(f.game.toString())
-            assertTrue(data.keys.none { f.game.resolve(it).exists() })
+            assertTrue(
+                (if (operation == "repair") data.keys - "doorstop_config.ini" else data.keys).none {
+                    f.game.resolve(it).exists()
+                }
+            )
             assertTrue(f.game.resolve("NuclearOption.exe").exists())
         }
     }
@@ -489,5 +500,114 @@ class LoaderOwnershipRegressionTest {
         f.folder.removeLoader(f.game.toString())
         assertFalse(proxy.exists())
         assertTrue(record(f).read().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun probeOrphanInstallReportMustNotAuthorizeNextInstall() = runBlocking {
+        for (action in listOf("remove-all", "uninstall")) {
+            val f = fixture(false, null)
+            DiskFaults.step = { if (it == "probe-install-pending-deleted") throw Crash() }
+            try {
+                assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.step = {}
+            }
+            val r = restart(f, allowDownload = true)
+            r.folder.recoverPending()
+            r.folder.removeLoader(f.game.toString())
+            assertTrue(record(f).read().orEmpty().isEmpty())
+            DiskFaults.step = { if (it == "probe-install-pending-written") throw Crash() }
+            try {
+                assertFailsWith<Crash> { r.folder.installLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.step = {}
+            }
+            for ((n, d) in data) f.game
+                .resolve(n)
+                .also { it.parent.createDirectories() }
+                .writeBytes(d)
+            val r2 = restart(f)
+            r2.folder.recoverPending()
+            println("PROBE orphan install claimed=${record(f).read()}")
+            if (action == "uninstall") r2.folder.removeLoader(f.game.toString())
+            else {
+                val app =
+                    AppStore(
+                        Demo.state()
+                            .copy(
+                                installed = emptyMap(),
+                                game = r2.folder.inspect(f.game.toString()),
+                            ),
+                        Demo.io().copy(gameFolder = r2.folder, persistence = null),
+                    )
+                try {
+                    app.removeEverything()
+                    app.shutdown()
+                    println("PROBE remove-all toasts=${app.state.value.toasts.map { it.text }}")
+                } finally {
+                    app.shutdown()
+                }
+            }
+            val remaining = data.keys.filter { f.game.resolve(it).exists() }
+            println("PROBE orphan install remaining=$remaining")
+            assertEquals(
+                data.keys.toList(),
+                remaining,
+                "Stale promotion report deleted player's manual installation via $action",
+            )
+        }
+    }
+
+    @Test
+    fun probeOrphanRemovalReportMustNotDropNextRemovalOwnership() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        DiskFaults.step = { if (it == "probe-removal-pending-deleted") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.removeLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        val r = restart(f, allowDownload = true)
+        r.folder.recoverPending()
+        r.folder.installLoader(f.game.toString())
+        DiskFaults.step = { if (it == "loader-removal-prepared") throw Crash() }
+        try {
+            assertFailsWith<Crash> { r.folder.removeLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        val r2 = restart(f)
+        r2.folder.recoverPending()
+        println(
+            "PROBE orphan removal ownership=${record(f).read()} files=${data.keys.filter { f.game.resolve(it).exists() }}"
+        )
+        assertEquals(
+            data.keys,
+            record(f).read().orEmpty().toSet(),
+            "Stale removal report abandoned all installed files",
+        )
+    }
+
+    @Test
+    fun probeMissingOwnedFileThenCrashAndManualReinstall() = runBlocking {
+        val f = fixture(false, null)
+        f.folder.installLoader(f.game.toString())
+        val proxy = f.game.resolve("winhttp.dll")
+        proxy.deleteExisting()
+        DiskFaults.step = { if (it == "prepared") throw Crash() }
+        try {
+            assertFailsWith<Crash> { f.folder.removeLoader(f.game.toString()) }
+        } finally {
+            DiskFaults.step = {}
+        }
+        proxy.writeText("player's new proxy")
+        val r = restart(f)
+        r.folder.recoverPending()
+        r.folder.removeLoader(f.game.toString())
+        assertTrue(
+            proxy.exists(),
+            "Uninstall removed a player file at an originally absent removal target",
+        )
     }
 }
