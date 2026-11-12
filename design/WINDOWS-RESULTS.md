@@ -101,7 +101,7 @@ This is the first time NNOMM ran on Windows and against real game files. The lis
 
 | Check | Result |
 | --- | --- |
-| Build the MSI | Passed, with two conditions: Node.js with npm must be found (`-Pcompose.electronBuilder.nodePath=<path of node.exe>`), and a version change needs a clean build, or the old package is kept. |
+| Build the MSI | Passed, with two conditions: Node.js with npm must be found (`-Pcompose.electronBuilder.nodePath=<path of node.exe>`), and after a version change the old package stays unless the task runs with `--rerun-tasks` and the folder `composeApp/build/compose/binaries/main/msi` is deleted first. |
 | Identity | Passed. Name and publisher "NNOMM", upgrade ID `b0eccd25-…`, folder `NNOMM\NNOMM`, shortcut group "NNOMM", file type `NNOMM.nommpack`, own icon. |
 | Install for the current user | Passed (`ALLUSERS=2 MSIINSTALLPERUSER=1`): program in the user's program folder, Start-menu and desktop shortcut, file type. |
 | Install for all users | Needs an administrator. A silent install without one stops with error 1603. With the normal dialog Windows asks for permission; that click was not possible here. |
@@ -172,6 +172,13 @@ Until this is done, the start through Steam is the one unproven step between "Pl
 - **Not possible with synthetic input:** dropping files on the window.
 - **Skipped to stay off the shared desktop:** actions that open Explorer or an editor ("Open the mod folder", "Open its settings file", "Open the game folder", "Open the mod log").
 - **NOMM and NNOMM running at the same time:** NOMM was installed beside NNOMM but not started, because it would start its Steam helper under the owner's Steam account.
+
+## What is left on the test machine
+
+- One copy of the game without the real install's plugins, with the mods and the loader that NNOMM placed during the checks: folder `nnomm-sandbox\game-clean` in the user folder, 2.4 GB. Beside it are the NNOMM settings folder of the checks (`home`), the logs and all screenshots. Delete the whole `nnomm-sandbox` folder when it is not needed.
+- The built app and the 0.1.0 installer are in the repository's build folder (`composeApp/build/compose/binaries/main`).
+- NNOMM and NOMM were installed for the checks and are uninstalled again. NOMM's settings folder is as it was.
+- Windows Firewall holds an inbound block entry for the Java of the Gradle toolchain, from the development `run` task. Removing it needs an administrator.
 
 ## Things seen that were left as they are
 
