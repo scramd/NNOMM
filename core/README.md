@@ -232,3 +232,20 @@ Play failure toasts use existing callback actions: Retry repeats Play; Turn off
 switches off the failed entries in the active profile. Loader repair now shares
 the disk queue with apply and other mutations. See IO.md for pending-journal
 scope and conservative handling of unreadable game journals.
+
+### Last core review API and behavior
+
+- `RealGameFolder` accepts optional `backgroundScope` and `preferredVersions` arguments; the real runtime
+  supplies its owned scope and active profile versions for verified takeover-artifact learning. Direct callers
+  without it use the conservative same-version-only rule.
+- `refreshStoreUsage()` requests the hash-based Clear estimate. Call it when
+  Storage settings open. Routine disk actions update sizes and retain the last
+  explicit estimate; the UI must present null as unknown, not zero.
+- Catalog metadata (newest and oldest versions) loads in the background with one
+  request at a time, regardless of visible cards. Existing metadata caches and
+  request deduplication are shared with explicit `loadMetadata(ids)` calls.
+- Play distinguishes apply errors from launcher errors. Its bulk Turn off action
+  excludes folder-name collisions; the player chooses one conflicting mod through
+  the existing per-mod problem actions.
+- `removeEverything()` commits Library removal only after a successful game apply.
+  Local and takeover copies remain available, switched off.

@@ -109,7 +109,7 @@ class Review5ProbeTest {
 
     // A: a NOMM-installed mod (meta.json) taken over with a player file inside, then updated.
     @Test
-    fun takenOverPlayerFileFollowsUpdate() = runBlocking {
+    fun unprovenTakeoverFilesAreParkedOnVersionChange() = runBlocking {
         val home = temp()
         val g = game()
         takeoverFoo(g)
@@ -120,7 +120,8 @@ class Review5ProbeTest {
         f.apply(plan(g, mapOf("foo" to "2")))
         assertTrue(
             containsText(g, "PLAYER DATA") ||
-                containsText(home.resolve("player-files"), "PLAYER DATA"),
+                containsText(home.resolve("player-files"), "PLAYER DATA") ||
+                containsText(home.resolve("player-edits"), "PLAYER DATA"),
             "player file inside a taken-over mod only survives inside the old stored version",
         )
     }

@@ -221,7 +221,7 @@ class AcceptanceSafetyTest {
     }
 
     @Test
-    fun brokenJournalIsPendingAndDoesNotBlockOtherRecoveryOrStartup() = runBlocking {
+    fun brokenHomeJournalIsSetAsideWithoutBlockingOtherRecoveryOrStartup() = runBlocking {
         val journals = root.resolve("transactions").createDirectories()
         journals.resolve("broken.txn").writeText("not json")
         val target = root.resolve("target").createDirectories()
@@ -238,7 +238,9 @@ class AcceptanceSafetyTest {
         RealPersistence(root).save(AppState(settings = settings()))
         val app = RealRuntime.open(root, notice = { notes += it })
         try {
-            assertTrue(app.store.state.value.gameIoPending)
+            assertFalse(app.store.state.value.gameIoPending)
+            assertFalse(journals.resolve("broken.txn").exists())
+            assertTrue(journals.resolve("damaged-records").isDirectory())
         } finally {
             app.shutdown()
         }

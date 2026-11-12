@@ -169,9 +169,31 @@ fun hash(s: String): Long {
 
 fun displayTag(tag: String): String {
     val acronyms =
-        listOf("HUD", "UI", "QoL", "VR", "AI", "PvP", "PvE", "FPS", "ATC", "AWACS").associateBy {
-            it.lowercase()
-        }
+        listOf(
+                "HUD",
+                "UI",
+                "QoL",
+                "VR",
+                "AI",
+                "PvP",
+                "PvE",
+                "FPS",
+                "ATC",
+                "AWACS",
+                "ECM",
+                "GFX",
+                "BOTE",
+                "FFB",
+                "SARH",
+                "ARH",
+            )
+            .associateBy { it.lowercase() }
+    if (
+        tag.none { it.isWhitespace() } &&
+            tag.any { it.isLetter() } &&
+            tag.filter { it.isLetter() }.all { it.isUpperCase() }
+    )
+        return tag
     val sentence = tag.lowercase().replaceFirstChar { it.titlecase() }
     return Regex("[A-Za-z]+").replace(sentence) { acronyms[it.value.lowercase()] ?: it.value }
 }

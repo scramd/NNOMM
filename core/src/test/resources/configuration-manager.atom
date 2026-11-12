@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/BepInEx/BepInEx.ConfigurationManager/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases.atom"/>
+  <title>Release notes from BepInEx.ConfigurationManager</title>
+  <updated>2026-10-24T00:03:09Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v19.1</id>
+    <updated>2026-10-24T00:04:46Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v19.1"/>
+    <title>BepInEx.ConfigurationManager v19.1</title>
+    <content type="html">&lt;p&gt;This update adds translation support and includes translations to various languages. See the readme for usage instructions.&lt;/p&gt;
+&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Russian translation as a plugin-specific AutoTranslator file; measure translated labels correctly by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MikalaiKryvusha/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MikalaiKryvusha&quot;&gt;@MikalaiKryvusha&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5795085450&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/125&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/125/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/125&quot;&gt;#125&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Add WindowSkin: let a separate plugin theme the settings window by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MikalaiKryvusha/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MikalaiKryvusha&quot;&gt;@MikalaiKryvusha&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5799385772&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/126&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/126/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/126&quot;&gt;#126&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Add 23 translations for XUnity.AutoTranslator (CJK, European, Baltic, SE Asian, Swahili) by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MikalaiKryvusha/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MikalaiKryvusha&quot;&gt;@MikalaiKryvusha&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5850576740&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/129&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/129/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/129&quot;&gt;#129&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Add Arabic (ar) translation by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/vfggf95565/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/vfggf95565&quot;&gt;@vfggf95565&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5833766786&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/128&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/128/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/128&quot;&gt;#128&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Fit the slider value box to its text instead of a fixed 50px by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MikalaiKryvusha/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MikalaiKryvusha&quot;&gt;@MikalaiKryvusha&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5801407638&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/127&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/127/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/127&quot;&gt;#127&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Fix tooltip translation through IMGUI hooks by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/angel12538/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/angel12538&quot;&gt;@angel12538&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5919169356&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/131&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/131/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/131&quot;&gt;#131&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;New Contributors&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MikalaiKryvusha/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MikalaiKryvusha&quot;&gt;@MikalaiKryvusha&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5795085450&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/125&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/125/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/125&quot;&gt;#125&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/vfggf95565/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/vfggf95565&quot;&gt;@vfggf95565&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5833766786&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/128&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/128/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/128&quot;&gt;#128&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/angel12538/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/angel12538&quot;&gt;@angel12538&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;5919169356&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/131&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/131/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/131&quot;&gt;#131&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v19.0...v19.1&quot;&gt;&lt;tt&gt;v19.0...v19.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v19.0</id>
+    <updated>2026-06-29T23:57:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v19.0"/>
+    <title>BepInEx.ConfigurationManager v19.0</title>
+    <content type="html">&lt;h1&gt;What&#39;s changed&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;IL2CPP - Upgrade to BepInEx6 be.785 (support games without legacy input)&lt;/li&gt;
+&lt;li&gt;Set KeyboardShortcut package as obsolete - remove it from your project and use KeyboardShortcut from BepInEx6 be.785+ instead&lt;/li&gt;
+&lt;li&gt;Added targetFrameworks to nuget package&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.4.1...v19.0&quot;&gt;&lt;tt&gt;v18.4.1...v19.0&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.4.1</id>
+    <updated>2025-06-04T21:20:41Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.4.1"/>
+    <title>BepInEx.ConfigurationManager v18.4.1</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Fixed decimal for Scandinavian and similar Culture by @zzzbatmand in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2994478430&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/105&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/105/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/105&quot;&gt;#105&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Catch exceptions during settings search by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/RikkiBalboa/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/RikkiBalboa&quot;&gt;@RikkiBalboa&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;3118410536&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/108&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/108/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/108&quot;&gt;#108&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;New Contributors&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;@zzzbatmand made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2994478430&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/105&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/105/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/105&quot;&gt;#105&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/RikkiBalboa/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/RikkiBalboa&quot;&gt;@RikkiBalboa&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;3118410536&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/108&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/108/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/108&quot;&gt;#108&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.4...v18.4.1&quot;&gt;&lt;tt&gt;v18.4...v18.4.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.4</id>
+    <updated>2025-01-19T21:46:21Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.4"/>
+    <title>BepInEx.ConfigurationManager v18.4</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Keep original category order by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2793860038&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/102&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/102/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/102&quot;&gt;#102&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.3.1...v18.4&quot;&gt;&lt;tt&gt;v18.3.1...v18.4&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.3.1</id>
+    <updated>2024-12-29T23:19:10Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.3.1"/>
+    <title>BepInEx.ConfigurationManager v18.3.1</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Harden against null plugin Metadata&lt;/li&gt;
+&lt;li&gt;Add &#39;Known Issues&#39; section to README.md by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2263217360&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/91&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/91/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/91&quot;&gt;#91&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.3...v18.3.1&quot;&gt;&lt;tt&gt;v18.3...v18.3.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.3</id>
+    <updated>2024-04-09T19:09:42Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.3"/>
+    <title>BepInEx.ConfigurationManager v18.3</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Fixed a bug that caused an exception if DLLs that failed to load were mixed in by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/takahiro0327/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/takahiro0327&quot;&gt;@takahiro0327&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2158964511&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/84&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/84/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/84&quot;&gt;#84&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Do not throw ArgumenNullException in ConfigSettingEntry.GetAcceptedValues by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MrAgeo/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MrAgeo&quot;&gt;@MrAgeo&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2228732287&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/89&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/89/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/89&quot;&gt;#89&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;New Contributors&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/takahiro0327/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/takahiro0327&quot;&gt;@takahiro0327&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2158964511&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/84&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/84/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/84&quot;&gt;#84&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/MrAgeo/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/MrAgeo&quot;&gt;@MrAgeo&lt;/a&gt; made their first contribution in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2228732287&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/89&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/89/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/89&quot;&gt;#89&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.2.1...v18.3&quot;&gt;&lt;tt&gt;v18.2.1...v18.3&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.2.1</id>
+    <updated>2024-02-09T19:46:06Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.2.1"/>
+    <title>BepInEx.ConfigurationManager v18.2.1</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Fix not working in some IL2CPP games by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2127743049&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/83&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/83/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/83&quot;&gt;#83&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Nuget - Add IL2CPP package&lt;/li&gt;
+&lt;li&gt;Nuget - Stop propagating Unity.InputSystem downstream&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.2...v18.2.1&quot;&gt;&lt;tt&gt;v18.2...v18.2.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.2</id>
+    <updated>2023-12-30T16:01:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.2"/>
+    <title>BepInEx.ConfigurationManager v18.2</title>
+    <content type="html">&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/67b4eefb1629e9b0bb046db64b8045b51b1cfcc3/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/67b4eefb1629e9b0bb046db64b8045b51b1cfcc3&quot;&gt;&lt;tt&gt;67b4eef&lt;/tt&gt;&lt;/a&gt;	&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt;	Improve Color settings: Dec/Hex numbers, Visualize alpha&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/9047ead0c34775e28b54cdbe236ab682d8c0f652/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/9047ead0c34775e28b54cdbe236ab682d8c0f652&quot;&gt;&lt;tt&gt;9047ead&lt;/tt&gt;&lt;/a&gt;	&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt;	Add ConfigurationManager.IsWindowFullscreen&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.1...v18.2&quot;&gt;&lt;tt&gt;v18.1...v18.2&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.1</id>
+    <updated>2023-11-27T18:11:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.1"/>
+    <title>BepInEx.ConfigurationManager v18.1</title>
+    <content type="html">&lt;p&gt;This release introduces a version for BepInEx 6 (nightly build 664 or newer, IL2CPP only). The port is based on source from HC.BepInEx.ConfigurationManager.Il2Cpp.CoreCLR-18.0_beta2_20230821, thank you to whoever the author of that fork is.&lt;/p&gt;
+&lt;p&gt;Source for both versions of the plugin has been merged into a single shared project, which resulted in the BepInEx5 version getting some minor changes and improvements that were present in the fork or that I made while merging the codebases.&lt;/p&gt;
+&lt;p&gt;Another important change is the plugin .dll now existing inside of &lt;code&gt;BepInEx\plugins\ConfigurationManager\&lt;/code&gt; together with the readme and license files. Remove the old ConfigurationManager.dll from your &lt;code&gt;BepInEx\plugins&lt;/code&gt; folder to avoid potential issues.&lt;/p&gt;
+&lt;h2&gt;What&#39;s Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Add IL2CPP version for BepInEx6 nightly builds by &lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt; in &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2012731162&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/issues/78&quot; data-hovercard-type=&quot;pull_request&quot; data-hovercard-url=&quot;/BepInEx/BepInEx.ConfigurationManager/pull/78/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/pull/78&quot;&gt;#78&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/4543547715f75a2a9ede67be553c25ef56c48f99/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/4543547715f75a2a9ede67be553c25ef56c48f99&quot;&gt;&lt;tt&gt;4543547&lt;/tt&gt;&lt;/a&gt;	&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt;	Add release script; Include readme and license in releases&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.0.1...v18.1&quot;&gt;&lt;tt&gt;v18.0.1...v18.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/211143487/v18.0.1</id>
+    <updated>2023-07-08T18:22:45Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/BepInEx/BepInEx.ConfigurationManager/releases/tag/v18.0.1"/>
+    <title>BepInEx.ConfigurationManager v18.0.1</title>
+    <content type="html">&lt;h2&gt;Changelog&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/8fc53a4820624052794fd7cd9d367d01a0101aec/hovercard&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/commit/8fc53a4820624052794fd7cd9d367d01a0101aec&quot;&gt;&lt;tt&gt;8fc53a4&lt;/tt&gt;&lt;/a&gt;	&lt;a class=&quot;user-mention notranslate&quot; data-hovercard-type=&quot;user&quot; data-hovercard-url=&quot;/users/ManlyMarco/hovercard&quot; data-octo-click=&quot;hovercard-link-click&quot; data-octo-dimensions=&quot;link_type:self&quot; href=&quot;https://github.com/ManlyMarco&quot;&gt;@ManlyMarco&lt;/a&gt; Fixed not detecting plugins if the &lt;code&gt;HideManagerGameObject&lt;/code&gt; setting is set to &lt;code&gt;true&lt;/code&gt; in BepInEx config.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class=&quot;commit-link&quot; href=&quot;https://github.com/BepInEx/BepInEx.ConfigurationManager/compare/v18.0...v18.0.1&quot;&gt;&lt;tt&gt;v18.0...v18.0.1&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ManlyMarco</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/39247311?s=60&amp;v=4"/>
+  </entry>
+</feed>
