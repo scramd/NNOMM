@@ -237,6 +237,8 @@ class LoaderPartialPlacementTest {
         if (ini != null) game.resolve("doorstop_config.ini").writeBytes(ini)
         val data =
             mapOf(
+                ".doorstop_version" to "4.3.0".toByteArray(),
+                "changelog.txt" to "log".toByteArray(),
                 "BepInEx/core/BepInEx.dll" to dll,
                 "winhttp.dll" to "shipped proxy".toByteArray(),
                 "doorstop_config.ini" to shipped,
@@ -429,6 +431,87 @@ class LoaderPartialPlacementTest {
                 DiskFaults.beforeMove = {}
             }
         }
+    }
+
+    // Port of VerifyLastProbeTest: refuse the alphabetically last archive file,
+    // after the core DLL is already detected, then run the actual toast Retry.
+    @Test
+    fun retryAfterRefusedProxyFinishesInstallBeforeSuccess() = runBlocking {
+        val order =
+            listOf(
+                ".doorstop_version",
+                "BepInEx/core/BepInEx.dll",
+                "BepInEx/core/Extra.dll",
+                "changelog.txt",
+                "doorstop_config.ini",
+                "winhttp.dll",
+            )
+        val f = fixture(false, null, order)
+        val proxy = f.game.resolve("winhttp.dll")
+        val moves = mutableListOf<String>()
+        val io = Demo.io()
+        val app =
+            AppStore(
+                Demo.state().copy(game = f.folder.inspect(f.game.toString())),
+                io.copy(gameFolder = f.folder, persistence = null),
+            )
+        DiskFaults.beforeMove = {
+            moves += f.game.relativize(it).toString().replace('\\', '/')
+            if (it == proxy) throw AccessDeniedException(it.toString())
+        }
+        try {
+            app.play()
+            withTimeout(5000) {
+                while (
+                    app.state.value.toasts.none {
+                        it.action == "Retry" && it.text.contains("mod loader")
+                    }
+                ) delay(10)
+            }
+            assertEquals(
+                listOf("doorstop_config.ini") + order.filter { it != "doorstop_config.ini" },
+                moves,
+            )
+            assertTrue(f.folder.inspect(f.game.toString()).loaderPresent)
+            assertFalse(proxy.exists())
+            assertTrue(app.state.value.toasts.none { it.text.contains("Installed the mod loader") })
+            // Install must not overwrite files already placed, including player edits.
+            val core = f.game.resolve("BepInEx/core/BepInEx.dll")
+            val playerDll = dll + byteArrayOf(0, 0)
+            core.writeBytes(playerDll)
+            DiskFaults.beforeMove = {
+                assertEquals(proxy, it)
+                assertTrue(
+                    app.state.value.toasts.none { toast ->
+                        toast.text.contains("Installed the mod loader")
+                    }
+                )
+            }
+            val retry = app.state.value.toasts.last { it.action == "Retry" }
+            app.runToast(retry.id)
+            withTimeout(5000) {
+                while (
+                    app.state.value.toasts.none { it.text.contains("Installed the mod loader") }
+                ) delay(10)
+            }
+            assertEquals("shipped proxy", proxy.readText())
+            assertContentEquals(playerDll, core.readBytes())
+            assertTrue(order.all { f.game.resolve(it).isRegularFile() })
+            assertEquals(order.toSet(), record(f).read()!!.toSet())
+        } finally {
+            app.shutdown()
+            DiskFaults.beforeMove = {}
+        }
+    }
+
+    @Test
+    fun installDoesNotFillMissingFilesOfAnAdoptedLoader() = runBlocking {
+        val f = fixture(true, null, orders[0])
+        f.folder.installLoader(f.game.toString())
+        assertFalse(f.game.resolve("doorstop_config.ini").exists())
+        assertFalse(f.game.resolve("BepInEx/core/Extra.dll").exists())
+        assertNull(record(f).read())
+        assertEquals("player proxy", f.game.resolve("winhttp.dll").readText())
     }
 
     @Test

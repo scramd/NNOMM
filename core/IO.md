@@ -202,7 +202,12 @@ ownership write succeeds is the pending record deleted. Publication failure leav
 it available for retry, even after the file transaction's journal was deleted.
 Startup with the game closed, game exit, and every loader Install, Repair and
 Uninstall recover file transactions before finishing pending ownership from disk.
-Install does this even when BepInEx is already present. Missing game folders and
+Install does this even when BepInEx is already present. If this home owns loader
+files, Install walks the archive again and places only missing files before reporting
+success. A detected DLL alone cannot complete a partial install. Existing files,
+including player edits, stay unchanged. A detected adopted loader with no owned
+files retains the presence guard and is left alone. The archive walk is alphabetical,
+with any INI replacement promoted first. Missing game folders and
 failed recovery keep the pending record and expose pending game IO. Repeated
 recovery is safe. Changed, missing or unreadable targets add no new ownership.
 During Install or Repair these mismatches fail with access/lock guidance before

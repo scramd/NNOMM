@@ -1324,7 +1324,14 @@ class RealGameFolder(
                 require(!running()) { "Close Nuclear Option before changing the mod loader." }
                 val game = root(folder)
                 recoverLoaderOwnership(game)
-                if (!repair && inspect(folder).loaderPresent) return@guarded
+                // A detected DLL can be the result of a partial install. Resume only
+                // loaders this home owns; adopted loaders keep the presence guard.
+                if (
+                    !repair &&
+                        inspect(folder).loaderPresent &&
+                        loaderRecord(game).read().isNullOrEmpty()
+                )
+                    return@guarded
                 val existingVersion = inspect(folder).loaderVersion
                 if (repair && existingVersion != "5.4.23.4") {
                     val message =
@@ -1363,6 +1370,7 @@ class RealGameFolder(
                         Files.walk(staging).use { paths ->
                             paths
                                 .filter { it.isRegularFile() }
+                                .sorted()
                                 .forEach { src ->
                                     val relative =
                                         staging.relativize(src).toString().replace('\\', '/')
