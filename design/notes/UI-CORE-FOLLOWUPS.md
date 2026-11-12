@@ -1,5 +1,7 @@
 # UI follow-ups after the last core merge
 
+Historical checks below describe that pass. The closing pass supersedes its removal confirmation/completion wording and closes both core TODOs; see `CLOSING-FIXES.md`.
+
 - Storage: request `refreshStoreUsage()` when Storage rows become visible, including search hits; remove Library's unsolicited hash scan; use core help so null never becomes zero and recovery-file retention is explained; show Calculating… for an initial real estimate.
 - Library/panel: existing shared `problemFixes` already supplies Retry and Turn off this mod for each placement problem; both views use it unchanged; added regressions for each collision's target and Play excluding collision entries from bulk Turn off.
 - Removal: row/button retain Remove all mods; confirmation states only that it cannot be undone, with the ownership explanation on the row; core completion changed by one string line to “Removed registry mods and turned off local and taken-over mods.” Failure text remains unchanged.
@@ -10,6 +12,6 @@
 - Collision desktop: a private adoption fixture gave two enabled local mods one placement name; Play refused without launching and retained both switches; Library menu named SandboxHud, panel menu named SandboxRadar, and the panel action disabled Radar alone with Hud still on.
 - Evidence: running screenshots under `composeApp/build/ui-followups/real-*.png`; comparison and extra-fixture contact sheets in the same directory; these are untracked build artifacts.
 - Deviations: existing font wrapping, danger ownership help and recovery-aware Storage help differ from the old mock; no redesign, new helper, service, startup change, Windows code change or real game launch.
-- TODO(core): refreshStoreUsage returns Unit and exposes neither progress nor completion; the UI can show Calculating… until the first non-null estimate, but repeats retain the previous estimate and an initial failed scan cannot be distinguished from a pending scan; a core scan-status signal is needed to finish that part exactly without inventing timing.
-- TODO(core): existing PlayerSettings presentation override still needs moving to shared definitions so command search uses the removal/report labels; no change to core settings data was authorized in this follow-up.
+- Closed by closing pass (historical): refreshStoreUsage returned Unit and exposes neither progress nor completion; the UI can show Calculating… until the first non-null estimate, but repeats retain the previous estimate and an initial failed scan cannot be distinguished from a pending scan; a core scan-status signal is needed to finish that part exactly without inventing timing.
+- Closed by closing pass (historical): PlayerSettings presentation override needed moving to shared definitions so command search uses the removal/report labels; no change to core settings data was authorized in this follow-up.
 - Decisions/open: kept core behavior changes limited to the authorized completion string; collision actions needed regression coverage, not duplicate UI logic; no independent Opus/Sol review because this task explicitly requires working alone; Windows acceptance remains open; no push, tags, release or external publication.

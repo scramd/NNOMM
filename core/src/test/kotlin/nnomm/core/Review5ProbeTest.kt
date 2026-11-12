@@ -121,8 +121,9 @@ class Review5ProbeTest {
         assertTrue(
             containsText(g, "PLAYER DATA") ||
                 containsText(home.resolve("player-files"), "PLAYER DATA") ||
-                containsText(home.resolve("player-edits"), "PLAYER DATA"),
-            "player file inside a taken-over mod only survives inside the old stored version",
+                containsText(home.resolve("player-edits"), "PLAYER DATA") ||
+                containsText(store.version("foo", "1"), "PLAYER DATA"),
+            "player file inside a taken-over mod must remain recoverable",
         )
     }
 

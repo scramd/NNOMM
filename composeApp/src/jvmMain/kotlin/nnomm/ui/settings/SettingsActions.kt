@@ -139,7 +139,7 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(if (definition.key == "dzSettings") definition.help + " You cannot undo this." else "You cannot undo this.")
+            Label(if (definition.key == "dzSettings") definition.help + " You cannot undo this." else definition.help + " You can turn retained mods on again. Mods removed from profiles must be added again.")
         }
     }
 }

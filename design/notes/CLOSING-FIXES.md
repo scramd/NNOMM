@@ -1,0 +1,29 @@
+# Closing fixes
+
+- C1: Publish and persist successful mod removal before the separate loader removal; partial failure has a loader-only Retry. Ported `closingRemovalWhenLoaderRemovalFails` to the existing offline review suite.
+- C2 / P6: Shared core settings definitions and their generator now say “Remove all mods”; removed the UI wording override; palette regression checks the exact search.
+- C3: Storage has IDLE/LOADING/READY/FAILED scan state, preserves the last successful estimate, marks refreshes and offers Retry; offline failure/retry regression and real unreadable-store/retry checks passed.
+- Sol nit / P8: IO documentation describes the ownership explanation on the Settings row and confirmation; historical integration TODOs are marked complete.
+- P1: Recovery parks contain only player differences, exclude stored payload bytes, reuse identical parks and stay quiet when no new park is needed; repeated version-change and player-edit restoration regression passed. Existing recovery remains recoverable.
+- P2: Visible metadata has a separate slot from the serial catalog scan; a blocked first background request no longer blocks the last visible card, checked with an offline gate regression.
+- P3: Shipped-file learning runs one at a time, waits for foreground downloads before starting and announces the check; startup clears abandoned learning preparation under the home lock; serial/priority/cleanup regression passed. A check already in progress is allowed to finish.
+- P4: Play without a folder points to Settings; loader failure has its own plain message and Retry; launcher exception text is shown only for two known player-facing messages; missing-folder/loader regressions and real no-folder Play passed.
+- P5: Removal without a folder updates only the Library, independent of a stale apply result; running-game checks report the close-game reason; no-folder and game-start-during-apply regressions passed. Real sandbox refusal, takeover/retry, and no-folder removal passed.
+- P7: Confirmation repeats the ownership help and explains that retained mods can be enabled again and removed entries must be added again; it makes no blanket irreversible claim. Demo and real keyboard/search/confirmation checks passed, including narrow light mode.
+- Nit completion wording: Report removed registry entries only when any were removed; report retained local/taken-over/unverified entries when present. Real local/unverified-only removal showed only retained entries.
+- Nit unknown registry origin: Retain those stored copies in the Library, off; row help and completion now explicitly include unverified mods.
+- Nit takeover notice: Say the game and stored files are unchanged, instead of claiming two copies were made; use the display name rather than a folder name.
+- Nit pack recovery name: Use `name (previous yyyy-MM-dd HHmm).nommpack`, with a numeric suffix for same-minute collisions; repeated replacement/failure retention tests passed.
+- Nit recovery paths: Pending-recovery notices omit journal paths and raw exception details; the recovery record/files stay available.
+- Nit off collision: A third, disabled mod whose placement must remain at a colliding folder gets a visible placement problem instead of disappearing from problem reporting.
+- Nit stale demo help: Settings search uses computed help, so invented Storage estimates are not searchable in real mode.
+- Nit size units: Storage uses KB below one MB, matching Library unit rules; the core formatting regression and real Storage screenshot show this.
+- Nit UI TODO: `PlayerSettings.kt` is a direct shared-definition alias; its wording workaround and TODO are removed.
+- Nit old notes: `LAST-APP-FIXES.md`, `UI-CORE-FOLLOWUPS.md`, `STATUS.md` and `IO.md` identify the finished integrations and current behavior.
+- Checks: `tools/gradlew-locked :core:test :composeApp:jvmTest :composeApp:renderShots` and `tools/compare-shots`; all tests and renders passed. Core formatting was applied. Existing render FocusRequester warnings remain; no render failed.
+- Renders: reviewed `composeApp/build/shots/compare/{08-settings-game,10-settings-profile,11-settings-search,12-palette,26-settings-danger,27-settings-mods,32-settings-registry}.png`; extra `closing-{danger,confirm,storage-failed}-{dark,light}-{wide,narrow}.png` cover both themes and widths.
+- Desktop: own Xvfb :78, 1600 x 1000, demo and real mode with a temporary copy of the sandbox game; wide 1360 x 860 and narrow 760 px checks. Verified removal with/without folder, no-folder Play, taken-over version selection from a prepared offline second version, exact command search, failed Storage scan and Retry. Apps and this display were closed afterward.
+- Evidence: `composeApp/build/closing/closing-*.png` contains desktop pictures and comparison contact sheets; build artifacts are untracked. The first demo launch collided with a concurrent compile, then a separate launch met another app's single-instance lock; final checks used compiled output and a private temporary runtime directory, leaving that app alone.
+- Decisions: preserve unknown-origin registry copies; use separate visible/background metadata slots; let an in-progress background verification finish; keep old recovery parks instead of deleting prior recovery automatically. No helper, service or persistent startup change was added.
+- Mock differences: longer ownership/confirmation and recovery-aware Storage text are intentional safety corrections; existing typography, wrapping, strip spacing and fixture-data differences remain. No pixel-equivalence claim.
+- TODO(core): none added or left for these findings. Independent Opus/Sol acceptance and Windows checks remain with the parent; this implementation worked alone. No push, tags, releases or external publication.

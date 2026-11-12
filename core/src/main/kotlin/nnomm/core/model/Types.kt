@@ -101,6 +101,7 @@ enum class PackKind {
 
 @Serializable
 enum class LoadStatus {
+    IDLE,
     LOADING,
     READY,
     FAILED,

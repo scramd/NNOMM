@@ -67,6 +67,11 @@ val followupShots = listOf("dark", "light").flatMap { theme ->
                 MockShot("followup-storage-$theme-$size", "page=settings&cat=storage&theme=$theme", width, if (width == 1328) 792 else 720),
                 MockShot("followup-storage-unknown-$theme-$size", "page=settings&cat=storage&theme=$theme", width, if (width == 1328) 792 else 720,
                     initialState = { it.copy(storeUnusedMb = null) }),
+                MockShot("closing-storage-failed-$theme-$size", "page=settings&cat=storage&theme=$theme", width, if (width == 1328) 792 else 720,
+                    initialState = { it.copy(storeScanStatus = nnomm.core.model.LoadStatus.FAILED) }),
+                MockShot("closing-danger-$theme-$size", "page=settings&cat=danger&theme=$theme", width, if (width == 1328) 792 else 720),
+                MockShot("closing-confirm-$theme-$size", "page=settings&cat=danger&theme=$theme", width, if (width == 1328) 792 else 720,
+                    seed = { it.ui.settings.confirmKey = "dzAll"; it.openOverlay("confirm") }),
                 MockShot("followup-collision-$theme-$size", "page=library&panel=mod:minimap&theme=$theme", width, if (width == 1328) 792 else 720,
                     initialState = { it.copy(applyProblems = listOf("minimap", "delivery").associateWith {
                         "Two enabled mods use the same game folder name. Turn off one of them and Retry."

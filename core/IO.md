@@ -159,13 +159,14 @@ A missing wanted descendant's payload blocks replacement of its parent subtree.
 Missing wanted game folders are changes, even when the record says they are placed.
 
 The home `.lock` file uses an OS lock, released by normal exit or process death.
-A second runtime refuses to open the same home. A broken journal does not stop
-startup; it remains pending with its files retained. Guided-test original switches
+A second runtime refuses to open the same home. A damaged home journal does not stop
+startup; it is set aside with its files retained. Unknown game journals remain pending. Guided-test original switches
 and session are durable before game changes and survive close or process death.
 
 Remove everything removes only loader files recorded as installed by this home.
-Its confirmation explicitly lists the adopted loader files and player files that
-remain. No unowned loader deletion is inferred.
+The Settings row and confirmation explain which adopted loader files and player
+files remain. Retained mods can be turned on again; removed profile entries must
+be added again. No unowned loader deletion is inferred.
 
 ## Final core safety findings
 
@@ -218,10 +219,9 @@ restores it, even after the current extra-file set changes.
 
 Pending recovery is checked against entry paths and their private payload/player
 file paths. A journal that touches shared ownership metadata can still block all
-entries using that metadata. Malformed home journals remain pending and visible,
-but cannot identify a particular game entry to block. Malformed game journals
-conservatively block game changes because their targets are unknown. No journal
-or recovery copy is discarded to unblock an apply. Recovery messages distinguish
+entries using that metadata. Malformed home journals are set aside in
+`transactions/damaged-records`, with one notice. Malformed game journals
+conservatively block game changes because their targets are unknown. No recovery copy is discarded to unblock an apply. Recovery messages distinguish
 unavailable storage from merely running the game.
 
 Play failures show entry-specific reasons with working Retry and Turn off toast
@@ -252,9 +252,35 @@ A failed apply leaves Library records available for retry.
 
 Routine disk operations refresh file sizes only. The hash-based Clear estimate is
 computed only by `refreshStoreUsage` or Clear. The estimate remains the last explicit scan;
-`storeUnusedMb = null` means no estimate has been requested. Clear still verifies duplicate bytes before
+`storeUnusedMb = null` means no successful estimate is available. Clear still verifies duplicate bytes before
 removing recoverable files.
 Unproven takeover snapshots themselves supply the baseline for detecting later
 player edits. An unchanged switch-off does not duplicate the whole mod as edits.
 Those edits return with the original version and generation; a version change
 keeps an identified recovery snapshot of the unproven original files.
+
+## Closing fixes
+
+Removal without a selected game folder updates only the Library. With a folder,
+mod apply must succeed before publishing and saving the Library change. Loader
+removal is a separate step: failure leaves the completed mod removal visible and
+provides a loader-only Retry. Local, taken-over and unknown-origin stored mods
+stay in the Library, off; verified registry entries leave every profile.
+
+Unproven takeover recovery parks only captured player differences, never another
+copy of the stored payload. Identical parks are reused. An empty capture produces
+no recovery notice. Version-specific edited files still restore only to their
+original version. Existing recovery files from older builds remain recoverable.
+
+Visible metadata requests have a separate slot from the serial catalog scan.
+Shipped-file learning is serial, waits for foreground downloads before starting,
+and announces its background check once per takeover. An already running check
+is not interrupted by a newly requested foreground download. Startup removes
+abandoned `staging/learn-shipped-*` preparation only while holding the home lock.
+
+Storage exposes `storeScanStatus` (IDLE, LOADING, READY, FAILED) and retains the
+last successful estimate across refreshes and failures. `storeUsedBytes` supplies
+KB formatting below one MB. Player search uses computed setting help, not demo
+storage estimates. Play refuses missing folders before launch and keeps loader
+installation failures distinct from mod placement and launch failures. Technical
+exception messages remain in logs, not Play toasts.

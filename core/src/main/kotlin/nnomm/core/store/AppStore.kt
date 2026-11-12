@@ -35,6 +35,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     notesStatus = emptyMap(),
                     metadataStatus = emptyMap(),
                     storeUnusedMb = null,
+                    storeScanStatus = LoadStatus.IDLE,
+                    storeUsedBytes = 0,
                     gameStarting = false,
                 )
             }
@@ -55,6 +57,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     private var sequence = 0L
     private val slots = Semaphore(3)
     private val metadataSlots = Semaphore(1)
+    private val backgroundMetadataSlots = Semaphore(1)
     private val jobs = mutableMapOf<String, Job>()
     private val transfers = mutableMapOf<String, Deferred<Unit>>()
     private var appliedPlan: GamePlan? = null
@@ -149,7 +152,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 .distinctUntilChanged()
                 .collect {
                     yield()
-                    loadMetadata()
+                    loadMetadata(backgroundLoad = true)
                 }
         }
 
@@ -260,6 +263,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
 
     private fun resolvedPlan(s: AppState) = gamePlan(s)
 
+    private class LoaderInstallFailure(cause: Exception) : Exception(cause)
+
     private suspend fun prepareGameFolder(snapshot: AppState, modAction: Boolean = true) {
         val folder = snapshot.game.folder ?: return
         if (snapshot.game.folderMissing) return
@@ -269,7 +274,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             return
         }
         if (modAction && onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
-            io.gameFolder.installLoader(folder)
+            try {
+                io.gameFolder.installLoader(folder)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw LoaderInstallFailure(e)
+            }
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
             toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
@@ -956,6 +967,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     fun play(withoutMods: Boolean = false) {
         val s = state.value
         if (s.gameRunning || s.gameStarting) return
+        if (s.game.folder == null || s.game.folderMissing) {
+            toast("Choose the game folder in Settings first.")
+            return
+        }
         change { it.copy(gameStarting = true) }
         toast(
             if (withoutMods) "Starting Nuclear Option without mods. Your profile stays as it is."
@@ -990,6 +1005,15 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 change { it.copy(gameStarting = false) }
                 if (e is CancellationException) throw e
                 io.logger.error("play", e)
+                if (e is LoaderInstallFailure) {
+                    toast(
+                        "Could not install the mod loader: check your connection and try again.",
+                        "Retry",
+                        ms = 30000,
+                        undo = { play(withoutMods) },
+                    )
+                    return@background
+                }
                 val failures =
                     if (applying) io.gameFolder.applyProblems?.value.orEmpty() else emptyMap()
                 val failedProfile = state.value.profileId
@@ -998,8 +1022,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         if (applying)
                             "Some changes are pending. Retry or take over existing mods before Play."
                         else
-                            e.message?.takeIf { !it.contains('/') && !it.contains('\\') }
-                                ?: "Check that the game is installed and try Play again."
+                            when (e.message) {
+                                "Doorstop's enabled setting was not found." ->
+                                    "Doorstop's enabled setting was not found."
+                                "Nuclear Option is already running." ->
+                                    "Nuclear Option is already running."
+                                else -> "Check that the game is installed and try Play again."
+                            }
                     }
                 toast(
                     "Nuclear Option did not start. $reason",
@@ -1513,7 +1542,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             }
         }
 
-    fun loadMetadata(ids: Set<String> = state.value.catalog.map { it.id }.toSet()) {
+    fun loadMetadata(
+        ids: Set<String> = state.value.catalog.map { it.id }.toSet(),
+        backgroundLoad: Boolean = false,
+    ) {
         val snapshot = state.value
         snapshot.catalog
             .filter { it.id in ids }
@@ -1521,68 +1553,70 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 listOfNotNull(mod.newestRelease, mod.newerPreRelease, mod.oldestVersion)
                     .distinctBy { it.version }
                     .forEach { version ->
-                        if (
-                            version.downloadUrl != null &&
-                                requestMetadata("${mod.id}/${version.version}")
-                        )
+                        if (version.downloadUrl != null)
                             background {
-                                metadataSlots.withPermit {
-                                    val key = "${mod.id}/${version.version}"
-                                    change {
-                                        it.copy(
-                                            metadataStatus =
-                                                it.metadataStatus + (key to LoadStatus.LOADING)
-                                        )
-                                    }
-                                    val meta =
-                                        try {
-                                            io.meta.metadata(mod, version)
-                                        } catch (e: CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            io.logger.error("metadata", e)
-                                            change {
-                                                it.copy(
-                                                    metadataStatus =
-                                                        it.metadataStatus +
-                                                            (key to LoadStatus.FAILED)
-                                                )
-                                            }
+                                (if (backgroundLoad) backgroundMetadataSlots else metadataSlots)
+                                    .withPermit {
+                                        if (!requestMetadata("${mod.id}/${version.version}"))
                                             return@withPermit
+                                        val key = "${mod.id}/${version.version}"
+                                        change {
+                                            it.copy(
+                                                metadataStatus =
+                                                    it.metadataStatus + (key to LoadStatus.LOADING)
+                                            )
                                         }
-                                    if (meta.sizeKb != null || meta.dateMillis != null)
-                                        metadataRequested[key] = Long.MAX_VALUE
-                                    change {
-                                        it.copy(
-                                            metadataStatus =
-                                                it.metadataStatus + (key to LoadStatus.READY)
-                                        )
-                                    }
-                                    change { s ->
-                                        s.copy(
-                                            catalog =
-                                                s.catalog.map { m ->
-                                                    if (m.id != mod.id) m
-                                                    else
-                                                        m.copy(
-                                                            versions =
-                                                                m.versions.map { v ->
-                                                                    if (
-                                                                        v.version != version.version
-                                                                    )
-                                                                        v
-                                                                    else
-                                                                        v.copy(
-                                                                            sizeKb = meta.sizeKb,
-                                                                            dateMillis =
-                                                                                meta.dateMillis,
-                                                                        )
-                                                                }
-                                                        )
+                                        val meta =
+                                            try {
+                                                io.meta.metadata(mod, version)
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                io.logger.error("metadata", e)
+                                                change {
+                                                    it.copy(
+                                                        metadataStatus =
+                                                            it.metadataStatus +
+                                                                (key to LoadStatus.FAILED)
+                                                    )
                                                 }
-                                        )
+                                                return@withPermit
+                                            }
+                                        if (meta.sizeKb != null || meta.dateMillis != null)
+                                            metadataRequested[key] = Long.MAX_VALUE
+                                        change {
+                                            it.copy(
+                                                metadataStatus =
+                                                    it.metadataStatus + (key to LoadStatus.READY)
+                                            )
+                                        }
+                                        change { s ->
+                                            s.copy(
+                                                catalog =
+                                                    s.catalog.map { m ->
+                                                        if (m.id != mod.id) m
+                                                        else
+                                                            m.copy(
+                                                                versions =
+                                                                    m.versions.map { v ->
+                                                                        if (
+                                                                            v.version !=
+                                                                                version.version
+                                                                        )
+                                                                            v
+                                                                        else
+                                                                            v.copy(
+                                                                                sizeKb =
+                                                                                    meta.sizeKb,
+                                                                                dateMillis =
+                                                                                    meta.dateMillis,
+                                                                            )
+                                                                    }
+                                                            )
+                                                    }
+                                            )
+                                        }
                                     }
-                                }
                             }
                     }
             }
@@ -1662,36 +1696,77 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             io.modStore.protect(snapshot.installed.keys)
             val proposed = snapshot.copy(installed = keep)
             try {
-                prepareGameFolder(proposed, modAction = false)
-                check(
-                    io.gameFolder.applySucceeded &&
-                        !io.launcher.running.value &&
-                        !state.value.gameRunning
-                ) {
-                    "Close Nuclear Option before removing mods."
+                if (snapshot.game.folder != null) {
+                    check(!snapshot.game.folderMissing) {
+                        "The game folder was not found. Choose it in Settings and Retry."
+                    }
+                    prepareGameFolder(proposed, modAction = false)
+                    check(!io.launcher.running.value && !state.value.gameRunning) {
+                        "Close Nuclear Option before removing mods."
+                    }
+                    check(io.gameFolder.applySucceeded) {
+                        "The game folder needs attention. Retry or take over existing mods."
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 val reason =
-                    io.gameFolder.applyProblems?.value.orEmpty().values.distinct().joinToString(" ")
-                toast(
-                    "Could not remove all mods. " +
-                        reason.ifBlank {
-                            "The game folder needs attention. Retry or take over existing mods."
-                        }
-                )
+                    if (io.launcher.running.value || state.value.gameRunning)
+                        "Close Nuclear Option before removing mods."
+                    else
+                        io.gameFolder.applyProblems
+                            ?.value
+                            .orEmpty()
+                            .values
+                            .distinct()
+                            .joinToString(" ")
+                            .ifBlank {
+                                if (snapshot.game.folderMissing)
+                                    "The game folder was not found. Choose it in Settings and Retry."
+                                else
+                                    "The game folder needs attention. Retry or take over existing mods."
+                            }
+                toast("Could not remove all mods. $reason")
                 return@disk
             }
-            state.value.game.folder?.let { folder ->
-                io.gameFolder.removeLoader(folder)
-                val game = io.gameFolder.inspect(folder)
-                change { it.copy(game = game) }
-            }
+            // Publish the completed mod removal before the independent loader operation.
+            change { it.copy(installed = keep, deferredModChange = false) }
+            io.persistence?.save(state.value)
             io.modStore.remove(remove.toList())
-            change { it.copy(installed = keep) }
+            val result =
+                buildList {
+                        if (remove.isNotEmpty())
+                            add("Removed ${remove.size} registry mods from the Library.")
+                        if (keep.isNotEmpty())
+                            add(
+                                "Kept ${keep.size} local, taken-over or unverified mods in the Library, turned off."
+                            )
+                        if (snapshot.installed.isEmpty()) add("There are no mods to remove.")
+                        if (snapshot.game.folder == null)
+                            add("Updated the Library. No game folder is selected.")
+                    }
+                    .joinToString(" ")
+            toast(result)
+            snapshot.game.folder?.let { removeLoaderAfterMods(it) }
+        }
+    }
+
+    private suspend fun removeLoaderAfterMods(folder: String) {
+        try {
+            check(!io.launcher.running.value && !state.value.gameRunning)
+            io.gameFolder.removeLoader(folder)
+            val game = io.gameFolder.inspect(folder)
+            change { it.copy(game = game) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            io.logger.error("remove loader", e)
             toast(
-                "Removed registry mods and turned off local and taken-over mods."
+                "Mod removal is complete. Could not remove the mod loader. Close the game and try again.",
+                "Retry",
+                ms = 30000,
+                undo = { disk { removeLoaderAfterMods(folder) } },
             )
         }
     }
@@ -1713,6 +1788,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         change {
             it.copy(
                 storeUsedMb = bytes / 1024 / 1024,
+                storeUsedBytes = bytes,
                 storeUsedKb = (installed + 1023) / 1024,
                 storeUnusedMb = unused,
             )
@@ -1720,7 +1796,21 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     }
 
     fun refreshStoreUsage() {
-        disk { updateStoreUsage(includeClearEstimate = true) }
+        synchronized(lock) {
+            if (state.value.storeScanStatus == LoadStatus.LOADING) return
+            change { it.copy(storeScanStatus = LoadStatus.LOADING) }
+        }
+        disk {
+            try {
+                updateStoreUsage(includeClearEstimate = true)
+                change { it.copy(storeScanStatus = LoadStatus.READY) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                io.logger.error("store scan", e)
+                change { it.copy(storeScanStatus = LoadStatus.FAILED) }
+            }
+        }
     }
 
     fun moveStore(folder: String) {

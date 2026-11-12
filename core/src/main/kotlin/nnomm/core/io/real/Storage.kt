@@ -284,7 +284,7 @@ class RealModStore(
                     }
                     .map { it.first }
             require(matches.map { it.first }.distinct().size <= 1) {
-                "These files match several different mods. Both copies have been kept."
+                "These files match several different mods. The game files and stored files are unchanged."
             }
             if (preferred in matches) preferred
             else
