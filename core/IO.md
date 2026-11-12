@@ -230,6 +230,11 @@ unowned loader files remain unchanged.
 The pinned archive SHA-256 is
 `f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
 
+Loader crash regression tests reopen the IO object without a downloader after all
+files are promoted, both before and after journal deletion. Repeated recovery
+publishes ownership from the pending record and Uninstall removes those files
+while keeping player files.
+
 Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
 Proton process detection and actual game launches still require platform checks;
 see `design/WINDOWS-CHECKS.md`.

@@ -130,6 +130,44 @@ class LoaderPartialPlacementTest {
     }
 
     @Test
+    fun fullPromotionRecoversOwnershipAfterRestartWithoutDownload() = runBlocking {
+        for (phase in listOf("ownership-published", "journal-deleted")) {
+            val f = fixture(false, null, orders[0])
+            val player = f.game.resolve("player.txt").apply { writeText("keep me") }
+            DiskFaults.step = { if (it == phase) throw Crash() }
+            try {
+                assertFailsWith<Crash> { f.folder.installLoader(f.game.toString()) }
+            } finally {
+                DiskFaults.step = {}
+            }
+            assertTrue(f.folder.inspect(f.game.toString()).loaderPresent)
+            assertNull(record(f).read())
+            val restarted =
+                RealGameFolder(
+                    f.home,
+                    RealModStore(f.home),
+                    object : Downloader {
+                        override suspend fun download(
+                            mod: CatalogMod,
+                            version: ModVersion,
+                            progress: (Int) -> Unit,
+                        ): DownloadedFile = error("Recovery must not download")
+                    },
+                    running = { false },
+                )
+            restarted.recoverPending()
+            restarted.recoverPending()
+            assertRecordedPlacements(f)
+            assertEquals(4, record(f).read()!!.size)
+            assertFalse(restarted.recoveryPending)
+            restarted.removeLoader(f.game.toString())
+            for (relative in orders[0]) assertFalse(f.game.resolve(relative).exists())
+            assertEquals("keep me", player.readText())
+            assertTrue(f.game.resolve("NuclearOption.exe").exists())
+        }
+    }
+
+    @Test
     fun recoveryDoesNotClaimChangedOrMissingTargets() = runBlocking {
         val f = fixture(false, null, orders[0])
         crashAfterTransaction(f)
@@ -479,13 +517,20 @@ class LoaderPartialPlacementTest {
             val core = f.game.resolve("BepInEx/core/BepInEx.dll")
             val playerDll = dll + byteArrayOf(0, 0)
             core.writeBytes(playerDll)
+            val retryMoves = mutableListOf<Path>()
+            var successBeforeProxy = false
             DiskFaults.beforeMove = {
-                assertEquals(proxy, it)
-                assertTrue(
-                    app.state.value.toasts.none { toast ->
-                        toast.text.contains("Installed the mod loader")
-                    }
-                )
+                if (
+                    it.startsWith(f.game) &&
+                        f.game.relativize(it).toString().replace('\\', '/') in order
+                ) {
+                    retryMoves.add(it)
+                    if (it == proxy)
+                        successBeforeProxy =
+                            app.state.value.toasts.any { toast ->
+                                toast.text.contains("Installed the mod loader")
+                            }
+                }
             }
             val retry = app.state.value.toasts.last { it.action == "Retry" }
             app.runToast(retry.id)
@@ -494,6 +539,8 @@ class LoaderPartialPlacementTest {
                     app.state.value.toasts.none { it.text.contains("Installed the mod loader") }
                 ) delay(10)
             }
+            assertEquals(listOf(proxy), retryMoves)
+            assertFalse(successBeforeProxy)
             assertEquals("shipped proxy", proxy.readText())
             assertContentEquals(playerDll, core.readBytes())
             assertTrue(order.all { f.game.resolve(it).isRegularFile() })
