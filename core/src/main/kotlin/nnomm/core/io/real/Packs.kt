@@ -3,12 +3,15 @@ package nnomm.core.io.real
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.utils.io.*
 import java.nio.file.*
 import java.util.zip.*
 import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
+import nnomm.core.config.modConfigFiles
+import nnomm.core.config.modConfigFilesIn
 import nnomm.core.model.*
 import nnomm.core.rules.compareVersions
 
@@ -70,8 +73,22 @@ class RealPacks(
 
     suspend fun read(path: Path): PackPreview =
         withContext(Dispatchers.IO) {
-            if (path.name.endsWith(".nomm.json", true))
-                return@withContext legacy(path.readText(), path.name, null)
+            require(path.fileSize() <= 256L * 1024 * 1024) { "Pack exceeds 256 MiB" }
+            val first = Files.newInputStream(path).use { it.readNBytes(2) }
+            if (!first.contentEquals(byteArrayOf(80, 75))) {
+                require(path.fileSize() <= 16L * 1024 * 1024) { "Mod list exceeds 16 MiB" }
+                val text = path.readText()
+                if (text.trimStart().startsWith("["))
+                    return@withContext legacy(text, path.name, null)
+                val document = json.decodeFromString<PackDocument>(text)
+                require(document.format == "NNOMM/1")
+                return@withContext contentPreview(
+                    document.pack,
+                    emptyMap(),
+                    document.settings?.let(::packSettings),
+                    null,
+                )
+            }
             Files.createDirectories(home.resolve("staging"))
             val staging = Files.createTempDirectory(home.resolve("staging"), "pack-")
             try {
@@ -139,7 +156,14 @@ class RealPacks(
                                 PackDocument(
                                     pack = pack,
                                     settings =
-                                        if (pack.includeSettings) packSettings(state.settings)
+                                        if (pack.includeSettings)
+                                            packSettings(
+                                                SettingsValues(
+                                                    state.settings.general +
+                                                        state.settings.overrides[state.profileId]
+                                                            .orEmpty()
+                                                )
+                                            )
                                         else null,
                                 )
                             )
@@ -169,17 +193,25 @@ class RealPacks(
                                     .flatMap { item ->
                                         val payload =
                                             item.version?.let { mods.version(item.id, it) }
-                                        if (payload?.isDirectory() == true)
-                                            Files.walk(payload).use { files ->
-                                                files
-                                                    .filter {
-                                                        it.isRegularFile() && it.extension == "cfg"
-                                                    }
-                                                    .map { it.fileName.toString() }
-                                                    .toList()
-                                            }
-                                        else emptyList()
+                                        if (payload == null) emptyList()
+                                        else {
+                                            if (folder == snapshot) {
+                                                modConfigFilesIn(
+                                                    folder,
+                                                    payload,
+                                                    item.id,
+                                                    state.mod(item.id).name,
+                                                )
+                                            } else
+                                                modConfigFiles(
+                                                    Path.of(requireNotNull(state.game.folder)),
+                                                    payload,
+                                                    item.id,
+                                                    state.mod(item.id).name,
+                                                )
+                                        }
                                     }
+                                    .map { it.fileName.toString() }
                                     .toSet()
                             names.forEach { name ->
                                 val file = safe(folder, name)
@@ -211,6 +243,29 @@ class RealPacks(
             }
         }
 
+    /** Copies selected settings only into a private destination-profile snapshot. */
+    suspend fun importSettings(preview: PackPreview, profileId: String) =
+        withContext(Dispatchers.IO) {
+            preview.modSettingsFolder?.let { source ->
+                val destination = home.resolve("profiles/${component(profileId)}/config")
+                Files.createDirectories(destination)
+                Files.list(source).use { files ->
+                    files.forEach { file ->
+                        require(
+                            file.isRegularFile() &&
+                                !Files.isSymbolicLink(file) &&
+                                file.extension.equals("cfg", true)
+                        )
+                        Files.copy(
+                            file,
+                            safe(destination, file.name),
+                            StandardCopyOption.REPLACE_EXISTING,
+                        )
+                    }
+                }
+            }
+        }
+
     /** Explicit user selection required by the caller. Materialized local payloads remain OFF. */
     suspend fun selectedLocals(
         preview: PackPreview,
@@ -236,10 +291,27 @@ class RealPacks(
     override suspend fun following(info: PackInfo): Pack? =
         withContext(Dispatchers.IO) {
             val url = info.followAddress ?: return@withContext null
-            val body = client.get(checkedUrl(url)).boundedText()
-            val document = json.decodeFromString<PackDocument>(body)
-            require(document.format == "NNOMM/1")
-            document.pack.takeIf { compareVersions(it.version, info.version) > 0 }
+            Files.createDirectories(home.resolve("staging"))
+            val file = Files.createTempFile(home.resolve("staging"), "follow-", ".pack")
+            try {
+                val channel = client.get(checkedUrl(url)).bodyAsChannel()
+                Files.newOutputStream(file).use { output ->
+                    val buffer = ByteArray(65536)
+                    var total = 0L
+                    while (true) {
+                        val count = channel.readAvailable(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 256L * 1024 * 1024) { "Pack exceeds 256 MiB" }
+                        output.write(buffer, 0, count)
+                    }
+                }
+                read(file).use { preview ->
+                    preview.pack.takeIf { compareVersions(it.version, info.version) > 0 }
+                }
+            } finally {
+                Files.deleteIfExists(file)
+            }
         }
 }
 

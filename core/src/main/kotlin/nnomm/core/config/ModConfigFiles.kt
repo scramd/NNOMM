@@ -5,7 +5,10 @@ import java.nio.file.Path
 
 /** Read-only lookup: never creates configs, which BepInEx writes after the plugin first runs. */
 fun modConfigFiles(gameFolder: Path, modFolder: Path, id: String, name: String): List<Path> {
-    val config = gameFolder.resolve("BepInEx/config")
+    return modConfigFilesIn(gameFolder.resolve("BepInEx/config"), modFolder, id, name)
+}
+
+fun modConfigFilesIn(config: Path, modFolder: Path, id: String, name: String): List<Path> {
     if (!Files.isDirectory(config) || !Files.isDirectory(modFolder)) return emptyList()
     val dlls =
         Files.walk(modFolder).use { paths ->

@@ -180,3 +180,10 @@ again after acquiring its mutex; the snapshot overload remains for callers/tests
 Active download versions are included in retention. Pack preview local ids and
 versions now derive from the bundled content, so consumers must use preview ids,
 not the ids supplied by a pack author.
+
+
+Acceptance settings additions: `GameFolder.setConsole(folder, enabled)` is a default
+port. Real IO writes it only on an explicit console change or Play. `importPack`
+accepts an optional destination id and permitted settings, so the UI can prepare a
+private config snapshot before profile selection. `RealPacks.importSettings` never
+writes into the game. `problemReport` builds the read-only report on an IO dispatcher.

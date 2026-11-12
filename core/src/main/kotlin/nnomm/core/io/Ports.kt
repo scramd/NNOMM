@@ -81,6 +81,8 @@ interface GameFolder {
 
     suspend fun removeLoader(folder: String) {}
 
+    suspend fun setConsole(folder: String, enabled: Boolean) {}
+
     suspend fun takeOver(folder: String): List<Pair<CatalogMod, InstalledMod>>
 
     suspend fun installLoader(folder: String)
