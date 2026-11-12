@@ -6,7 +6,10 @@ Run checks from the repository root with tools/gradlew-locked :core:test.
 ## UI entry point
 
 Use nnomm.core.demo.demoStore() for the demo or AppStore(initialState, AppIo(...))
-for real mode. Collect store.state: StateFlow<AppState>. Close the store when the
+for custom IO. For production real mode use `RealRuntime.open()` in
+`nnomm.core.io.real`, then collect `runtime.store.state` and call its suspending
+`shutdown()` to flush before exit. See IO.md for paths, safety rules and boundaries.
+Collect store.state: StateFlow<AppState>. Close the store when the
 app exits. An optional coroutine scope supports virtual-time tests; production
 defaults to a SupervisorJob on Dispatchers.IO.
 
@@ -16,7 +19,8 @@ The store exposes:
   repair, addLocal, paletteToggle, lookForUpdates.
 - Profiles: useProfile, newProfile, copyProfile, renameProfile, deleteProfile,
   shareProfile.
-- Packs: importPack, updatePack. Pass the selected pack data explicitly.
+- Packs: importPack, updatePack, checkPackUpdates, addPreparedLocalMods.
+  Pass selected pack data explicitly; prepared local records stay off.
 - Settings: setSetting, ovset, ovreset, ovclear. Pass an optional profile ID to
   setSetting; an inherited setting is locked until ovset.
 - Downloads: cancelDownload, clearFinished.
@@ -36,7 +40,8 @@ the domain model. Undo callbacks retain the profile and affected records.
 
 shareProfile returns pack data; the UI/platform layer chooses a file and writes
 it. It includes local files only when requested. includeSettings marks the pack;
-the real config-file payload and archive writer are future IO work.
+`RealPacks` writes the selected payload and optional config snapshot. The UI
+chooses the file and connects the preview and explicit local selections.
 
 ## Pure functions
 
@@ -116,9 +121,11 @@ gameClosed() is also available to the demo harness.
   initial profile, found can be null.
 - The mock's UI-only no-ops (copying, file save, danger actions and window/page
   rendering) have no fabricated effects in the store. Real archive/config export
-  and durable installed/profile persistence still belong to the next IO layer.
+  is provided by `nnomm.core.io.real`; durable installed/profile persistence uses
+the optional `AppIo.persistence` port.
 - Mod-loader installation is called before applying a profile if needed.
-  The mock supplies no loader-install toast; none is invented here.
+  Real and demo store calls now show the required loader-install notice:
+  “Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.”
 - No Opus/Sol review was run: this implementation task explicitly says to work
   alone. The parent must arrange the project-required independent reviews.
 

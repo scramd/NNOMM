@@ -41,4 +41,10 @@ interface GameLauncher {
 interface SettingsFile { suspend fun read(): SettingsValues?; suspend fun write(values: SettingsValues) }
 /** Milliseconds since Unix epoch, injectable for deterministic rules and tests. */
 fun interface Clock { fun nowMillis(): Long }
-data class AppIo(val registry: Registry,val meta: MetaSource,val releaseNotes: ReleaseNotesSource,val downloader: Downloader,val modStore: ModStore,val gameFolder: GameFolder,val launcher: GameLauncher,val settingsFile: SettingsFile,val clock: Clock)
+data class AppIo(val registry: Registry,val meta: MetaSource,val releaseNotes: ReleaseNotesSource,val downloader: Downloader,val modStore: ModStore,val gameFolder: GameFolder,val launcher: GameLauncher,val settingsFile: SettingsFile,val clock: Clock,val persistence: StatePersistence? = null,val packSource: PackSource? = null)
+
+/** Durable domain snapshot, excluding transient downloads and Undo callbacks. */
+interface StatePersistence { suspend fun load(): AppState?; suspend fun save(state: AppState) }
+
+/** Opt-in pack update address; no background subscription or publication. */
+interface PackSource { suspend fun following(info: PackInfo): Pack? }

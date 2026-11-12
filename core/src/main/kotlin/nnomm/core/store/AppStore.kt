@@ -41,6 +41,16 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
     private val launcherObserver=worker.launch {
         io.launcher.running.drop(1).collect { running -> change { it.copy(gameRunning=running) } }
     }
+    private var saveFailed=false
+    @OptIn(FlowPreview::class)
+    private val persistenceJob=io.persistence?.let { persistence -> worker.launch {
+        state.debounce(350).collect { snapshot ->
+            try { persistence.save(snapshot);saveFailed=false } catch(e: CancellationException){throw e} catch(e: Exception){ /* Report once; avoid a toast/save failure loop. */
+                if(!saveFailed){saveFailed=true;toast("Could not save your changes: ${e.message}",ms=30000)}
+            }
+        }
+    }}
+    suspend fun flush(){io.persistence?.save(state.value);io.settingsFile.write(state.value.settings)}
     private fun change(f: (AppState)->AppState) { synchronized(lock){mutable.value=f(mutable.value)} }
     private fun background(block: suspend ()->Unit)=worker.launch { try{block()}catch(e: CancellationException){throw e}catch(e: Exception){toast(e.message?:"The action could not be completed.")} }
     private fun toast(text: String,action: String?=null,target: UiAction?=null,ms: Long=7000,undo: (() -> Unit)?=null) {
@@ -60,13 +70,14 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
     private fun applyAndSave() {
         val snapshot=state.value
         disk {
-            io.settingsFile.write(snapshot.settings)
+            if(io.persistence==null)io.settingsFile.write(snapshot.settings)
             if(!snapshot.gameRunning) {
                 if(onCount(snapshot)>0&&!snapshot.game.loaderPresent) {
                     snapshot.game.folder?.let { folder ->
                         io.gameFolder.installLoader(folder)
                         val game=io.gameFolder.inspect(folder)
                         change{it.copy(game=game)}
+                        toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
                     }
                 }
                 io.gameFolder.apply(snapshot,snapshot.profileId)
@@ -178,7 +189,13 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
         change{it.copy(profiles=it.profiles-p,profileId=if(it.profileId==id)"default" else it.profileId)}
         toast("Deleted the profile ${p.name}. Its mods stay installed.","Undo",undo={change{st->st.copy(profiles=st.profiles.toMutableList().apply{add(index.coerceAtMost(size),p)})};applyAndSave()});applyAndSave()
     }
-    fun setSetting(key: String,value: JsonPrimitive,profile: String?=null){change{nnomm.core.settings.setSetting(it,key,value,profile)};applyAndSave()}
+    fun setSetting(key: String,value: JsonPrimitive,profile: String?=null){
+        change{nnomm.core.settings.setSetting(it,key,value,profile)}
+        if(key=="gamePath")background {
+            val game=if(value.content.isBlank())GameInfo() else io.gameFolder.inspect(value.content)
+            change{it.copy(game=game)};applyAndSave()
+        } else applyAndSave()
+    }
     fun ovset(key: String,p: String=state.value.profileId){change{nnomm.core.settings.ovset(it,key,p)};applyAndSave()}
     fun ovreset(key: String,p: String=state.value.profileId){change{nnomm.core.settings.ovreset(it,key,p)};applyAndSave()}
     fun ovclear(p: String=state.value.profileId){change{nnomm.core.settings.ovclear(it,p)};applyAndSave()}
@@ -216,6 +233,17 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
         }
         change{it.copy(toasts=emptyList())};toast("Importing ${pack.name}: ${plural(n,"download","downloads")}")
     }
+    fun checkPackUpdates() {
+        val source=io.packSource?:return
+        state.value.profiles.forEach { profile -> val info=profile.pack
+            if(info?.followAddress!=null)background {
+                val next=source.following(info)
+                change { s -> s.copy(profiles=s.profiles.map { p ->
+                    if(p.id==profile.id && p.pack?.followAddress==info.followAddress)p.copy(pack=p.pack.copy(nextVersion=next?.version)) else p
+                }) }
+            }
+        }
+    }
     fun updatePack(pack: Pack) {
         val p=state.value.profile();val info=p.pack?:return;var managed=info.mods
         pack.items.forEach{i->when(i.kind){
@@ -230,6 +258,13 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
     fun shareProfile(name: String=state.value.profile().name,version: String="1.0",by: String="",includeLocal: Boolean=false,includeSettings: Boolean=false,followAddress: String?=null): Pack {
         val s=state.value
         return Pack(name,by,version,s.installed.keys.filter{isOn(s,it)&&(includeLocal||s.installed[it]?.source!=ModSource.LOCAL)}.map{PackItem(if(s.installed[it]?.source==ModSource.LOCAL)"local" else "ver",it,verOf(s,it))},followAddress=followAddress,includeSettings=includeSettings)
+    }
+    /** Adopt explicitly selected pack payloads already materialized by pack IO. They remain off. */
+    fun addPreparedLocalMods(mods: List<Pair<CatalogMod,InstalledMod>>) {
+        require(mods.all{it.second.source==ModSource.LOCAL && it.first.id==it.second.id})
+        change { s -> s.copy(catalog=s.catalog.filterNot{m->mods.any{it.first.id==m.id}}+mods.map{it.first},
+            installed=s.installed+mods.associate{(mod,m)->mod.id to m.copy(profiles=s.profiles.associate{it.id to ProfileMod(false,m.defaultVersion)})}) }
+        applyAndSave()
     }
     fun addLocal(path: String) {val p=state.value.profileId;background{
         val (mod,installed)=io.modStore.addLocal(path)
@@ -250,9 +285,15 @@ class AppStore(initial: AppState,val io: AppIo,scope: CoroutineScope?=null): Aut
     }
     fun completeFirstStart(){change{it.copy(firstStart=it.firstStart.copy(complete=true))}}
     fun repairLoader(){val folder=state.value.game.folder?:return;background{io.gameFolder.repairLoader(folder);val game=io.gameFolder.inspect(folder);change{it.copy(game=game)}}}
+    fun loadMetadata() { val snapshot=state.value; snapshot.catalog.forEach { mod -> listOfNotNull(mod.newestRelease).forEach { version ->
+        if(version.downloadUrl!=null) background { slots.withPermit {
+            val meta=io.meta.metadata(mod,version)
+            change { s -> s.copy(catalog=s.catalog.map { m -> if(m.id!=mod.id)m else m.copy(versions=m.versions.map { v -> if(v.version!=version.version)v else v.copy(sizeKb=meta.sizeKb,dateMillis=meta.dateMillis) }) }) }
+        }}
+    } } }
     fun refreshRegistry(){change{it.copy(connection=CatalogConnection(ConnectionKind.LOADING))};background{
-        try{val mods=cleanCatalogTags(io.registry.read());val now=io.clock.nowMillis();io.registry.save(mods,now);change{it.copy(catalog=mods+it.catalog.filter{m->m.localFile!=null},connection=CatalogConnection(ConnectionKind.READY,now),nowMillis=now)}}
+        try{val mods=cleanCatalogTags(io.registry.read());val now=io.clock.nowMillis();io.registry.save(mods,now);change{it.copy(catalog=mods+it.catalog.filter{m->m.localFile!=null},connection=CatalogConnection(ConnectionKind.READY,now),nowMillis=now)};loadMetadata()}
         catch(e: Exception){val saved=io.registry.saved();change{it.copy(catalog=(saved?.first?:it.catalog.filter{m->m.localFile==null})+it.catalog.filter{m->m.localFile!=null},connection=CatalogConnection(ConnectionKind.OFFLINE,saved?.second?:it.connection.readAtMillis))}}
     }}
-    override fun close(){launcherObserver.cancel();diskQueue.close();diskWorker.cancel();if(owned)worker.cancel() else synchronized(lock){jobs.values.forEach{it.cancel()}}}
+    override fun close(){persistenceJob?.cancel();launcherObserver.cancel();diskQueue.close();diskWorker.cancel();if(owned)worker.cancel() else synchronized(lock){jobs.values.forEach{it.cancel()}}}
 }

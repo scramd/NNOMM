@@ -16,6 +16,9 @@ coil = "3.6.3"
 
 [libraries]
 # core
+core-compress = { module = "org.apache.commons:commons-compress", version = "1.28.0" }
+core-xz = { module = "org.tukaani:xz", version = "1.10" }
+core-jsoup = { module = "org.jsoup:jsoup", version = "1.21.2" }
 core-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 core-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 

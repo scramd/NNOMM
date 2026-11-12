@@ -21,7 +21,7 @@ fun problems(s: AppState,id: String): List<Problem> {
             v.dependencies.forEach{if(!isOn(s,it.id))add(Problem("warn","dep","Needs ${s.mod(it.id).name}",it.id))}
             (v.incompatibilities.map{it.id}+s.catalog.filter{m->m.newestRelease?.incompatibilities?.any{it.id==id}==true}.map{it.id}).forEach { if(isOn(s,it))add(Problem("warn","conflict","Conflicts with ${s.mod(it).name}",it)) }
         }
-        if(s.settings.bool("warnOld")&&v.gameVersion!=s.game.version)add(Problem("","old","Made for ${v.gameVersion}"))
+        if(s.settings.bool("warnOld")&&v.gameVersion!=effectiveGameVersion(s))add(Problem("","old","Made for ${v.gameVersion}"))
     }
 }
 fun hasProblem(s: AppState,id: String)=problems(s,id).any{it.kind.isNotEmpty()}
@@ -39,7 +39,7 @@ fun browseList(s: AppState,b: BrowseFilter=BrowseFilter(),skip: String?=null): L
         (skip=="type"||b.type=="all"||(if(x.newestRelease?.type==ModType.ADDON)"addon" else "plugin")==b.type) &&
         (skip=="tags"||b.tags.isEmpty()||if(b.tagMode=="all")b.tags.all{it in x.tags} else b.tags.any{it in x.tags}) &&
         (skip=="have"||when(b.have){"new"->x.id !in s.installed;"inst"->x.id in s.installed;"upd"->hasUpdate(s,x.id);else->true}) &&
-        (!b.fits||x.newestRelease?.gameVersion==s.game.version)
+        (!b.fits||x.newestRelease?.gameVersion==effectiveGameVersion(s))
     }.mapNotNull { x->matchMod(x,b.query.trim())?.let{BrowseRow(x,it)} }
     val comparator=when(b.sort){"updated"->compareBy<BrowseRow>{daysAgo(s,it.mod.updated)};"newest"->compareBy{daysAgo(s,it.mod.added)};"name"->compareBy{it.mod.name.lowercase()};else->compareByDescending{it.mod.downloadCount}}
     return list.sortedWith(if(b.query.isNotBlank())compareByDescending<BrowseRow>{it.match.score}.thenByDescending{it.mod.downloadCount} else comparator)
@@ -93,3 +93,6 @@ fun problemFixes(s: AppState,id: String,p: Problem): List<FixItem> {
         else->emptyList()
     }
 }
+
+/** Unknown disk version uses the newest game version named by the registry. */
+fun effectiveGameVersion(s: AppState): String? = s.game.version?.takeUnless{it=="unknown"} ?: s.catalog.flatMap{it.versions}.mapNotNull{it.gameVersion}.maxWithOrNull(::compareVersions)
