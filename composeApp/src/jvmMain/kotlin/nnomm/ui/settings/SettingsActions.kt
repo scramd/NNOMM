@@ -72,8 +72,7 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
     val c = LocalNnTheme.current.colors
     var address by remember { mutableStateOf("") }
     val nomnom = "https://kopterbuzz.github.io/NOMNOM/manifest/manifest.json"
-    // TODO(core): SettingsValues currently accepts primitives only. Preserve the source list as
-    // newline-separated addresses until core supplies a registry configuration type and reader.
+    // RealRuntime reads newline-separated source addresses from this setting.
     val sources = state.settings.general["sources"]?.content?.lineSequence()?.filter { it.isNotBlank() }?.toList()
         ?: listOf(nomnom)
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -84,7 +83,6 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 Switch(source in sources, { on ->
                     val next = if (on) sources + source else sources - source
                     model.store.setSetting("sources", JsonPrimitive(next.joinToString("\n")))
-                    todo(model, "Registry selection is saved; the registry reader does not support switching sources yet")
                 }, description = if (source == nomnom) "NOMNOM" else source)
                 Column(Modifier.weight(1f)) {
                     Label(if (source == nomnom) "NOMNOM" else source, weight = 600, maxLines = 1)
@@ -94,7 +92,7 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                     val minutes = state.connection.readAtMillis?.let { ((state.nowMillis - it) / 60000).coerceAtLeast(0) }
                     Label("${state.catalog.count { it.localFile == null }} mods, " + if (minutes == null) "not read yet" else "read $minutes ${if (minutes == 1L) "minute" else "minutes"} ago", color = c.text2)
                     Button("Read now", model.store::refreshRegistry, size = ControlSize.Small)
-                } else Button("Read now", { todo(model, "Reading additional registries") }, size = ControlSize.Small)
+                } else Button("Read now", model.store::refreshRegistry, size = ControlSize.Small)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,7 +102,6 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                 if (entered.isNotEmpty() && entered !in sources) {
                     model.store.setSetting("sources", JsonPrimitive((sources + entered).joinToString("\n")))
                     address = ""
-                    todo(model, "Registry address is saved; reading additional registries is not available yet")
                 }
             })
         }

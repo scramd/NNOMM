@@ -18,11 +18,13 @@ import io.github.vinceglb.filekit.FileKit
 import java.awt.dnd.*
 import java.io.File
 import java.util.Properties
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import nnomm.core.demo.demoStore
+import nnomm.core.io.real.RealRuntime
 import nnomm.core.store.AppStore
 import nnomm.ui.*
 import nnomm.ui.dialogs.registerDialogFactories
+import nnomm.ui.kit.Label
 import nnomm.ui.kit.windowInputMode
 import nnomm.ui.shell.*
 import nnomm.ui.shots.KitGallery
@@ -36,20 +38,47 @@ object LaunchRequests {
     val pendingFiles = mutableStateListOf<String>()
 }
 
-fun settingsDirectory(): File =
-    System.getenv("NNOMM_HOME")?.let(::File)
-        ?: File(
-            System.getenv("APPDATA")
-                ?: System.getenv("XDG_CONFIG_HOME")
-                ?: "${System.getProperty("user.home")}/.config",
-            "NNOMM",
-        )
+fun settingsDirectory(): File = nnomm.core.io.real.settingsHome().toFile()
 
-/** TODO(core): replace the real-mode branch with durable IO when it is merged. */
-fun createStore(args: Array<String>): AppStore {
-    val demo = "--demo" in args || System.getenv("NNOMM_DEMO") == "1"
-    return if (demo) demoStore() else demoStore()
+/** The session retains the runtime resources as well as its store. */
+class AppSession(val store: AppStore, private val runtime: RealRuntime? = null) {
+    suspend fun shutdown() =
+        withContext(Dispatchers.IO) {
+            if (runtime != null) runtime.shutdown() else store.shutdown()
+        }
 }
+
+suspend fun createStore(args: Array<String>): AppSession =
+    withContext(Dispatchers.IO) {
+        val demo = "--demo" in args || "--kit" in args || System.getenv("NNOMM_DEMO") == "1"
+        if (demo) AppSession(demoStore())
+        else {
+            val notices =
+                kotlinx.coroutines.channels.Channel<String>(
+                    kotlinx.coroutines.channels.Channel.UNLIMITED
+                )
+            val home = settingsDirectory().toPath()
+            val fakeLauncher =
+                System.getenv("NNOMM_SANDBOX_LAUNCHER")?.let { command ->
+                    val sandbox =
+                        File(System.getProperty("user.home"), "nnomm-sandbox").toPath().toRealPath()
+                    require(home.toAbsolutePath().normalize().startsWith(sandbox)) {
+                        "A fake launcher requires a sandbox home."
+                    }
+                    listOf(command)
+                }
+            val runtime =
+                RealRuntime.open(
+                    home,
+                    fakeLauncher = fakeLauncher,
+                    notice = { notices.trySend(it) },
+                )
+            AppSession(runtime.store, runtime).also {
+                // Forward startup notices as well as notices emitted by later disk/network actions.
+                runtime.store.forwardNotices(notices)
+            }
+        }
+    }
 
 fun main(args: Array<String>) {
     System.setProperty("nucleus.app.id", "io.github.scramd.nnomm")
@@ -115,63 +144,95 @@ fun main(args: Array<String>) {
                     ),
             )
         val platform = remember { DesktopPlatform() }
-        val model = remember {
-            AppModel(createStore(args), platform).apply {
-                nnomm.ui.settings.registerSettingsOverlays(this)
-                registerDialogFactories()
-                if (!store.state.value.firstStart.complete) openOverlay("first")
+        val scope = rememberCoroutineScope()
+        var session by remember { mutableStateOf<AppSession?>(null) }
+        var model by remember { mutableStateOf<AppModel?>(null) }
+        var startupError by remember { mutableStateOf<String?>(null) }
+        var closing by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            // NonCancellable ensures a close during startup still gets a session to drain.
+            withContext(NonCancellable) {
+                try {
+                    val opened = createStore(args)
+                    session = opened
+                    model =
+                        AppModel(opened.store, platform).apply {
+                            nnomm.ui.settings.registerSettingsOverlays(this)
+                            registerDialogFactories()
+                            if (!store.state.value.firstStart.complete) openOverlay("first")
+                        }
+                } catch (e: Exception) {
+                    startupError = "Could not open NNOMM's settings. Your files have been kept."
+                    System.err.println("NNOMM startup failed: ${e.javaClass.simpleName}")
+                }
             }
         }
-        val storeState by model.store.state.collectAsState()
-        val scope = rememberCoroutineScope()
+        val storeState = model?.store?.state?.collectAsState()?.value
         DisposableEffect(Unit) {
             onDispose {
-                model.close()
+                model?.close()
                 platform.close()
             }
         }
-        LaunchedEffect(LaunchRequests.pendingFiles.toList()) {
+        LaunchedEffect(
+            model,
+            storeState?.firstStart?.complete,
+            LaunchRequests.pendingFiles.toList(),
+        ) {
+            val ready = model ?: return@LaunchedEffect
+            if (!ready.store.state.value.firstStart.complete) return@LaunchedEffect
             val files = LaunchRequests.pendingFiles.toList()
             LaunchRequests.pendingFiles.clear()
-            model.acceptFiles(
+            ready.acceptFiles(
                 files.map { if (it.startsWith("file:")) File(java.net.URI(it)) else File(it) }
             )
         }
         val saveAndExit: () -> Unit = {
-            properties.setProperty("placement", state.placement.name)
-            if (state.placement == WindowPlacement.Floating) {
-                properties.setProperty("width", state.size.width.value.toString())
-                properties.setProperty("height", state.size.height.value.toString())
-                properties.setProperty("x", state.position.x.value.toString())
-                properties.setProperty("y", state.position.y.value.toString())
-            }
-            scope.launch {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching {
-                            placementFile.parentFile.mkdirs()
-                            placementFile.outputStream().use {
-                                properties.store(it, "NNOMM window")
-                            }
-                        }
-                        .onFailure { System.err.println("Could not save window placement") }
+            if (!closing) {
+                closing = true
+                properties.setProperty("placement", state.placement.name)
+                if (state.placement == WindowPlacement.Floating) {
+                    properties.setProperty("width", state.size.width.value.toString())
+                    properties.setProperty("height", state.size.height.value.toString())
+                    properties.setProperty("x", state.position.x.value.toString())
+                    properties.setProperty("y", state.position.y.value.toString())
                 }
-                exitApplication()
+                scope.launch {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching {
+                                placementFile.parentFile.mkdirs()
+                                placementFile.outputStream().use {
+                                    properties.store(it, "NNOMM window")
+                                }
+                            }
+                            .onFailure { System.err.println("Could not save window placement") }
+                    }
+                    while (session == null && startupError == null) delay(25)
+                    try {
+                        session?.shutdown()
+                        exitApplication()
+                    } catch (e: Exception) {
+                        closing = false
+                        startupError = "Could not save your changes. Close NNOMM to try again."
+                    }
+                }
             }
         }
         val updates = remember { AppUpdates() }
         val isDemo = "--demo" in args || System.getenv("NNOMM_DEMO") == "1" || "--kit" in args
-        model.checkAppUpdates = {
+        model?.checkAppUpdates = {
             if (!isDemo)
                 scope.launch {
-                    updates.check(storeState.settings.general["appUpdate"]?.content ?: "Tell me") {
-                        message ->
-                        scope.launch { model.ui.updateStatus = message }
+                    updates.check(
+                        storeState!!.settings.general["appUpdate"]?.content ?: "Tell me"
+                    ) { message ->
+                        scope.launch { model?.ui?.updateStatus = message }
                     }
                 }
         }
-        model.openAppReleases = { platform.openUrl(NNOMM_LATEST_RELEASE_URL) }
-        LaunchedEffect(Unit) { if (!isDemo) model.checkAppUpdates() }
-        val values = storeState.settings.general
+        model?.openAppReleases = { platform.openUrl(NNOMM_LATEST_RELEASE_URL) }
+        LaunchedEffect(model) { if (!isDemo) model?.checkAppUpdates?.invoke() }
+        val values = storeState?.settings?.general.orEmpty()
         val dark =
             when {
                 "--light" in args -> false
@@ -194,7 +255,7 @@ fun main(args: Array<String>) {
                 state = state,
                 minimumSize = DpSize(720.dp, 560.dp),
                 onCloseRequest = saveAndExit,
-                onPreviewKeyEvent = model::shortcut,
+                onPreviewKeyEvent = { model?.shortcut(it) ?: false },
             ) {
                 val win = nucleusWindow
                 val drag = Modifier.windowDragArea(window = checkNotNull(win.unsafe.taoWindow))
@@ -202,36 +263,49 @@ fun main(args: Array<String>) {
                 val maximized = state.placement == WindowPlacement.Maximized
                 val focusMode = remember { nnomm.ui.kit.FocusMode() }
                 CompositionLocalProvider(nnomm.ui.kit.LocalFocusMode provides focusMode) {
-                Box(Modifier.fillMaxSize().then(Modifier.windowInputMode(focusMode))) {
-                    WindowScaffold(
-                        modifier =
-                            Modifier.fillMaxSize()
-                                .clip(RoundedCornerShape(if (maximized) 0.dp else 10.dp))
-                                .background(colors.bg)
-                                .then(
-                                    if (maximized) Modifier
-                                    else
-                                        Modifier.border(
-                                            1.dp,
-                                            colors.line2,
-                                            RoundedCornerShape(10.dp),
-                                        )
+                    Box(Modifier.fillMaxSize().then(Modifier.windowInputMode(focusMode))) {
+                        WindowScaffold(
+                            modifier =
+                                Modifier.fillMaxSize()
+                                    .clip(RoundedCornerShape(if (maximized) 0.dp else 10.dp))
+                                    .background(colors.bg)
+                                    .then(
+                                        if (maximized) Modifier
+                                        else
+                                            Modifier.border(
+                                                1.dp,
+                                                colors.line2,
+                                                RoundedCornerShape(10.dp),
+                                            )
+                                    )
+                                    .padding(1.dp),
+                            titleBar = {
+                                TitleBar(
+                                    onCommand = { model?.openOverlay("palette") },
+                                    onMinimize = { win.setMinimized(true) },
+                                    onMaximize = { win.setMaximized(!win.isMaximized) },
+                                    onClose = saveAndExit,
+                                    dragModifier = drag,
                                 )
-                                .padding(1.dp),
-                        titleBar = {
-                            TitleBar(
-                                onCommand = { model.openOverlay("palette") },
-                                onMinimize = { win.setMinimized(true) },
-                                onMaximize = { win.setMaximized(!win.isMaximized) },
-                                onClose = saveAndExit,
-                                dragModifier = drag,
-                            )
-                        },
-                    ) {
-                        if ("--kit" in args) KitGallery() else AppShell(model)
+                            },
+                        ) {
+                            val ready = model
+                            if (closing || startupError != null || ready == null) {
+                                Box(
+                                    Modifier.fillMaxSize(),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                                ) {
+                                    Label(
+                                        startupError
+                                            ?: if (closing) "Saving your changes…"
+                                            else "Opening NNOMM…"
+                                    )
+                                }
+                            } else if ("--kit" in args) KitGallery() else AppShell(ready)
+                        }
+                        if ("--kit" !in args && !closing && startupError == null)
+                            model?.let { AppLayers(it) }
                     }
-                    if ("--kit" !in args) AppLayers(model)
-                }
                 }
             }
         }

@@ -60,7 +60,10 @@ About and updates calls `model.checkAppUpdates()`, displays `ui.updateStatus`, a
 
 - Servers heading: `Servers`; empty heading: `Coming later`; body: `A list of dedicated servers comes in a later version of NNOMM.`
 - Missing dialog factories stay inert until the dialog agent supplies them. The first-start and guided-test page layers also need that agent's factory wiring.
-- `TODO(core)`: real mode still uses demo IO. No real game directory was used.
+- Real mode uses NNOMM's private settings home. Desktop checks use only
+  `~/nnomm-sandbox`; see `notes/real-mode-check.md`.
+- `NNOMM_SANDBOX_LAUNCHER` optionally names a fake executable for launch checks.
+  It is accepted only with an NNOMM home inside `~/nnomm-sandbox`.
 - Store timers expire core toasts. The host displays at most three with optional actions and bounded wrapping.
 - Windows checks are in `WINDOWS-CHECKS.md`.
 - Independent Opus/Sol review remains the parent's responsibility: this task explicitly required working alone.
