@@ -147,11 +147,18 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 
 ## Final loader fixes
 
-- Repair a missing/unreadable Doorstop enabled key for owned and adopted
-  BepInEx 5.4.23.4. Confirm the old file remains in recovery and unowned binaries
-  and other settings remain unchanged. Check locked/unreadable INI recovery.
+- Repair Doorstop for owned and adopted BepInEx 5.4.23.4: a missing enabled key
+  with a valid General target stays unchanged; ineffective configs receive shipped
+  defaults and the original stays in recovery. Unowned binaries stay unchanged.
+  A locked/unreadable INI must fail without replacing any files.
 - Play without mods after Repair; verify enabled restoration after observed exit.
 - Full disk during loader download or placement gives free-space guidance; TLS
   and dropped transfers give connection guidance. First-mod Retry repeats installation.
 - Remove all mods with owned and adopted loaders: confirm completion matches
   actual removed/retained files. Other-version Repair gives instructions without Retry.
+
+## Doorstop encoding and profile API
+
+| Check on real Windows | Expected result |
+| --- | --- |
+| Play without mods and Repair with UTF-8 BOM, UTF-16 LE/BE BOM, `[General] ; comment` and `[ General ]` headers; include lone CR, byte 0x85 comments, duplicate General sections and missing enabled. Hold the INI open with a sharing lock during Repair. | Doorstop uses the first General section. Play disables effective keys and restores exact original bytes after exit/restart/failure, with BOM first and original line endings. Healthy Repair preserves encoding and unrelated bytes; missing enabled alone stays unchanged, explicit false becomes true unless restore is pending. Unhealthy Repair uses shipped defaults and keeps original bytes in recovery. A locked read fails with close-programs guidance and leaves every loader file unchanged. |
