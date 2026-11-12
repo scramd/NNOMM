@@ -28,6 +28,7 @@ object Shots {
     val registry =
         mutableListOf<ShotSpec>().apply {
             addAll(mockShots.map { it.spec() })
+            addAll(nnomm.ui.dialogs.dialogMockShots.map { it.spec() })
             for (dark in listOf(true, false)) {
                 val theme = if (dark) "dark" else "light"
                 add(ShotSpec("kit-table-$theme", dark) { WindowShell { KitTableDemo() } })

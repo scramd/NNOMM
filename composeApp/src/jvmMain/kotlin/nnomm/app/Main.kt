@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import nnomm.core.demo.demoStore
 import nnomm.core.store.AppStore
 import nnomm.ui.*
+import nnomm.ui.dialogs.registerDialogFactories
 import nnomm.ui.kit.windowInputMode
 import nnomm.ui.shell.*
 import nnomm.ui.shots.KitGallery
@@ -114,7 +115,12 @@ fun main(args: Array<String>) {
                     ),
             )
         val platform = remember { DesktopPlatform() }
-        val model = remember { AppModel(createStore(args), platform) }
+        val model = remember {
+            AppModel(createStore(args), platform).apply {
+                registerDialogFactories()
+                if (!store.state.value.firstStart.complete) openOverlay("first")
+            }
+        }
         val storeState by model.store.state.collectAsState()
         val scope = rememberCoroutineScope()
         DisposableEffect(Unit) {

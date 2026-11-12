@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import nnomm.ui.AppModel
+import nnomm.ui.dialogs.registerDialogFactories
 import nnomm.ui.shell.*
 
 data class MockShot(
@@ -60,7 +61,12 @@ val mockShots =
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {
-            AppModel(mockStore(address), ShotPlatform).also { applyMockAddress(it, address) }
+            AppModel(mockStore(address), ShotPlatform).also {
+                it.registerDialogFactories()
+                applyMockAddress(it, address)
+                if (address.contains("mock=first")) it.openOverlay("first")
+                if (address.contains("trouble=1")) it.openOverlay("trouble")
+            }
         }
         DisposableEffect(model) { onDispose { model.close() } }
         Box(Modifier.fillMaxSize()) {
