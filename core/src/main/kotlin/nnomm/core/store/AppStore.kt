@@ -617,8 +617,21 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     }
                 }
             jobs[key] = job
-            job.invokeOnCompletion {
-                synchronized(lock) { if (jobs[key] === job) jobs.remove(key) }
+            job.invokeOnCompletion { cause ->
+                synchronized(lock) {
+                    if (jobs[key] === job) {
+                        jobs.remove(key)
+                        if (cause is CancellationException)
+                            change { st ->
+                                st.copy(
+                                    downloads =
+                                        st.downloads.filterNot {
+                                            it.id == id && it.profile == p && it.version == v
+                                        }
+                                )
+                            }
+                    }
+                }
             }
             job.start()
         }
