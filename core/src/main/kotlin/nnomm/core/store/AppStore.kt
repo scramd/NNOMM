@@ -344,7 +344,13 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             val game = io.gameFolder.inspect(folder)
             change { it.copy(game = game) }
             installBlock(game)?.let { throw LoaderInstallFailure(it) }
-            if (game.loaderPresent && game.loaderVersion == "5.4.23.4" && game.loaderComplete)
+            // A pending recovery of a complete loader is not a new installation.
+            if (
+                !(beforeInstall.loaderPresent && beforeInstall.loaderComplete) &&
+                    game.loaderPresent &&
+                    game.loaderVersion == "5.4.23.4" &&
+                    game.loaderComplete
+            )
                 toast("Installed the mod loader BepInEx 5.4.23.4. Mods need it to run.")
         }
         io.gameFolder.apply(gamePlan(snapshot))
