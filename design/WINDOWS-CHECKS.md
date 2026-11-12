@@ -169,5 +169,13 @@ count all store/recovery use. Linux choosers use Swing; Windows still uses FileK
 | --- | --- |
 | Repair pinned 5.4.23.4 with enabled=0, 1, no, yes, off, empty, quoted false and inline comments; also missing enabled and enabled without equals. Try empty and quoted-empty target_assembly. | Every present value other than true is repaired to true unless this folder has a pending restore. Missing/no-equals enabled stays unchanged. Empty targets receive shipped defaults and exact originals remain in recovery with a notice. |
 | Lock the INI or deny writes during Play without mods and again during restore after game exit. Keep the lock through NNOMM restart, then release it. | Startup still opens, running clears on exit, saved bytes remain pending, and one close-programs notice appears. Automatic retry restores exact bytes after release without another game transition. Play retries first and remains usable after recovery. An edit failure gives access/lock guidance, preserving the initial cause in logs. |
-| Delete a sandbox game folder while its restore record is pending. | Restart clears the record without recreating the folder. |
+| Disconnect a sandbox library drive while its restore record is pending, then reconnect it. | Restart retains the record without recreating the folder; automatic retry restores exact original bytes when the drive returns. |
 | Use unmatched bracket lines, NBSP/control whitespace, and odd-length or unpaired-surrogate UTF-16 in the sandbox INI. | Windows profile API behaviour agrees with parser rules; malformed UTF-16 is refused with valid-copy guidance and no loader files change. |
+
+## Doorstop3 read-only and pending Repair
+
+| Check on real Windows | Expected result |
+| --- | --- |
+| Mark the sandbox doorstop_config.ini read-only, then use Play without mods followed by normal Play. | The edit gives access guidance. Unchanged original bytes clear the restore record without another INI write, no false restore notice appears, and normal Play works. |
+| Put a bare enabled line before enabled=true; also use VT, FF and Ctrl-Z whitespace around headers, keys and values. | Play without mods changes the first effective key. Whitespace agrees with the Windows profile API; whitespace-only targets receive shipped defaults on Repair. |
+| Repair an unhealthy INI with a pending restore for the same sandbox folder, then restart or retry restoration. | Shipped repaired settings remain enabled, stale bytes never return, and the original unhealthy INI remains in recovery. |
