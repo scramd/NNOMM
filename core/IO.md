@@ -196,13 +196,21 @@ canonical game path; the record also checks that full path. It lists only select
 replacement targets and each staged source's SHA-256. Existing files that are not
 selected for replacement are never claimed, even when their bytes match the archive.
 After the batch, ownership publication keeps existing ownership and adds only targets
-whose current bytes match their pending hash. This includes a previously unowned
-INI changed by Repair; adopted binaries remain unowned. Only after the atomic
-ownership write succeeds is the pending record deleted. Publication failure leaves
+whose current bytes match their pending hash. Repair claims an INI only when it
+creates a missing file, or keeps its existing ownership. Rewriting a player's existing INI never claims it: the pending record
+marks it unowned while still verifying its replacement bytes before success.
+Uninstall keeps that repaired INI beside the adopted binaries. Pending records
+from before this distinction retain their recorded ownership semantics. Only after
+the atomic ownership write succeeds is the pending record deleted. Publication failure leaves
 it available for retry, even after the file transaction's journal was deleted.
 Startup with the game closed, game exit, and every loader Install, Repair and
 Uninstall recover file transactions before finishing pending ownership from disk.
-Install does this even when BepInEx is already present. Missing game folders and
+Install does this even when BepInEx is already present. If this home owns loader
+files, Install walks the archive again and places only missing files before reporting
+success. A detected DLL alone cannot complete a partial install. Existing files,
+including player edits, stay unchanged. A detected adopted loader with no owned
+files retains the presence guard and is left alone. The archive walk is alphabetical,
+with any INI replacement promoted first. Missing game folders and
 failed recovery keep the pending record and expose pending game IO. Repeated
 recovery is safe. Changed, missing or unreadable targets add no new ownership.
 During Install or Repair these mismatches fail with access/lock guidance before
@@ -221,6 +229,11 @@ restore finishes before Repair checks the record. Adopted binaries and other
 unowned loader files remain unchanged.
 The pinned archive SHA-256 is
 `f881201b79da03e513bf97cdf39607ffa7f9e0d31a519b1aeeca8eb60f8309e7`.
+
+Loader crash regression tests reopen the IO object without a downloader after all
+files are promoted, both before and after journal deletion. Repeated recovery
+publishes ownership from the pending record and Uninstall removes those files
+while keeping player files.
 
 Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
 Proton process detection and actual game launches still require platform checks;
