@@ -71,7 +71,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         worker.launch {
             for (operation in diskQueue) {
                 try {
-                    operation()
+                    try {
+                        operation()
+                    } finally {
+                        change {
+                            it.copy(
+                                gameIoPending =
+                                    io.gameFolder.recoveryPending ||
+                                        (it.gameIoPending && it.gameRunning)
+                            )
+                        }
+                    }
                     try {
                         updateStoreUsage()
                     } catch (e: CancellationException) {
@@ -282,7 +292,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             io.persistence?.save(state.value)
             return
         }
-        if (modAction && onCount(snapshot) > 0 && !snapshot.game.loaderPresent) {
+        if (
+            modAction &&
+                onCount(snapshot) > 0 &&
+                (!snapshot.game.loaderPresent || !snapshot.game.loaderComplete)
+        ) {
             try {
                 io.gameFolder.installLoader(folder)
             } catch (e: CancellationException) {
@@ -313,7 +327,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 !force &&
                     resolvedPlan(state.value) == appliedPlan &&
                     (!queuedLoaderRequest ||
-                        state.value.game.loaderPresent ||
+                        (state.value.game.loaderPresent && state.value.game.loaderComplete) ||
                         onCount(state.value) == 0)
             ) {
                 queuedLoaderRequest = false
@@ -995,7 +1009,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     if (
                         !withoutMods &&
                             (resolvedPlan(state.value) != appliedPlan ||
-                                (onCount(state.value) > 0 && !state.value.game.loaderPresent))
+                                (onCount(state.value) > 0 &&
+                                    (!state.value.game.loaderPresent ||
+                                        !state.value.game.loaderComplete)))
                     )
                         prepareGameFolder(state.value)
                     applying = false

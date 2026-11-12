@@ -155,6 +155,7 @@ data class GameInfo(
     val loaderPresent: Boolean = false,
     val loaderVersion: String? = null,
     val folderMissing: Boolean = false,
+    val loaderComplete: Boolean = true,
 )
 
 @Serializable

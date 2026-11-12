@@ -33,6 +33,7 @@ internal data class PendingLoaderOwnership(
     val hashes: Map<String, String>,
     // Verify rewritten player files too, but never turn a repair into ownership.
     val unowned: Set<String> = emptySet(),
+    val archiveFiles: Set<String> = emptySet(),
 )
 
 class RealGameFolder(
@@ -46,6 +47,7 @@ class RealGameFolder(
     private val preferredVersions: () -> Map<String, String> = { emptyMap() },
     private val backgroundReady: () -> Boolean = { true },
     private val readDoorstop: (Path) -> ByteArray = { Files.readAllBytes(it) },
+    private val readLoaderHash: (Path) -> String = ::digest,
 ) : GameFolder {
     private val mutex = Mutex()
     private val learningSlot = Semaphore(1)
@@ -101,7 +103,8 @@ class RealGameFolder(
         get() =
             pendingTransactions(home.resolve("transactions")) ||
                 pendingTransactions(home.resolve("game-transactions")) ||
-                pendingLoaderRecords().isNotEmpty()
+                pendingLoaderRecords().isNotEmpty() ||
+                pendingRemovalRecords().isNotEmpty()
 
     override suspend fun recoverPending() =
         withContext(Dispatchers.IO) {
@@ -109,6 +112,13 @@ class RealGameFolder(
                 if (!running()) {
                     recoverTransactions(home.resolve("transactions"), notice = notice)
                     recoverTransactions(home.resolve("game-transactions"), notice = notice)
+                    pendingRemovalRecords().forEach { path ->
+                        try {
+                            finishLoaderRemoval(path)
+                        } catch (e: Exception) {
+                            notice("Mod loader removal recovery is pending. Its record is kept.")
+                        }
+                    }
                     pendingLoaderRecords().forEach { path ->
                         try {
                             val pending =
@@ -117,7 +127,7 @@ class RealGameFolder(
                             check(pendingLoaderRecord(game) == path) {
                                 "Loader recovery folder mismatch"
                             }
-                            finishLoaderOwnership(game)
+                            finishLoaderOwnership(game)?.let { throw it }
                         } catch (e: Exception) {
                             notice(
                                 "Could not recover mod loader ownership. The pending record is kept: ${e.message}"
@@ -170,7 +180,17 @@ class RealGameFolder(
                         }
                         .getOrNull()
                 else null
-            GameInfo(game.toString(), version ?: "unknown", present, loaderVersion)
+            val archive = loaderArchive(game).read().orEmpty()
+            val complete =
+                loaderRecord(game).read().isNullOrEmpty() ||
+                    archive.all { safe(game, it).isRegularFile() }
+            GameInfo(
+                game.toString(),
+                version ?: "unknown",
+                present,
+                loaderVersion,
+                loaderComplete = complete,
+            )
         }
 
     override suspend fun takeOver(folder: String): List<Pair<CatalogMod, InstalledMod>> =
@@ -1224,6 +1244,58 @@ class RealGameFolder(
             notice,
         )
 
+    private fun loaderArchive(game: Path) =
+        JsonFile(
+            loaderRecordPath(game)
+                .resolveSibling(loaderRecordPath(game).fileName.toString() + ".archive"),
+            kotlinx.serialization.builtins.ListSerializer(String.serializer()),
+            notice,
+        )
+
+    private fun loaderRecordPath(game: Path) =
+        home.resolve("loader-${Integer.toHexString(game.toString().hashCode())}.json")
+
+    private fun promotionReport(game: Path) =
+        pendingLoaderRecord(game)
+            .resolveSibling(pendingLoaderRecord(game).fileName.toString() + ".promoted")
+
+    private fun pendingRemovalRecords(): List<Path> =
+        home.resolve("loader-removals").let {
+            if (it.isDirectory()) it.listDirectoryEntries("*.json") else emptyList()
+        }
+
+    private fun removalRecord(game: Path) =
+        home.resolve("loader-removals").resolve(pendingLoaderRecord(game).fileName)
+
+    private fun finishLoaderRemoval(path: Path) {
+        val pending = json.decodeFromString<PendingLoaderOwnership>(path.readText())
+        val game = root(pending.gameRoot)
+        check(removalRecord(game) == path)
+        checkLoaderRecovery(game)
+        val record = loaderRecord(game)
+        val report = path.resolveSibling(path.fileName.toString() + ".promoted")
+        val promoted =
+            if (report.exists()) json.decodeFromString<List<String>>(report.readText()).toSet()
+            else emptySet()
+        record.write(
+            record.read().orEmpty().filter {
+                it !in pending.hashes || safe(game, it).toString() !in promoted
+            }
+        )
+        Files.delete(path)
+        Files.deleteIfExists(report)
+        forceDirectory(path.parent)
+    }
+
+    private fun checkLoaderRecovery(game: Path) {
+        check(
+            !pendingTouches(home.resolve("transactions"), game) &&
+                !pendingTouches(home.resolve("game-transactions"), game, unknownBlocks = true)
+        ) {
+            "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
+        }
+    }
+
     private fun pendingLoaderRecord(game: Path): Path {
         val key =
             java.security.MessageDigest.getInstance("SHA-256")
@@ -1241,43 +1313,71 @@ class RealGameFolder(
     // Transactions must settle before matching bytes: recovery can still promote a target.
     private fun recoverLoaderOwnership(game: Path) {
         recoverTransactions(home.resolve("transactions"), notice = notice)
-        check(!pendingTransactions(home.resolve("transactions"))) {
-            "Game files still need recovery. Their journals and files have been kept."
-        }
-        finishLoaderOwnership(game)
+        recoverTransactions(home.resolve("game-transactions"), notice = notice)
+        checkLoaderRecovery(game)
+        removalRecord(game).takeIf { it.exists() }?.let(::finishLoaderRemoval)
+        finishLoaderOwnership(game)?.let { throw it }
     }
 
-    private fun finishLoaderOwnership(game: Path): java.io.IOException? {
+    private fun finishLoaderOwnership(
+        game: Path,
+        requireAll: Boolean = false,
+    ): java.io.IOException? {
         val path = pendingLoaderRecord(game)
         if (!path.exists()) return null
-        check(!pendingTransactions(home.resolve("transactions"))) {
-            "Game files still need recovery. Their journals and files have been kept."
-        }
+        checkLoaderRecovery(game)
         val pending = json.decodeFromString<PendingLoaderOwnership>(path.readText())
         check(pending.gameRoot == game.toString()) { "Loader recovery folder mismatch" }
+        val report = promotionReport(game)
+        val promoted =
+            if (report.exists()) json.decodeFromString<List<String>>(report.readText()).toSet()
+            else emptySet()
         val owned = loaderRecord(game)
         val names = owned.read().orEmpty().toMutableSet()
+        val unreadable = mutableMapOf<String, String>()
         var failure: java.io.IOException? = null
         pending.hashes.forEach { (relative, hash) ->
             val target = safe(game, relative)
+            if (target.toString() !in promoted) {
+                if (requireAll && failure == null)
+                    failure = AccessDeniedException(target.toString())
+                return@forEach
+            }
             try {
                 val actual =
                     if (relative == "doorstop_config.ini") {
                         java.security.MessageDigest.getInstance("SHA-256")
                             .digest(readDoorstop(target))
                             .joinToString("") { "%02x".format(it) }
-                    } else digest(target)
-                if (actual != hash) throw AccessDeniedException(target.toString())
-                if (relative !in pending.unowned) names += relative
+                    } else readLoaderHash(target)
+                if (actual == hash) {
+                    if (relative !in pending.unowned) names += relative
+                } else {
+                    if (failure == null)
+                        failure =
+                            if (relative == "doorstop_config.ini")
+                                DoorstopSettingsFailure(AccessDeniedException(target.toString()))
+                            else AccessDeniedException(target.toString())
+                }
+            } catch (e: java.nio.file.NoSuchFileException) {
+                if (failure == null) failure = AccessDeniedException(target.toString())
             } catch (e: java.io.IOException) {
+                unreadable[relative] = hash
                 val problem =
                     if (relative == "doorstop_config.ini") DoorstopSettingsFailure(e)
                     else AccessDeniedException(target.toString()).apply { initCause(e) }
                 if (failure == null) failure = problem else failure.addSuppressed(problem)
             }
         }
+        if (names.isNotEmpty() && pending.archiveFiles.isNotEmpty())
+            loaderArchive(game).write(pending.archiveFiles.toList())
         owned.write(names.toList())
-        Files.delete(path)
+        if (unreadable.isEmpty()) {
+            Files.delete(path)
+            Files.deleteIfExists(report)
+        } else {
+            atomic(path, json.encodeToString(pending.copy(hashes = unreadable)))
+        }
         forceDirectory(path.parent)
         return failure
     }
@@ -1294,18 +1394,42 @@ class RealGameFolder(
                         .read()
                         .orEmpty()
                         .map { relative -> safe(game, relative) }
-                        .filter { it.exists() }
                         .map { it to null }
+                val presentRemovals = removals.map { it.first }.filter { it.exists() }.toSet()
+                val removal = removalRecord(game)
+                atomic(
+                    removal,
+                    json.encodeToString(
+                        PendingLoaderOwnership(
+                            game.toString(),
+                            record.read().orEmpty().associateWith { "removal" },
+                        )
+                    ),
+                )
+                DiskFaults.step("loader-removal-prepared")
                 replaceTrees(
                     removals,
                     home.resolve("transactions"),
+                    promotionReport =
+                        removal.resolveSibling(removal.fileName.toString() + ".promoted"),
+                    commitRemovals = true,
                     beforeMutation = {
                         check(!running()) { "Game started; loader changes are pending" }
                     },
                 )
-                record.write(emptyList())
+                val report = removal.resolveSibling(removal.fileName.toString() + ".promoted")
+                val removedCount =
+                    if (report.exists())
+                        json.decodeFromString<List<String>>(report.readText()).count { name ->
+                            presentRemovals.any { it.toString() == name }
+                        }
+                    else 0
+                finishLoaderRemoval(removal)
+                if (loaderRecord(game).read().orEmpty().isNotEmpty())
+                    throw AccessDeniedException(game.toString())
+                DiskFaults.step("loader-removal-published")
                 LoaderRemoval(
-                    removals.size,
+                    removedCount,
                     listOf("doorstop_config.ini", "winhttp.dll", "BepInEx/core").any {
                         safe(game, it).let { path ->
                             if (path.isDirectory())
@@ -1370,6 +1494,7 @@ class RealGameFolder(
                     DoorstopLocks.locked(game) {
                         val pendingRestore = DoorstopRestores(home).read(game).isNotEmpty()
                         val replacements = mutableListOf<Pair<Path, Path>>()
+                        val archiveFiles = mutableSetOf<String>()
                         val owned = loaderRecord(game)
                         val ownedNames = owned.read().orEmpty().toMutableList()
                         Files.walk(staging).use { paths ->
@@ -1383,6 +1508,7 @@ class RealGameFolder(
                                         !relative.startsWith("BepInEx/plugins/") &&
                                             !relative.startsWith("BepInEx/config/")
                                     )
+                                    archiveFiles += relative
                                     val dest = safe(game, relative)
                                     val wasOwned = relative in ownedNames
                                     if (
@@ -1436,18 +1562,33 @@ class RealGameFolder(
                         atomic(
                             pendingLoaderRecord(game),
                             json.encodeToString(
-                                PendingLoaderOwnership(game.toString(), hashes, unowned)
+                                PendingLoaderOwnership(
+                                    game.toString(),
+                                    hashes,
+                                    unowned,
+                                    archiveFiles,
+                                )
                             ),
                         )
-                        replaceTrees(
-                            replacements,
-                            home.resolve("transactions"),
-                            beforeMutation = {
-                                check(!running()) { "Game started; loader changes are pending" }
-                            },
-                        )
+                        try {
+                            replaceTrees(
+                                replacements,
+                                home.resolve("transactions"),
+                                promotionReport = promotionReport(game),
+                                beforeMutation = {
+                                    check(!running()) { "Game started; loader changes are pending" }
+                                },
+                            )
+                        } catch (e: Exception) {
+                            try {
+                                finishLoaderOwnership(game)?.let { e.addSuppressed(it) }
+                            } catch (publication: Exception) {
+                                e.addSuppressed(publication)
+                            }
+                            throw e
+                        }
                         // A recovered batch may contain promoted and rolled-back files.
-                        finishLoaderOwnership(game)?.let { throw it }
+                        finishLoaderOwnership(game, requireAll = true)?.let { throw it }
                         if (replacedDoorstop)
                             notice(
                                 "Replaced the damaged mod loader settings with the shipped defaults. Your previous doorstop_config.ini was kept in recovery in the game folder (.nnomm/recovery)."
