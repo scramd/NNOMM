@@ -172,16 +172,25 @@ internal fun copyTree(from: Path, to: Path, link: Boolean = false) {
     }
 }
 
-/** NOFOLLOW also treats Windows junctions (reported as other/reparse entries) as links. */
-internal fun isLink(path: Path): Boolean =
-    Files.isSymbolicLink(path) ||
-        (Files.exists(path, LinkOption.NOFOLLOW_LINKS) &&
-            Files.readAttributes(
-                    path,
-                    java.nio.file.attribute.BasicFileAttributes::class.java,
-                    LinkOption.NOFOLLOW_LINKS,
-                )
-                .isOther)
+/** Refuse links, special entries, and Windows junctions that canonicalize elsewhere. */
+internal fun isLink(path: Path): Boolean {
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return Files.isSymbolicLink(path)
+    val attributes =
+        Files.readAttributes(
+            path,
+            java.nio.file.attribute.BasicFileAttributes::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+    if (attributes.isSymbolicLink || attributes.isOther) return true
+    // Junctions can report as directories rather than isOther. Resolve this entry separately
+    // from its parent, so an ordinary child inside a canonical game path still compares equal.
+    if (System.getProperty("os.name").startsWith("Windows", true)) {
+        val absolute = path.toAbsolutePath().normalize()
+        val parent = absolute.parent ?: return false
+        return absolute.toRealPath() != parent.toRealPath().resolve(absolute.fileName)
+    }
+    return false
+}
 
 internal fun rejectLinks(path: Path) {
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
@@ -529,7 +538,14 @@ internal fun replaceTrees(
         forceDirectory(journals)
     } catch (e: Exception) {
         // Ordinary IO failures roll back now; a process crash leaves the same journal for startup.
-        val committed = prepared.any { it.phase == "promoted" }
+        val committed =
+            prepared.any {
+                it.phase == "promoted" ||
+                    (it.phase == "old-moved" &&
+                        it.staged != null &&
+                        !Path.of(it.staged).exists() &&
+                        Path.of(it.target).exists())
+            }
         if (journal.exists()) {
             try {
                 recoverTransactions(journals, only = journal)

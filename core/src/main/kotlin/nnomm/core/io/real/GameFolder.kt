@@ -284,11 +284,16 @@ class RealGameFolder(
                         trusted?.profileId ?: "default",
                         ownSettings = trusted?.ownSettings ?: false,
                         directories = trusted?.directories.orEmpty(),
-                        entryProfiles = trusted?.entryProfiles.orEmpty() + entries.keys.associateWith { "default" },
+                        entryProfiles =
+                            trusted?.entryProfiles.orEmpty() +
+                                entries.keys.associateWith { "default" },
                         unplaced = previousAdoption?.unplaced.orEmpty() + unplaced,
                         epoch = java.util.UUID.randomUUID().toString(),
                         generations =
-                            trusted?.generations.orEmpty() + entries.mapValues { (_, m) -> "|" + store.generation(m.id, m.version) },
+                            trusted?.generations.orEmpty() +
+                                entries.mapValues { (_, m) ->
+                                    "|" + store.generation(m.id, m.version)
+                                },
                     ),
                 )
                 found
@@ -477,7 +482,36 @@ class RealGameFolder(
                             if (store.hashes(m.id, m.version)[rel] != digest(dest))
                                 copyTree(dest, safe(snapshot, rel))
                         }
-                        // The saved set mirrors the last removal, including player deletions.
+                        // Shipped-file edits belong to this exact version/generation. A later
+                        // version's capture cannot overwrite edits that it never put back.
+                        val editedStage =
+                            home.resolve("staging/edits-${java.util.UUID.randomUUID()}")
+                        Files.createDirectories(editedStage)
+                        try {
+                            val shipped = store.hashes(m.id, m.version)
+                            Files.walk(snapshot).use { files ->
+                                files
+                                    .filter { it.isRegularFile() }
+                                    .forEach { file ->
+                                        val relative =
+                                            snapshot.relativize(file).toString().replace('\\', '/')
+                                        if (relative in shipped)
+                                            copyTree(file, safe(editedStage, relative))
+                                    }
+                            }
+                            replaceTree(
+                                editedFiles(
+                                    m,
+                                    owners[name] ?: "default",
+                                    old.generations[name].orEmpty(),
+                                ),
+                                editedStage,
+                                home.resolve("transactions"),
+                            )
+                        } finally {
+                            deleteTree(editedStage)
+                        }
+                        // The saved extra set mirrors removal, including player deletions.
                         replaceTree(kept, snapshot, home.resolve("transactions"))
                         atomic(
                             kept.resolveSibling(kept.fileName.toString() + ".generation"),
@@ -489,7 +523,10 @@ class RealGameFolder(
                                 "Kept changed files for ${m.id} in $kept. They return with this profile."
                             )
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            "${m.id} could not be fully applied: ${e.message}. Files are kept; Retry after closing the game.",
+                        )
                     }
                 }
                 // Removals first, deepest first. Missing wanted payloads never authorize removal.
@@ -537,7 +574,10 @@ class RealGameFolder(
                                 generations.remove(it)
                             }
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            "${m.id} could not be fully applied: ${e.message}. Files are kept; Retry after closing the game.",
+                        )
                     }
                 }
                 for (name in
@@ -616,7 +656,7 @@ class RealGameFolder(
                                                 copyTree(file, to)
                                             } else
                                                 notice(
-                                                    "Edited shipped files for ${m.id} remain in $kept. Repair placed the shipped files."
+                                                    "Shipped files were placed for ${m.id}. Its edits stay saved for their original version in ${home.resolve("player-edits")}."
                                                 )
                                         }
                                 }
@@ -629,6 +669,37 @@ class RealGameFolder(
                             ) {
                                 deleteTree(next)
                                 copyTree(kept.resolve(Path.of(name).fileName), next)
+                            }
+                            val edited =
+                                editedFiles(
+                                    m,
+                                    plan.profileId,
+                                    "|" + store.generation(m.id, m.version),
+                                )
+                            if (edited.isDirectory()) {
+                                if (m.loose) {
+                                    val file = edited.resolve(Path.of(name).fileName)
+                                    if (file.isRegularFile()) {
+                                        deleteTree(next)
+                                        copyTree(file, next)
+                                    }
+                                } else
+                                    Files.walk(edited).use { files ->
+                                        files
+                                            .filter { it.isRegularFile() }
+                                            .forEach { file ->
+                                                val to =
+                                                    safe(
+                                                        next,
+                                                        edited
+                                                            .relativize(file)
+                                                            .toString()
+                                                            .replace('\\', '/'),
+                                                    )
+                                                if (to.exists()) deleteTree(to)
+                                                copyTree(file, to)
+                                            }
+                                    }
                             }
                             // Validate actual game paths, not long temporary path prefixes.
                             if (next.isDirectory())
@@ -691,7 +762,10 @@ class RealGameFolder(
                             deleteTree(stage)
                         }
                     } catch (e: Exception) {
-                        problem(m.id, "${m.id} was left unchanged: ${e.message}")
+                        problem(
+                            m.id,
+                            "${m.id} could not be fully applied: ${e.message}. Files are kept; Retry after closing the game.",
+                        )
                     }
                 }
                 captured.values.forEach(::deleteTree)
@@ -789,6 +863,16 @@ class RealGameFolder(
         }
     }
 
+    private fun editedFiles(m: ManagedMod, profile: String, generation: String): Path {
+        val key =
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(generation.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        return home.resolve(
+            "player-edits/${component(profile)}/${component(m.id)}/${component(m.version)}/$key"
+        )
+    }
+
     private fun loaderRecord(game: Path) =
         JsonFile(
             home.resolve("loader-${Integer.toHexString(game.toString().hashCode())}.json"),
@@ -804,7 +888,13 @@ class RealGameFolder(
                 val record = loaderRecord(game)
                 val removals =
                     record.read().orEmpty().map { relative -> safe(game, relative) to null }
-                replaceTrees(removals, home.resolve("transactions"), beforeMutation = { check(!running()) { "Game started; loader changes are pending" } })
+                replaceTrees(
+                    removals,
+                    home.resolve("transactions"),
+                    beforeMutation = {
+                        check(!running()) { "Game started; loader changes are pending" }
+                    },
+                )
                 record.write(emptyList())
             }
         }
@@ -874,7 +964,13 @@ class RealGameFolder(
                         home.resolve(
                             "loader-${Integer.toHexString(game.toString().hashCode())}.json"
                         ) to ownedStaged
-                    replaceTrees(replacements, home.resolve("transactions"), beforeMutation = { check(!running()) { "Game started; loader changes are pending" } })
+                    replaceTrees(
+                        replacements,
+                        home.resolve("transactions"),
+                        beforeMutation = {
+                            check(!running()) { "Game started; loader changes are pending" }
+                        },
+                    )
                 } finally {
                     deleteTree(staging)
                     transfer.close()

@@ -48,6 +48,46 @@ class AcceptanceSafetyTest {
         }
 
     @Test
+    fun editedShippedFileReturnsAfterVersionRoundTrip() = runBlocking {
+        val g = game()
+        val home = root.resolve("home")
+        val store = RealModStore(home)
+        val payload = root.resolve("payload").createDirectories()
+        payload.resolve("a.dll").writeText("version-one")
+        store.put("a", "1", DownloadedFile(payload.toString()))
+        payload.resolve("a.dll").writeText("version-two")
+        store.put("a", "2", DownloadedFile(payload.toString()))
+        val f = RealGameFolder(home, store, noNet, running = { false })
+        val one = GamePlan(g.toString(), "default", mapOf("a" to "1"), false)
+        f.apply(one)
+        val file = g.resolve("BepInEx/plugins/a/a.dll")
+        file.writeText("PLAYER EDIT OF ONE")
+        f.apply(one.copy(versions = mapOf("a" to "2")))
+        assertEquals("version-two", file.readText())
+        f.apply(one)
+        assertEquals("PLAYER EDIT OF ONE", file.readText())
+    }
+
+    @Test
+    fun externalStoreRecoveryCannotCountItselfAsDuplicate() = runBlocking {
+        val home = root.resolve("home")
+        val external = root.resolve("external-store")
+        val copy = external.resolve("mod/.nnomm/recovery/copy").createDirectories()
+        copy.resolve("save.dat").writeText("only copy")
+        Files.setLastModifiedTime(copy, java.nio.file.attribute.FileTime.fromMillis(1000))
+        atomic(
+            home.resolve("recovery/copy.json"),
+            kotlinx.serialization.json
+                .buildJsonObject { put("copies", JsonPrimitive(copy.toString())) }
+                .toString(),
+        )
+        val store = RealModStore(home, external.toString())
+        store.clearUnused(AppState())
+        assertEquals("only copy", copy.resolve("save.dat").readText())
+        assertEquals(9L, store.usedBytes())
+    }
+
+    @Test
     fun firstApplyOwnershipSurvivesCrashBeforeAdoptionPublication() = runBlocking {
         val g = game()
         val home = root.resolve("home")

@@ -384,6 +384,36 @@ class EntryAttackTest {
     }
 
     @Test
+    fun renameWindowIoFailureMustKeepOwnershipConsistent() = runBlocking {
+        val h = tmp()
+        val g = game()
+        val s = RealModStore(h)
+        put(s, "m")
+        val f = RealGameFolder(h, s, noNet, running = { false })
+        var fired = false
+        DiskFaults.step = {
+            if (
+                it == "new-rename-before-journal" &&
+                    !fired &&
+                    g.resolve("BepInEx/plugins/m/mod.dll").exists()
+            ) {
+                fired = true
+                throw java.io.IOException("No space left on device (injected)")
+            }
+        }
+        f.apply(plan(g, "m"))
+        DiskFaults.step = {}
+        val placement =
+            json.decodeFromString<Placement>(
+                g.resolve("BepInEx/plugins/.nnomm-state.json").readText()
+            )
+        assertTrue(
+            placement.entries.values.any { it.id == "m" },
+            "Promoted target exists but final ownership omits it",
+        )
+    }
+
+    @Test
     fun interruptedRollbackMustNotBeInferredAsPromotion() {
         val h = tmp()
         val t = h.resolve("game/BepInEx/plugins/m").createDirectories()

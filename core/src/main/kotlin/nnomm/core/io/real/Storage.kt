@@ -325,7 +325,11 @@ class RealModStore(
 
     override suspend fun usedBytes(): Long =
         withContext(Dispatchers.IO) {
-            (listOf(storeRoot, home.resolve("player-files")) + recoveryCopies())
+            (listOf(storeRoot, home.resolve("player-files"), home.resolve("player-edits")) +
+                    recoveryCopies())
+                .let { roots ->
+                    roots.filter { path -> roots.none { it != path && path.startsWith(it) } }
+                }
                 .filter { it.exists() }
                 .sumOf { root ->
                     Files.walk(root).use { files ->
@@ -448,6 +452,7 @@ class RealModStore(
             listOfNotNull(
                 storeRoot,
                 home.resolve("player-files"),
+                home.resolve("player-edits"),
                 home.resolve("profiles"),
                 state.game.folder?.let { Path.of(it).resolve("BepInEx") },
             )
@@ -456,7 +461,11 @@ class RealModStore(
             .forEach { folder ->
                 Files.walk(folder).use { paths ->
                     paths
-                        .filter { it.isRegularFile() && !Files.isSymbolicLink(it) }
+                        .filter { file ->
+                            file.isRegularFile() &&
+                                !isLink(file) &&
+                                copies.none { file.startsWith(it) }
+                        }
                         .forEach { live += digest(it) }
                 }
             }
