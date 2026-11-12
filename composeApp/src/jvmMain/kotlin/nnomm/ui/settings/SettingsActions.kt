@@ -139,7 +139,7 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(definition.help + if (definition.key == "dzSettings") " You cannot undo this." else "")
+            Label(if (definition.key == "dzSettings") definition.help + " You cannot undo this." else "You cannot undo this.")
         }
     }
 }

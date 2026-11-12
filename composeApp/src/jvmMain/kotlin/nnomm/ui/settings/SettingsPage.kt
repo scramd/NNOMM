@@ -32,7 +32,6 @@ fun SettingsPage() {
             model.store.state.map { it.copy(toasts = emptyList(), downloads = emptyList()) }.distinctUntilChanged()
         }.collectAsState(model.store.state.value)
     GameFolderChooser(model)
-    LaunchedEffect(model) { if (!model.isDemo) model.store.refreshStoreUsage() }
     val view = model.ui.settings
     val colors = LocalNnTheme.current.colors
     val focus = remember { FocusRequester() }
@@ -62,6 +61,10 @@ fun SettingsPage() {
             (it.cat != "servers" || it.key == "showServers") &&
             (query.isEmpty() || "${it.label} ${it.help} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&
             (personal || query.isNotEmpty() || it.cat == view.category)
+    }
+    val storageVisible = rows.any { it.cat == "storage" }
+    LaunchedEffect(model, storageVisible) {
+        if (!model.isDemo && storageVisible) model.store.refreshStoreUsage()
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth <= 800.dp
@@ -213,7 +216,10 @@ private fun SettingRow(model: AppModel, state: AppState, definition: SettingDefi
                 var help = settingHelp(d, state)
                 if (d.key == "appUpdate") help = model.ui.updateStatus ?: if (model.isDemo) "Version ${state.appVersion}. You have the newest version." else "Version ${state.appVersion}. Get updates from the releases page."
                 if (d.key == "loader" && model.isDemo) help = d.help
-                if (d.key == "cache") help = "${state.storeUnusedMb ?: 0}\u00a0MB. Old versions that no profile uses."
+                // TODO(core): expose scan progress/completion to distinguish a refresh of the
+                // last estimate from an idle estimate (including a failed initial scan).
+                if (d.key == "cache" && !model.isDemo && state.storeUnusedMb == null)
+                    help = "Calculating… " + help
                 if (help.isNotEmpty()) Box(Modifier.padding(top = 2.dp)) { Mark(help, query, true) }
                 if (query.isNotEmpty() && !"${d.label} ${d.help}".lowercase().contains(query)) {
                     d.options.firstOrNull { it.lowercase().contains(query) }?.let { Mark("Option: $it", query, true) }

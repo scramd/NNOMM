@@ -60,6 +60,21 @@ val mockShots =
         MockShot("36-browse-tags", "page=browse&tags=HUD,Map", 1328, 792),
     )
 
+val followupShots = listOf("dark", "light").flatMap { theme ->
+        listOf(1328, 728).flatMap { width ->
+            val size = if (width == 1328) "wide" else "narrow"
+            listOf(
+                MockShot("followup-storage-$theme-$size", "page=settings&cat=storage&theme=$theme", width, if (width == 1328) 792 else 720),
+                MockShot("followup-storage-unknown-$theme-$size", "page=settings&cat=storage&theme=$theme", width, if (width == 1328) 792 else 720,
+                    initialState = { it.copy(storeUnusedMb = null) }),
+                MockShot("followup-collision-$theme-$size", "page=library&panel=mod:minimap&theme=$theme", width, if (width == 1328) 792 else 720,
+                    initialState = { it.copy(applyProblems = listOf("minimap", "delivery").associateWith {
+                        "Two enabled mods use the same game folder name. Turn off one of them and Retry."
+                    }) }),
+            )
+        }
+    }
+
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {

@@ -29,7 +29,6 @@ import nnomm.ui.theme.LocalNnTheme
 @Composable
 fun LibraryPage() {
     val model = LocalApp.current
-    LaunchedEffect(model) { if (!model.isDemo) model.store.refreshStoreUsage() }
     val view = model.ui.library
     // Toast and download ticks must not invalidate the library's rules or every row.
     val stateFlow =
