@@ -1,3 +1,5 @@
+> Historical implementation report. Current behavior and review disposition: IO.md and REAL-IO-FIXES.md.
+
 # Real IO implementation handoff
 
 Worktree: `/home/agent/.t3/worktrees/NNOMM/t3-04b80b35-109a7494ca638ce1`

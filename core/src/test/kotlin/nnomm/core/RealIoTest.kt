@@ -179,7 +179,7 @@ class RealIoTest {
         assertTrue(off.exists())
         folder.apply(state, "default")
         val id = found.first { it.second.profiles["default"]!!.on }.first.id
-        assertEquals("original", game.resolve("BepInEx/plugins/$id/mod.dll").readText())
+        assertEquals("original", game.resolve("BepInEx/plugins/Existing/mod.dll").readText())
         mods.remove(listOf(id))
         mods.restore(listOf(id))
         assertTrue(
