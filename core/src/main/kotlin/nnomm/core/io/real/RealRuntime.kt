@@ -22,6 +22,7 @@ private constructor(
     suspend fun shutdown() {
         try {
             store.shutdown()
+            (store.io.meta as? RealMetaSource)?.shutdown()
         } finally {
             scope.cancel()
             client.close()
@@ -141,12 +142,12 @@ private constructor(
                     )
                 if (System.getProperty("os.name").startsWith("Linux") && loaded.game.loaderPresent)
                     notice(
-                        "For mods under Proton, set WINEDLLOVERRIDES=\"winhttp.dll=n,b\" %command% in this game's Steam launch options. Process detection under Proton needs verification."
+                        "For mods under Proton, set WINEDLLOVERRIDES=\"winhttp.dll=n,b\" %command% in this game's Steam launch options."
                     )
                 val packs = RealPacks(home, mods, client)
                 app =
                     AppStore(
-                        loaded,
+                        loaded.copy(catalog = nnomm.core.rules.cleanCatalogTags(loaded.catalog)),
                         AppIo(
                             registry,
                             RealMetaSource(client, home),
@@ -161,6 +162,7 @@ private constructor(
                             packs,
                         ),
                     )
+                app.checkPackUpdates()
                 app.startRegistrySchedule()
                 RealRuntime(app, mods, packs, scope, client)
             }

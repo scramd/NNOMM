@@ -126,6 +126,13 @@ class RealIoTest {
             assertEquals(1, meta.metadata(m, v).sizeKb)
             assertNotNull(meta.metadata(m, v).dateMillis)
             assertEquals(1, heads)
+            assertFalse(home.resolve("head.json").exists())
+            meta.shutdown()
+            assertTrue(home.resolve("head.json").exists())
+            val cached = RealMetaSource(client, home)
+            assertEquals(1, cached.metadata(m, v).sizeKb)
+            assertEquals(1, heads)
+            cached.shutdown()
             // Redirect target controls transfer metadata, not its source response.
             val downloader = RealDownloader(client, home)
             val payload =

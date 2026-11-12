@@ -259,6 +259,7 @@ data class AppState(
     val nowMillis: Long = 0,
     val appVersion: String = "0.1.0",
     val storeUsedMb: Long = 0,
+    val storeUsedKb: Long? = null,
     val packSource: nnomm.core.io.PackSource? = null,
 ) {
     private val index by lazy { catalog.associateBy { it.id } }

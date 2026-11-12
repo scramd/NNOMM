@@ -160,6 +160,21 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
     private val mutex = Mutex()
     private val slots = Semaphore(3)
     private val keys = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private var cache: Map<String, CachedMeta>? = null
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var flushJob: Job? = null
+
+    suspend fun flush() {
+        mutex.withLock {
+            cache?.let(file::write)
+            flushJob = null
+        }
+    }
+
+    suspend fun shutdown() {
+        cacheScope.cancel()
+        flush()
+    }
 
     override suspend fun metadata(mod: CatalogMod, version: ModVersion): VersionMetadata =
         withContext(Dispatchers.IO) {
@@ -168,7 +183,10 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
                 .computeIfAbsent(key) { Mutex() }
                 .withLock {
                     mutex
-                        .withLock { file.read().orEmpty()[key] }
+                        .withLock {
+                            if (cache == null) cache = file.read().orEmpty()
+                            cache!![key]
+                        }
                         ?.takeIf {
                             it.retryAfter == 0L || System.currentTimeMillis() < it.retryAfter
                         }
@@ -202,7 +220,15 @@ class RealMetaSource(private val client: HttpClient, home: Path) : MetaSource {
                         } catch (_: Exception) {
                             CachedMeta(retryAfter = System.currentTimeMillis() + 300_000)
                         }
-                    mutex.withLock { file.write(file.read().orEmpty() + (key to value)) }
+                    mutex.withLock {
+                        cache = cache.orEmpty() + (key to value)
+                        if (flushJob?.isActive != true)
+                            flushJob =
+                                cacheScope.launch {
+                                    delay(1000)
+                                    flush()
+                                }
+                    }
                     VersionMetadata(value.sizeKb, value.dateMillis)
                 }
         }
