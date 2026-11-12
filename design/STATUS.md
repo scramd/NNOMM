@@ -9,6 +9,10 @@ The first version of NNOMM is built: every screen of the agreed mock except the 
 - **The player's files:** NNOMM changes nothing in the game folder until the player installs, uninstalls or switches a mod. The first start takes over existing mods as they are. Changes run one mod at a time with a journal, so a crash leaves the old or the new state, and startup finishes or rolls back. Files a mod or the player creates or edits are kept per mod and profile. Nothing is deleted without a copy; Clear keeps every copy that cannot be downloaded again. No Steam sign-in and no Steam helper: Steam shows the player as playing only while the game runs.
 - **Checks:** 424 core tests and 26 UI tests; renders of every mock picture (`tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`; mock left, app right in `composeApp/build/shots/compare/`).
 
+## Upstream NOMM
+
+NNOMM started at upstream NOMM 5.5.0 and is merged with upstream 5.6.0 (`8786356`, merge `249c469`), without its tag. Its changes were carried over by hand where they apply: an update keeps a mod's disabled state, download progress and Cancel, and the Flatpak settings. NNOMM keeps its own version and changelog. How to sync next time: the "Syncing with upstream NOMM" section in `AGENTS.md`.
+
 ## How it was reviewed
 
 Every part was reviewed by an Opus agent and a Sol agent, then fixed, several rounds deep: the core, the kit, each page, the real IO (five safety reviews), two acceptance checks against the owner's requirements, and closing checks of each later fix round. The review notes are in `design/notes/` and the core's `*FIXES*.md` and `REAL-IO-ROUND*.md` files.
