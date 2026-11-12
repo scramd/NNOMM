@@ -1,7 +1,7 @@
 package nnomm.core.io.real
 
 import java.nio.file.*
-import java.util.zip.ZipInputStream
+import java.util.zip.ZipFile
 import kotlin.io.path.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.*
@@ -17,32 +17,95 @@ internal suspend fun unpack(file: Path, target: Path) {
         total += count
         require(total <= 2L * 1024 * 1024 * 1024) { "Archive exceeds the 2 GiB extraction limit." }
     }
-    when (file.extension.lowercase()) {
+    val magic = Files.newInputStream(file).use { it.readNBytes(6) }
+    val format =
+        when {
+            magic.take(2) == listOf(0x50.toByte(), 0x4b.toByte()) -> "zip"
+            magic.take(2) == listOf(0x1f.toByte(), 0x8b.toByte()) -> "tar.gz"
+            magic.contentEquals(
+                byteArrayOf(0x37, 0x7a, 0xbc.toByte(), 0xaf.toByte(), 0x27, 0x1c)
+            ) -> "7z"
+            magic.take(2) == listOf(0x4d.toByte(), 0x5a.toByte()) -> "dll"
+            file.extension.lowercase() in setOf("dll", "nobp") -> file.extension.lowercase()
+            else -> error("Unsupported or invalid mod file: ${file.fileName}")
+        }
+    val aliases = mutableSetOf<String>()
+    val pathAliases = mutableMapOf<String, String>()
+    fun destination(name: String): Path {
+        require(aliases.add(name.trimEnd('/').lowercase())) { "Duplicate archive path: $name" }
+        var prefix = ""
+        name.trimEnd('/').split('/').forEach { part ->
+            prefix = if (prefix.isEmpty()) part else "$prefix/$part"
+            val previous = pathAliases.putIfAbsent(prefix.lowercase(), prefix)
+            require(previous == null || previous == prefix) { "Case-alias archive path: $name" }
+        }
+        return safe(target, name)
+    }
+    when (format) {
         "zip",
         "nommpack" ->
-            ZipInputStream(Files.newInputStream(file)).use { zip ->
-                var count = 0
-                while (true) {
+            ZipFile(file.toFile()).use { zip ->
+                val entries = zip.entries().asSequence().toList()
+                require(entries.size <= 100_000 && entries.any { !it.isDirectory }) {
+                    "Empty or oversized archive"
+                }
+                for (entry in entries) {
                     currentCoroutineContext().ensureActive()
-                    val entry = zip.nextEntry ?: break
-                    require(++count <= 100_000) { "Too many archive entries" }
-                    val dest = safe(target, entry.name.replace('\\', '/'))
+                    val dest = destination(entry.name.replace('\\', '/'))
                     if (entry.isDirectory) Files.createDirectories(dest)
                     else {
                         Files.createDirectories(dest.parent)
-                        Files.newOutputStream(dest, StandardOpenOption.CREATE_NEW).use { out ->
-                            val buf = ByteArray(65536)
-                            while (true) {
-                                currentCoroutineContext().ensureActive()
-                                val n = zip.read(buf)
-                                if (n < 0) break
-                                budget(n)
-                                out.write(buf, 0, n)
+                        zip.getInputStream(entry).use { input ->
+                            Files.newOutputStream(dest, StandardOpenOption.CREATE_NEW).use { out ->
+                                val buffer = ByteArray(65536)
+                                while (true) {
+                                    val n = input.read(buffer)
+                                    if (n < 0) break
+                                    currentCoroutineContext().ensureActive()
+                                    budget(n)
+                                    out.write(buffer, 0, n)
+                                }
                             }
                         }
                     }
                 }
             }
+        "tar.gz" -> {
+            org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream.builder()
+                .setPath(file)
+                .get()
+                .use { gzip ->
+                    org.apache.commons.compress.archivers.tar.TarArchiveInputStream(gzip).use { tar
+                        ->
+                        var count = 0
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val entry = tar.nextEntry ?: break
+                            require(++count <= 100_000 && !entry.isSymbolicLink && !entry.isLink) {
+                                "Unsafe TAR entry"
+                            }
+                            val dest = destination(entry.name.trimEnd('/'))
+                            if (entry.isDirectory) Files.createDirectories(dest)
+                            else {
+                                require(entry.isFile) { "Unsupported TAR entry" }
+                                Files.createDirectories(dest.parent)
+                                Files.newOutputStream(dest, StandardOpenOption.CREATE_NEW).use { out
+                                    ->
+                                    val buffer = ByteArray(65536)
+                                    while (true) {
+                                        currentCoroutineContext().ensureActive()
+                                        val n = tar.read(buffer)
+                                        if (n < 0) break
+                                        budget(n)
+                                        out.write(buffer, 0, n)
+                                    }
+                                }
+                            }
+                        }
+                        require(count > 0) { "Empty TAR archive" }
+                    }
+                }
+        }
         "7z" ->
             SevenZFile.builder().setPath(file).get().use { archive ->
                 var count = 0
@@ -50,7 +113,7 @@ internal suspend fun unpack(file: Path, target: Path) {
                     currentCoroutineContext().ensureActive()
                     val entry = archive.nextEntry ?: break
                     require(++count <= 100_000)
-                    val dest = safe(target, entry.name.replace('\\', '/'))
+                    val dest = destination(entry.name.replace('\\', '/'))
                     if (entry.isDirectory) Files.createDirectories(dest)
                     else {
                         Files.createDirectories(dest.parent)
@@ -79,11 +142,36 @@ class RealModStore(
     private val catalog: () -> List<CatalogMod> = { emptyList() },
 ) : ModStore {
     private val mutex = Mutex()
-    private var storeRoot = Path.of(catalogStorePath ?: home.resolve("mods").toString())
+    private var storeRoot =
+        Path.of(catalogStorePath?.takeIf { it.isNotBlank() } ?: home.resolve("mods").toString())
+
+    init {
+        recoverTransactions(home.resolve("transactions"))
+    }
+
     private val undoUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    fun version(id: String, version: String) =
-        safe(safe(storeRoot, component(id)), component(version))
+    internal fun generation(id: String, version: String) =
+        home.resolve("generations/${component(id)}-${component(version)}").let {
+            if (it.exists()) it.readText() else ""
+        }
+
+    fun version(id: String, version: String): Path {
+        fun noAlias(parent: Path, name: String) {
+            if (parent.isDirectory())
+                Files.list(parent).use { paths ->
+                    require(paths.noneMatch { it.name != name && it.name.equals(name, true) }) {
+                        "Name differs only by case: $name"
+                    }
+                }
+        }
+        component(id)
+        component(version)
+        noAlias(storeRoot, id)
+        val parent = safe(storeRoot, id)
+        noAlias(parent, version)
+        return safe(parent, version)
+    }
 
     override suspend fun hasVersion(id: String, version: String): Boolean =
         withContext(Dispatchers.IO) { version(id, version).isDirectory() }
@@ -91,6 +179,7 @@ class RealModStore(
     override suspend fun put(id: String, version: String, file: DownloadedFile) =
         withContext(Dispatchers.IO) {
             mutex.withLock {
+                undoUntil[id] = System.currentTimeMillis() + 9000
                 val source = Path.of(file.path)
                 val target = version(id, version)
                 val root = home.resolve("staging")
@@ -99,25 +188,24 @@ class RealModStore(
                 try {
                     if (source.isDirectory()) copyTreeContents(source, staging)
                     else unpack(source, staging)
-                    if (target.exists()) {
-                        // Repair keeps the old payload, including unexpected files, recoverable.
-                        val backup =
-                            home.resolve(
-                                "recovery/${System.nanoTime()}/${component(id)}/${component(version)}"
-                            )
-                        Files.createDirectories(backup.parent)
-                        Files.move(target, backup)
+                    require(Files.walk(staging).use { it.anyMatch { p -> p.isRegularFile() } }) {
+                        "Empty mod payload"
                     }
-                    Files.createDirectories(target.parent)
-                    Files.move(staging, target)
-                    // Only consume files created by our downloader; never the user's import.
-                    if (
-                        source
-                            .toAbsolutePath()
-                            .normalize()
-                            .startsWith(home.resolve("staging").toAbsolutePath().normalize())
-                    )
-                        deleteTree(source.parent)
+                    val stamp = Files.createTempFile(root, "generation-", ".txt")
+                    try {
+                        stamp.writeText(java.util.UUID.randomUUID().toString())
+                        replaceTrees(
+                            listOf(
+                                target to staging,
+                                home.resolve(
+                                    "generations/${component(id)}-${component(version)}"
+                                ) to stamp,
+                            ),
+                            home.resolve("transactions"),
+                        )
+                    } finally {
+                        Files.deleteIfExists(stamp)
+                    }
                 } finally {
                     deleteTree(staging)
                 }
@@ -173,10 +261,12 @@ class RealModStore(
 
     override suspend fun usedBytes(): Long =
         withContext(Dispatchers.IO) {
-            if (!storeRoot.exists()) 0
-            else
-                Files.walk(storeRoot).use { files ->
-                    files.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+            listOf(storeRoot, home.resolve("recovery"), home.resolve("player-files"))
+                .filter { it.exists() }
+                .sumOf { root ->
+                    Files.walk(root).use { files ->
+                        files.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+                    }
                 }
         }
 
@@ -208,6 +298,7 @@ class RealModStore(
             if (!root.exists()) return@withContext emptyList()
             Files.list(root).use { ids ->
                 ids.toList().flatMap { dir ->
+                    if (dir.name.startsWith(".") || !dir.isDirectory()) return@flatMap emptyList()
                     val m = state.installed[dir.name]
                     val referenced =
                         m?.profiles
@@ -218,12 +309,17 @@ class RealModStore(
                             .orEmpty() + listOfNotNull(m?.defaultVersion)
                     val versions =
                         Files.list(dir)
-                            .use { it.toList() }
+                            .use { paths ->
+                                paths
+                                    .filter { !it.name.startsWith(".") && it.isDirectory() }
+                                    .toList()
+                            }
                             .sortedWith { a, b -> compareVersions(b.name, a.name) }
                     val spare =
                         versions.filter {
                             it.name !in referenced &&
-                                (undoUntil[dir.name] ?: 0) < System.currentTimeMillis()
+                                (m != null ||
+                                    (undoUntil[dir.name] ?: 0) < System.currentTimeMillis())
                         }
                     spare.drop(if (m == null) 0 else keepOld)
                 }
@@ -232,19 +328,64 @@ class RealModStore(
 
     override suspend fun unusedBytes(state: AppState): Long =
         withContext(Dispatchers.IO) {
-            unused(state).sumOf { dir ->
+            (unused(state) + clearableRecovery(state)).sumOf { dir ->
                 Files.walk(dir).use {
                     it.filter { p -> p.isRegularFile() }.mapToLong { p -> p.fileSize() }.sum()
                 }
             }
         }
 
+    /** Only remove old recovery trees whose every byte also exists outside recovery. */
+    private fun clearableRecovery(state: AppState): List<Path> {
+        val root = home.resolve("recovery")
+        if (!root.exists()) return emptyList()
+        val live = mutableSetOf<String>()
+        val roots =
+            listOfNotNull(
+                storeRoot,
+                home.resolve("player-files"),
+                home.resolve("profiles"),
+                state.game.folder?.let { Path.of(it).resolve("BepInEx") },
+            )
+        roots
+            .filter { it.exists() }
+            .forEach { folder ->
+                Files.walk(folder).use { paths ->
+                    paths
+                        .filter { it.isRegularFile() && !Files.isSymbolicLink(it) }
+                        .forEach { live += digest(it) }
+                }
+            }
+        return Files.list(root).use { paths ->
+            paths
+                .filter {
+                    it.isDirectory() &&
+                        it.getLastModifiedTime().toMillis() < System.currentTimeMillis() - 9000
+                }
+                .toList()
+                .filter { folder ->
+                    Files.walk(folder).use { files ->
+                        files
+                            .filter {
+                                it.isRegularFile() &&
+                                    it.name !in setOf(".nnomm-state.json", ".nnomm-state.json.bak")
+                            }
+                            .allMatch { digest(it) in live }
+                    }
+                }
+        }
+    }
+
     override suspend fun clearUnused(state: AppState) =
         withContext(Dispatchers.IO) {
             require(!state.gameRunning && !gameProcessRunning()) {
                 "Close the game before clearing downloaded files."
             }
-            unused(state).forEach(::deleteTree)
+            mutex.withLock {
+                unused(state).forEach(::deleteTree)
+                // Recompute after retention: a payload just deleted cannot protect recovery.
+                clearableRecovery(state).forEach(::deleteTree)
+            }
         }
 }
 
