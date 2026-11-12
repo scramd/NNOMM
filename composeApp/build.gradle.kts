@@ -30,6 +30,7 @@ kotlin {
     jvmToolchain(25)
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core"))
             implementation(compose.desktop.currentOs)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)

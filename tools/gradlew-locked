@@ -3,7 +3,7 @@
 # Gradle builds (each with about 3 GB of memory) run at the same time on the
 # development machine. Waits for a free slot. Use it for every Gradle call:
 #   tools/gradlew-locked :composeApp:jvmTest
-# The Gradle daemon stops itself after 10 idle minutes (see gradle.properties).
+# gradle.properties turns the Gradle daemon off, so each build frees its memory at the end.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 lockdir="${NNOMM_LOCK_DIR:-/tmp/nnomm-build-locks}"
