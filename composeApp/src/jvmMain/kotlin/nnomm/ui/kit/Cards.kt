@@ -49,7 +49,11 @@ fun OptionCard(
         onClick = onClick,
     ) { m, _, _ ->
         Row(
-            m.border(1.dp, if (selected) c.text3 else c.line, RoundedCornerShape(6.dp))
+            m.border(
+                    1.dp,
+                    if (selected) c.text3 else c.line,
+                    RoundedCornerShape(LocalNnTheme.current.radius),
+                )
                 .padding(horizontal = 11.dp, vertical = 9.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -79,7 +83,7 @@ fun ModCard(
     footer: @Composable RowScope.() -> Unit = {},
 ) {
     val c = LocalNnTheme.current.colors
-    val shape = RoundedCornerShape(9.dp)
+    val shape = RoundedCornerShape(LocalNnTheme.current.radiusLarge)
     control(modifier.semantics { selected = current }, onClick = onClick) { m, hover, _ ->
         Column(
             m.background(c.raise, shape)
@@ -237,7 +241,7 @@ fun NavItem(
             m.height(32.dp)
                 .background(
                     if (current) c.raise2 else if (hover) c.raise else Color.Transparent,
-                    RoundedCornerShape(6.dp),
+                    RoundedCornerShape(LocalNnTheme.current.radius),
                 )
                 .padding(horizontal = 9.dp),
             verticalAlignment = Alignment.CenterVertically,

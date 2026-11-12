@@ -17,7 +17,6 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import coil3.compose.AsyncImage
@@ -155,7 +154,7 @@ fun Button(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     preview: PreviewState = PreviewState.Normal,
-    shape: Shape = RoundedCornerShape(6.dp),
+    shape: Shape = RoundedCornerShape(LocalNnTheme.current.radius),
     iconOnly: Boolean = false,
 ) {
     val c = LocalNnTheme.current.colors
@@ -243,7 +242,7 @@ fun IconButton(
                 m.size(if (small) 22.dp else 28.dp)
                     .background(
                         if (h || selected) c.raise2 else Color.Transparent,
-                        RoundedCornerShape(6.dp),
+                        RoundedCornerShape(LocalNnTheme.current.radius),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -430,8 +429,8 @@ fun SegmentedControl(
     val c = LocalNnTheme.current.colors
     Row(
         modifier
-            .background(c.raise, RoundedCornerShape(6.dp))
-            .border(1.dp, c.line, RoundedCornerShape(6.dp))
+            .background(c.raise, RoundedCornerShape(LocalNnTheme.current.radius))
+            .border(1.dp, c.line, RoundedCornerShape(LocalNnTheme.current.radius))
             .padding(1.dp)
     ) {
         segments.forEachIndexed { i, segment ->
@@ -476,17 +475,22 @@ fun SegmentedControl(
 @Composable
 fun LinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalNnTheme.current.colors
+    var baseline by remember { mutableFloatStateOf(0f) }
     control(modifier, onClick = onClick) { m, h, _ ->
         BasicText(
             text,
-            m,
-            style =
-                LocalNnTheme.current
-                    .text()
-                    .copy(
-                        color = if (h) c.text else c.text2,
-                        textDecoration = TextDecoration.Underline,
-                    ),
+            m.drawWithContent {
+                drawContent()
+                val y = baseline + 2.dp.toPx()
+                drawLine(
+                    c.line2,
+                    androidx.compose.ui.geometry.Offset(0f, y),
+                    androidx.compose.ui.geometry.Offset(size.width, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            },
+            style = LocalNnTheme.current.text().copy(color = if (h) c.text else c.text2),
+            onTextLayout = { baseline = it.firstBaseline },
         )
     }
 }
@@ -514,11 +518,11 @@ fun TextField(
         modifier
             .alpha(if (enabled) 1f else .55f)
             .height(if (palette) 44.dp else 28.dp)
-            .background(if (bg) c.bg else c.raise, RoundedCornerShape(6.dp))
+            .background(if (bg) c.bg else c.raise, RoundedCornerShape(LocalNnTheme.current.radius))
             .border(
                 1.dp,
                 if (palette) Color.Transparent else if (focus) c.text3 else c.line,
-                RoundedCornerShape(6.dp),
+                RoundedCornerShape(LocalNnTheme.current.radius),
             )
             .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -664,8 +668,15 @@ fun Note(
     val c = LocalNnTheme.current.colors
     Row(
         modifier
-            .background(if (warn) c.warnBg else Color.Transparent, RoundedCornerShape(6.dp))
-            .border(1.dp, if (warn) c.warn else c.line2, RoundedCornerShape(6.dp))
+            .background(
+                if (warn) c.warnBg else Color.Transparent,
+                RoundedCornerShape(LocalNnTheme.current.radius),
+            )
+            .border(
+                1.dp,
+                if (warn) c.warn else c.line2,
+                RoundedCornerShape(LocalNnTheme.current.radius),
+            )
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -799,7 +810,7 @@ fun Skeleton(modifier: Modifier = Modifier) {
                     Brush.horizontalGradient(
                         listOf(t.colors.raise, t.colors.raise2, t.colors.raise)
                     ),
-                    RoundedCornerShape(9.dp),
+                    RoundedCornerShape(LocalNnTheme.current.radiusLarge),
                 )
         )
     else {
@@ -807,16 +818,19 @@ fun Skeleton(modifier: Modifier = Modifier) {
         val fraction by
             transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing)))
         Box(
-            modifier.height(128.dp).clip(RoundedCornerShape(9.dp)).drawBehind {
-                val x = (fraction * 2f - 1f) * size.width
-                drawRect(
-                    Brush.linearGradient(
-                        listOf(t.colors.raise, t.colors.raise2, t.colors.raise),
-                        start = androidx.compose.ui.geometry.Offset(x, 0f),
-                        end = androidx.compose.ui.geometry.Offset(x + size.width, 0f),
+            modifier
+                .height(128.dp)
+                .clip(RoundedCornerShape(LocalNnTheme.current.radiusLarge))
+                .drawBehind {
+                    val x = (fraction * 2f - 1f) * size.width
+                    drawRect(
+                        Brush.linearGradient(
+                            listOf(t.colors.raise, t.colors.raise2, t.colors.raise),
+                            start = androidx.compose.ui.geometry.Offset(x, 0f),
+                            end = androidx.compose.ui.geometry.Offset(x + size.width, 0f),
+                        )
                     )
-                )
-            }
+                }
         )
     }
 }

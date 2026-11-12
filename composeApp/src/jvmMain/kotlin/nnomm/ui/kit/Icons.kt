@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.*
 import androidx.compose.ui.unit.dp
 
-/** Generated from ICONS and PICS in design/mock/src/core.js. */
+/** Vector paths transcribed from ICONS and PICS in design/mock/src/core.js. */
 object NnIcons {
     val search: ImageVector by lazy {
         ImageVector.Builder("search", 16.dp, 16.dp, 16f, 16f)
