@@ -4,6 +4,8 @@ package nnomm.core.store
 internal fun loaderFailureHelp(error: Throwable): String {
     val causes = generateSequence(error) { it.cause }.take(12).toList()
     return when {
+        causes.any { it is nnomm.core.io.LoaderRecoveryPending } ->
+            "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
         causes.any { it is nnomm.core.io.LoaderRepairRefused } ->
             "Repair supports only BepInEx 5.4.23.4. Select a folder with that version, or restore the loader using its original installer. Existing files were kept."
         causes.any { it is java.nio.charset.CharacterCodingException } ->

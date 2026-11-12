@@ -313,6 +313,7 @@ class Review5ProbeTest {
                         home.resolve("missing/old").toString(),
                         existed = true,
                         gameTarget = true,
+                        phase = "old-moved",
                     )
                 )
             )

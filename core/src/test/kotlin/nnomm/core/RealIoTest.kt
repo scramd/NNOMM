@@ -492,21 +492,23 @@ class RealIoTest {
             // Neither a legacy-only file nor arbitrary bytes supplies Doorstop 4's target.
             // Repair replaces these with the shipped defaults and retains the original below.
             assertContentEquals(
-                "[General]\nenabled=true\ntarget_assembly=shipped.dll\n".toByteArray(),
+                if (adopted) "[General]\nenabled=true\ntarget_assembly=shipped.dll\n".toByteArray()
+                else oldBytes,
                 game.resolve("doorstop_config.ini").readBytes(),
             )
             assertEquals("player file", game.resolve("BepInEx/core/player.txt").readText())
             assertContentEquals(beforeDll, game.resolve("BepInEx/core/BepInEx.dll").readBytes())
             if (adopted) assertEquals("player proxy", game.resolve("winhttp.dll").readText())
-            assertTrue(
-                Files.walk(game.resolve(".nnomm/recovery")).use { paths ->
-                    paths.anyMatch {
-                        it.isRegularFile() &&
-                            runCatching { it.readBytes().contentEquals(oldBytes) }
-                                .getOrDefault(false)
+            if (adopted)
+                assertTrue(
+                    Files.walk(game.resolve(".nnomm/recovery")).use { paths ->
+                        paths.anyMatch {
+                            it.isRegularFile() &&
+                                runCatching { it.readBytes().contentEquals(oldBytes) }
+                                    .getOrDefault(false)
+                        }
                     }
-                }
-            )
+                )
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             try {
                 val launcher =
@@ -529,7 +531,7 @@ class RealIoTest {
             // Repair keeps ownership of an existing player INI with the player.
             // Adopted binaries and that INI must survive Uninstall.
             assertTrue(if (adopted) result.removed == 0 else result.removed > 0)
-            assertEquals(adopted, game.resolve("doorstop_config.ini").exists())
+            assertTrue(game.resolve("doorstop_config.ini").exists())
             if (adopted) {
                 assertContentEquals(beforeDll, game.resolve("BepInEx/core/BepInEx.dll").readBytes())
                 assertEquals("player proxy", game.resolve("winhttp.dll").readText())

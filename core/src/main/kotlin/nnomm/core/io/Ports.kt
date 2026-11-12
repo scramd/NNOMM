@@ -233,3 +233,8 @@ fun gamePlan(state: AppState, profileId: String = state.profileId) =
         state.settings.bool("ownSettingsP", profileId),
         state.installed.keys,
     )
+
+class LoaderRecoveryPending :
+    java.io.IOException(
+        "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
+    )

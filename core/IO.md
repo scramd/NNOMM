@@ -407,7 +407,8 @@ exception messages remain in logs, not Play toasts.
 
 ## Final loader and metadata fixes
 
-Repair changes existing loader files only when this home recorded ownership.
+Repair changes existing loader files only when this home recorded ownership and
+the current bytes still match the recorded hash.
 For detected BepInEx 5.4.23.4, it also repairs Doorstop as described above:
 a missing enabled key alone is healthy, an empty or ineffective target configuration is
 replaced with the shipped default and retained in recovery, and unreadable files
@@ -422,3 +423,42 @@ the connection. First-mod installation uses the same guidance as Play.
 Visible metadata consumers register independently and dispose their registrations
 when leaving composition. Multiple consumers of one mod share a counted identity;
 queued requests for departed consumers are skipped, while in-flight work finishes.
+
+## Loader ownership v2
+
+Loader ownership is byte-specific. The private `.hashes` ownership record stores
+its canonical game root, SHA-256 per owned file, and relinquished names; the legacy
+name list is only an index. Legacy names without hashes grant no removal or repair
+authority. Before mutation and at recovery, missing or changed owned files lose
+ownership. Changed files stay in place, including on Retry and Remove all mods.
+Relinquished INIs are not rewritten by a later Repair. Creating a missing file can
+establish new ownership again. Unreadable files are retained for verification;
+read failure does not authorize replacement or removal.
+
+Each loader batch has a unique operation ID in its pending/removal record,
+transaction journal and promotion report. Only matching reports count. Old reports
+are removed before writing a new intent; completion writes ownership, removes the
+report, then removes the intent. Crashes between those steps are repeatable.
+Removal intent also records targets already absent. Recovery drops those names,
+and promoted removals, without deleting any game target. Unstarted removals keep
+ownership only while their bytes still match. Uninstall stages only existing,
+verified files, so it does not recreate removed directories.
+
+For every journal caller, a prepared/copying entry with no previous copy was never
+moved. A missing target is accepted as a player deletion, rather than unavailable
+storage. Loader rollback also preserves a target hand-installed after interruption:
+the previous copy goes to recovery instead of replacing the player's target.
+Other callers retain their existing rollback and commit rules.
+
+An incomplete installation resumes only for detected BepInEx 5.4.23.4 with matching
+surviving owned bytes. A different or changed present loader keeps the presence
+guard; Play does not mix the pinned archive into it or announce an installation.
+Startup reports ownership recovery only when an intent remains pending, without
+technical exception paths. Loader recovery failures use dedicated Retry guidance.
+
+Regression probes cover orphan reports, absent removal targets, hand replacements,
+version guards, directory preservation, pending notices and unreadable verification.
+The crash/hand-change matrix covers Install, Repair, retries and Remove all mods through AppStore, all exposed commit boundaries, four hand-change
+modes, and an optional second interruption during recovery. All archives are local
+fixtures; the matrix does not download or launch the game. Hash equality cannot
+distinguish an identical hand replacement from the bytes NNOMM placed.

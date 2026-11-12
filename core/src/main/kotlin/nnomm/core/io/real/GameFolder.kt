@@ -34,10 +34,23 @@ internal data class PendingLoaderOwnership(
     // Verify rewritten player files too, but never turn a repair into ownership.
     val unowned: Set<String> = emptySet(),
     val archiveFiles: Set<String> = emptySet(),
+    val operationId: String? = null,
 )
 
 @Serializable
-internal data class PendingLoaderRemoval(val gameRoot: String, val names: Set<String>)
+internal data class PendingLoaderRemoval(
+    val gameRoot: String,
+    val names: Set<String>,
+    val absent: Set<String> = emptySet(),
+    val operationId: String? = null,
+)
+
+@Serializable
+internal data class LoaderOwnership(
+    val gameRoot: String,
+    val hashes: Map<String, String>,
+    val relinquished: Set<String> = emptySet(),
+)
 
 class RealGameFolder(
     private val home: Path,
@@ -115,6 +128,16 @@ class RealGameFolder(
                 if (!running()) {
                     recoverTransactions(home.resolve("transactions"), notice = notice)
                     recoverTransactions(home.resolve("game-transactions"), notice = notice)
+                    if (home.isDirectory())
+                        home.listDirectoryEntries("loader-*.json.hashes").forEach { path ->
+                            val ownership =
+                                JsonFile(path, LoaderOwnership.serializer(), notice).read()
+                                    ?: return@forEach
+                            val game =
+                                runCatching { root(ownership.gameRoot) }.getOrNull()
+                                    ?: return@forEach
+                            runCatching { writeOwnership(game, verifiedOwnership(game)) }
+                        }
                     pendingRemovalRecords().forEach { path ->
                         try {
                             finishLoaderRemoval(path)
@@ -130,10 +153,14 @@ class RealGameFolder(
                             check(pendingLoaderRecord(game) == path) {
                                 "Loader recovery folder mismatch"
                             }
-                            finishLoaderOwnership(game)?.let { throw it }
+                            finishLoaderOwnership(game)
+                            if (path.exists())
+                                notice(
+                                    "Mod loader ownership verification is pending. Close programs using the game folder, then Retry."
+                                )
                         } catch (e: Exception) {
                             notice(
-                                "Could not recover mod loader ownership. The pending record is kept: ${e.message}"
+                                "Mod loader ownership recovery is pending. Restore access to the game folder, then Retry."
                             )
                         }
                     }
@@ -184,15 +211,23 @@ class RealGameFolder(
                         .getOrNull()
                 else null
             val archive = loaderArchive(game).read().orEmpty()
-            val complete =
-                loaderRecord(game).read().isNullOrEmpty() ||
-                    archive.all { safe(game, it).isRegularFile() }
+            val hashes = ownedHashes(game)
+            val complete = hashes.isEmpty() || archive.all { safe(game, it).isRegularFile() }
+            val resumeAllowed =
+                hashes.isNotEmpty() &&
+                    loaderVersion == "5.4.23.4" &&
+                    hashes.all { (name, hash) ->
+                        !safe(game, name).exists() ||
+                            runCatching { readLoaderHash(safe(game, name)) == hash }
+                                .getOrDefault(false)
+                    }
             GameInfo(
                 game.toString(),
                 version ?: "unknown",
                 present,
                 loaderVersion,
                 loaderComplete = complete,
+                loaderResumeAllowed = resumeAllowed,
             )
         }
 
@@ -1247,6 +1282,42 @@ class RealGameFolder(
             notice,
         )
 
+    // The legacy name list is an index only. Names without durable hashes grant no authority.
+    private fun loaderOwnership(game: Path) =
+        JsonFile(
+            loaderRecordPath(game)
+                .resolveSibling(loaderRecordPath(game).fileName.toString() + ".hashes"),
+            LoaderOwnership.serializer(),
+            notice,
+        )
+
+    private fun ownedHashes(game: Path): Map<String, String> =
+        loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }?.hashes.orEmpty()
+
+    private fun verifiedOwnership(game: Path): Map<String, String> {
+        val hashes = ownedHashes(game)
+        return hashes.filter { (name, hash) ->
+            val target = safe(game, name)
+            target.exists() && readLoaderHash(target) == hash
+        }
+    }
+
+    private fun writeOwnership(game: Path, hashes: Map<String, String>) {
+        val old = loaderOwnership(game).read()?.takeIf { it.gameRoot == game.toString() }
+        if (old == null && hashes.isEmpty() && !loaderRecord(game).path.exists()) return
+        val relinquished =
+            (old?.relinquished.orEmpty() + (old?.hashes.orEmpty().keys - hashes.keys)) - hashes.keys
+        loaderOwnership(game).write(LoaderOwnership(game.toString(), hashes, relinquished))
+        loaderRecord(game).write(hashes.keys.toList())
+    }
+
+    private fun promoted(report: Path, operationId: String?): Set<String> {
+        if (operationId == null || !report.exists()) return emptySet()
+        val evidence =
+            runCatching { json.decodeFromString<PromotionReport>(report.readText()) }.getOrNull()
+        return evidence?.takeIf { it.operationId == operationId }?.targets.orEmpty().toSet()
+    }
+
     private fun loaderArchive(game: Path) =
         JsonFile(
             loaderRecordPath(game)
@@ -1277,26 +1348,25 @@ class RealGameFolder(
         checkLoaderRecovery(game)
         val record = loaderRecord(game)
         val report = path.resolveSibling(path.fileName.toString() + ".promoted")
-        val promoted =
-            if (report.exists()) json.decodeFromString<List<String>>(report.readText()).toSet()
-            else emptySet()
-        record.write(
-            record.read().orEmpty().filter {
-                it !in pending.names || safe(game, it).toString() !in promoted
+        val promoted = promoted(report, pending.operationId)
+        val hashes =
+            verifiedOwnership(game).filter { (name, _) ->
+                name !in pending.absent && safe(game, name).toString() !in promoted
             }
-        )
-        Files.delete(path)
+        writeOwnership(game, hashes)
         Files.deleteIfExists(report)
+        DiskFaults.step("loader-removal-report-deleted")
+        Files.delete(path)
+        DiskFaults.step("probe-removal-pending-deleted")
         forceDirectory(path.parent)
     }
 
     private fun checkLoaderRecovery(game: Path) {
-        check(
-            !pendingTouches(home.resolve("transactions"), game) &&
-                !pendingTouches(home.resolve("game-transactions"), game, unknownBlocks = true)
-        ) {
-            "Changes in this game folder still need recovery. Restore access to the game folder, then Retry."
-        }
+        if (
+            pendingTouches(home.resolve("transactions"), game) ||
+                pendingTouches(home.resolve("game-transactions"), game, unknownBlocks = true)
+        )
+            throw LoaderRecoveryPending()
     }
 
     private fun pendingLoaderRecord(game: Path): Path {
@@ -1332,11 +1402,18 @@ class RealGameFolder(
         val pending = json.decodeFromString<PendingLoaderOwnership>(path.readText())
         check(pending.gameRoot == game.toString()) { "Loader recovery folder mismatch" }
         val report = promotionReport(game)
-        val promoted =
-            if (report.exists()) json.decodeFromString<List<String>>(report.readText()).toSet()
-            else emptySet()
-        val owned = loaderRecord(game)
-        val names = owned.read().orEmpty().toMutableSet()
+        val promoted = promoted(report, pending.operationId)
+        val preserved =
+            runCatching { json.decodeFromString<PromotionReport>(report.readText()) }
+                .getOrNull()
+                ?.takeIf { pending.operationId != null && it.operationId == pending.operationId }
+                ?.preserved
+                .orEmpty()
+                .toSet()
+        val names =
+            verifiedOwnership(game)
+                .filterKeys { safe(game, it).toString() !in preserved }
+                .toMutableMap()
         val unreadable = mutableMapOf<String, String>()
         var failure: java.io.IOException? = null
         pending.hashes.forEach { (relative, hash) ->
@@ -1354,7 +1431,7 @@ class RealGameFolder(
                             .joinToString("") { "%02x".format(it) }
                     } else readLoaderHash(target)
                 if (actual == hash) {
-                    if (relative !in pending.unowned) names += relative
+                    if (relative !in pending.unowned) names[relative] = hash
                 } else {
                     if (failure == null)
                         failure =
@@ -1374,10 +1451,12 @@ class RealGameFolder(
         }
         if (names.isNotEmpty() && pending.archiveFiles.isNotEmpty())
             loaderArchive(game).write(pending.archiveFiles.toList())
-        owned.write(names.toList())
+        writeOwnership(game, names)
         if (unreadable.isEmpty()) {
-            Files.delete(path)
             Files.deleteIfExists(report)
+            DiskFaults.step("loader-ownership-report-deleted")
+            Files.delete(path)
+            DiskFaults.step("probe-install-pending-deleted")
         } else {
             atomic(path, json.encodeToString(pending.copy(hashes = unreadable)))
         }
@@ -1391,19 +1470,21 @@ class RealGameFolder(
                 require(!running()) { "Close Nuclear Option before removing the mod loader." }
                 val game = root(folder)
                 recoverLoaderOwnership(game)
-                val record = loaderRecord(game)
-                val removals =
-                    record
-                        .read()
-                        .orEmpty()
-                        .map { relative -> safe(game, relative) }
-                        .map { it to null }
-                val presentRemovals = removals.map { it.first }.filter { it.exists() }.toSet()
+                val hashes = ownedHashes(game)
+                val absent = hashes.keys.filter { !safe(game, it).exists() }.toSet()
+                val verified = verifiedOwnership(game)
+                writeOwnership(game, verified)
+                val removals = verified.keys.map { safe(game, it) to null }
+                val presentRemovals = removals.map { it.first }.toSet()
                 val removal = removalRecord(game)
+                val operationId = java.util.UUID.randomUUID().toString()
+                Files.deleteIfExists(
+                    removal.resolveSibling(removal.fileName.toString() + ".promoted")
+                )
                 atomic(
                     removal,
                     json.encodeToString(
-                        PendingLoaderRemoval(game.toString(), record.read().orEmpty().toSet())
+                        PendingLoaderRemoval(game.toString(), hashes.keys, absent, operationId)
                     ),
                 )
                 DiskFaults.step("loader-removal-prepared")
@@ -1413,14 +1494,20 @@ class RealGameFolder(
                     promotionReport =
                         removal.resolveSibling(removal.fileName.toString() + ".promoted"),
                     commitRemovals = true,
+                    operationId = operationId,
                     beforeMutation = {
                         check(!running()) { "Game started; loader changes are pending" }
+                        val current = verifiedOwnership(game)
+                        writeOwnership(game, current)
+                        check(verified.all { (name, hash) -> current[name] == hash }) {
+                            "Loader files changed while preparing removal. Their current bytes were kept. Retry."
+                        }
                     },
                 )
                 val report = removal.resolveSibling(removal.fileName.toString() + ".promoted")
                 val removedCount =
                     if (report.exists())
-                        json.decodeFromString<List<String>>(report.readText()).count { name ->
+                        promoted(report, operationId).count { name ->
                             presentRemovals.any { it.toString() == name }
                         }
                     else 0
@@ -1453,15 +1540,25 @@ class RealGameFolder(
                 require(!running()) { "Close Nuclear Option before changing the mod loader." }
                 val game = root(folder)
                 recoverLoaderOwnership(game)
-                // A detected DLL can be the result of a partial install. Resume only
-                // loaders this home owns; adopted loaders keep the presence guard.
+                val info = inspect(folder)
+                val recorded = ownedHashes(game)
+                val verified = verifiedOwnership(game)
+                writeOwnership(game, verified)
+                // Only resume the pinned loader while every surviving owned file is unchanged.
                 if (
                     !repair &&
-                        inspect(folder).loaderPresent &&
-                        loaderRecord(game).read().isNullOrEmpty()
+                        info.loaderPresent &&
+                        (info.loaderVersion != "5.4.23.4" ||
+                            verified.isEmpty() ||
+                            recorded.any { (name, hash) ->
+                                safe(game, name).exists() && verified[name] != hash
+                            })
                 )
                     return@guarded
-                val existingVersion = inspect(folder).loaderVersion
+                val existingVersion = info.loaderVersion
+                val changedOwned =
+                    (recorded.keys - verified.keys) +
+                        loaderOwnership(game).read()?.relinquished.orEmpty()
                 if (repair && existingVersion != "5.4.23.4") {
                     val message =
                         if (existingVersion == null)
@@ -1525,7 +1622,12 @@ class RealGameFolder(
                                 setOf("doorstop_config.ini")
                             else emptySet()
                         var replacedDoorstop = false
-                        if (repair && !pendingRestore && doorstop.exists()) {
+                        if (
+                            repair &&
+                                !pendingRestore &&
+                                doorstop.exists() &&
+                                "doorstop_config.ini" !in changedOwned
+                        ) {
                             val config =
                                 try {
                                     // Strict decoding happens before any loader replacement is
@@ -1559,6 +1661,8 @@ class RealGameFolder(
                                 game.relativize(target).toString().replace('\\', '/') to
                                     digest(source)
                             }
+                        val operationId = java.util.UUID.randomUUID().toString()
+                        Files.deleteIfExists(promotionReport(game))
                         atomic(
                             pendingLoaderRecord(game),
                             json.encodeToString(
@@ -1567,16 +1671,34 @@ class RealGameFolder(
                                     hashes,
                                     unowned,
                                     archiveFiles,
+                                    operationId,
                                 )
                             ),
                         )
+                        DiskFaults.step("probe-install-pending-written")
                         try {
                             replaceTrees(
                                 replacements,
                                 home.resolve("transactions"),
                                 promotionReport = promotionReport(game),
+                                operationId = operationId,
                                 beforeMutation = {
                                     check(!running()) { "Game started; loader changes are pending" }
+                                    val current = verifiedOwnership(game)
+                                    writeOwnership(game, current)
+                                    check(
+                                        replacements.all { (target, _) ->
+                                            val name =
+                                                game
+                                                    .relativize(target)
+                                                    .toString()
+                                                    .replace('\\', '/')
+                                            if (name in verified) current[name] == verified[name]
+                                            else name in unowned || !target.exists()
+                                        }
+                                    ) {
+                                        "Loader files changed while preparing Repair. Their current bytes were kept. Retry."
+                                    }
                                 },
                             )
                         } catch (e: Exception) {
