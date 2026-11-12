@@ -67,3 +67,9 @@ These parts cannot be checked on the Linux development machine. Check them on Wi
 | Loader Repair refuses unknown/different versions | Test undetected/BepInEx 6 and known 5.4.23.4; only the pinned version can repair. Play alone must not install it. |
 | Inherited vanilla restoration | Reopen NNOMM during Play without mods; Doorstop text returns byte-for-byte on exit. |
 | Add-on order and directory ownership | Parent first, child second; child edits return with profile; empty created folders disappear. |
+
+Third IO safety round: check Windows reparse/junction refusal before entry moves,
+non-following deletion, home OS file locking (including installed/portable copies),
+same-drive game recovery with home on C: and game on D:, and repeated recovery
+under file locks. Core uses NOFOLLOW basic attributes (`isOther`), symbolic-link detection and a
+canonical-parent/entry comparison for junctions reported as directories; native Windows junction coverage is not verified on Linux.

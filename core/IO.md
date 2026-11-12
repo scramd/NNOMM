@@ -35,13 +35,24 @@ removes empty ancestor folders it created.
 Before removal/replacement, player-created and edited files are compared with the
 stored payload hashes and saved under `player-files/<profile>/<mod>`. The saved set
 mirrors the most recent removal: deleted extras are not reintroduced. Saved extra
-files return with their profile. Explicit Repair uses shipped files again, while
+files return with their profile. Each placed entry records its profile owner, so
+partial applies cannot misattribute player files on the next retry. Profile changes
+are entry changes even when both profiles use the same version. Edited shipped
+files also return with the same stored generation, including after switching to
+another version and back. `player-edits/<profile>/<mod>/<version>/<generation-hash>`
+keeps these edits separate from the current extra-file set. Explicit Repair uses shipped files again, while
 keeping edited files aside with a notice giving their location. Unchanged shipped
 files do not get copied to normal apply recovery.
 
 ## Recovery and startup
 
 Home journals live in `transactions/`; entry swaps use `game-transactions/`.
+Preparation is journaled before copying, including partial staging copies. Recovery
+persists its direction before restoring targets or deleting staging. Repeated
+recovery cannot mistake its own rollback for promotion. IO failure recovers only
+the initiating call's journal. A recovered commit counts as committed, even if the
+original operation encountered a cleanup error. Unfinished game journals prevent
+publication of stale aggregate ownership.
 Home-only journals recover during startup. Journals with game targets wait for the
 game to close. `inspect()` reads only. `AppState.gameIoPending` exposes deferred
 startup work, with a notice. A completed but empty library can open during play;
@@ -55,8 +66,12 @@ all-or-nothing game transaction. Fault tests simulate process interruption, not
 physical power loss or Windows locks.
 
 Recovery indexes record target, time and reason. Normal player-file recovery paths
-identify profile and mod. Recovery directories are trimmed oldest first beyond
-100 copies or 256 MiB after apply, with a notice before removal. Current kept
+identify profile and mod. Game recovery copies live in `.nnomm/recovery` in the game root, on the same drive
+as the files they protect. Home indexes list these paths. External-store recovery
+also stays on its target drive. Recovery failure becomes a notice and pending
+state; each other journal is still considered. Recovery copies are never pruned
+merely to meet a storage cap. Beyond 100 copies or 256 MiB a notice directs the
+player to Clear in Settings. Current kept
 player files are separate from those historical copies. Storage usage includes
 recovery and player files. Clear deletes unreferenced payloads and recovery copies
 whose bytes also exist elsewhere; it retains unique recovery files. This can leave
@@ -67,7 +82,12 @@ including loose files, are retained. Private adoption records are scoped to the
 canonical game folder, with the full canonical path checked inside the private
 record. Older adoption files without that path require takeover again. A game ownership record without this home's adoption
 record cannot authorize removal. Adoption merges versions and preserves existing
-profile associations. Missing ownership after a previous apply requires takeover.
+profile associations. Missing ownership after a previous apply requires explicit takeover; the notice
+has a Take over action. Automatic takeover requires both no game record and no
+private adoption. Repeated takeover skips entries this home owns. Disabled NOMM
+mods retain placement-name hints but are not recorded as placed. Explicit takeover
+creates a new ownership epoch, superseding a foreign home's identities; entry
+commits carry that epoch, including across a crash before adoption publication.
 Game exit alone does not force an apply. Play alone does not install a loader.
 
 ## Store, packs and transfers
@@ -76,7 +96,8 @@ AppStore registers Undo protection before removing references. Clear runs in the
 disk queue and rechecks retention under the store mutex. Recent puts protect even
 unreferenced versions of installed ids. Undo checks that saved versions exist
 before publishing restored records. Active queued downloads also protect their versions until publication. Recent
-put/Undo protection lasts nine seconds.
+put protection is renewed when put finishes. AppStore renews replacement protection
+at toast publication; nine seconds cover the entire eight-second Undo toast.
 
 Pack IO uses the runtime's store and HTTP client. Bundled local payload identities
 come from a content hash; a selected pack cannot overwrite the id/version supplied
@@ -111,3 +132,28 @@ are refused. Existing Doorstop config is preserved. The pinned archive SHA-256 i
 Tests use temporary sandboxes and loopback HTTP only. Windows locking, Steam,
 Proton process detection and actual game launches still require platform checks;
 see `design/WINDOWS-CHECKS.md`.
+
+## Third-round safety boundaries
+
+`applySucceeded` reports full success; false means deferred, refused or partial,
+with per-mod details in `applyProblems`. The applied plan starts unknown on every
+AppStore open and is cached only after full success. Retry and Play repeat failed
+plans. NNOMM launch and apply share AppStore's disk queue. A running-process check
+runs again after staging immediately before mutations. An external game launch
+can still race this final check; NNOMM cannot lock the game's own startup.
+
+All changed entries and their descendants are checked for symbolic links and
+Windows reparse/other entries or entries whose canonical target differs from their
+canonical parent plus filename before capture or rename. Deletion walks without
+following links. Native Windows junction detection still needs a Windows check.
+A missing wanted descendant's payload blocks replacement of its parent subtree.
+Missing wanted game folders are changes, even when the record says they are placed.
+
+The home `.lock` file uses an OS lock, released by normal exit or process death.
+A second runtime refuses to open the same home. A broken journal does not stop
+startup; it remains pending with its files retained. Guided-test original switches
+and session are durable before game changes and survive close or process death.
+
+Remove everything removes only loader files recorded as installed by this home.
+Its confirmation explicitly lists the adopted loader files and player files that
+remain. No unowned loader deletion is inferred.

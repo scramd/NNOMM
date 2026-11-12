@@ -180,3 +180,21 @@ again after acquiring its mutex; the snapshot overload remains for callers/tests
 Active download versions are included in retention. Pack preview local ids and
 versions now derive from the bundled content, so consumers must use preview ids,
 not the ids supplied by a pack author.
+
+### Third IO safety round
+
+`GameFolder.applySucceeded` is false for deferred, refused or partial applies. Call
+`apply`, then read this property and `applyProblems`; only a full success can cache
+the requested plan. `AppStore.retryApply()` retries the current plan. `GameFolder.recoveryPending`
+keeps deferred or failed journals visible after a recovery attempt. Placement
+problems supply the `retryApply` action, and are hidden when the mod is off.
+
+`SavedState` now includes the serializable `TroubleSession`. Its original enabled
+set and temporary switches are saved before applying a guided-test round. Reopen
+resumes the test; Stop restores the original switches. Runtime open holds an OS
+file lock on `<home>/.lock` until shutdown. Direct `RealGameFolder` operations
+also acquire this lock when no runtime owns it in this process.
+
+Disk swaps accept an internal `beforeMutation` gate and recover only their own
+journal on an IO failure. Internal crash hooks cover both rename windows,
+ownership publication, journal deletion, and interrupted recovery cleanup.
