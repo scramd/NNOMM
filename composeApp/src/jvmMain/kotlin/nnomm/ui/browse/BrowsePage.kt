@@ -3,6 +3,8 @@
 package nnomm.ui.browse
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +13,10 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
@@ -49,6 +54,7 @@ fun BrowsePage() {
             b.kind.ifEmpty { "all" },
             b.have.ifEmpty { "all" },
             b.game.isNotEmpty(),
+            b.hideTags.toList(),
         )
     val rows = remember(state, filter) { browseList(state, filter) }
     val sections = remember(state, filter) { browseSections(state, filter) }
@@ -183,7 +189,9 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
     val have = remember(s, filter) { browseList(s, filter, "have") }
     val kinds = remember(s, filter) { browseList(s, filter, "type") }
     val counts = remember(s, filter) { tagCounts(s, filter) }
-    val tags = counts.keys.toList()
+    // A hidden tag leaves this list and shows under "Hide mods with".
+    val tags = counts.keys.filter { it !in b.hideTags }
+    val visibleTags = if (b.allTags) tags else tags.take(9)
     Column(
         modifier
             .verticalScroll(rememberScrollState())
@@ -249,8 +257,8 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
                         )
                     }
             }
-            (if (b.allTags) tags else tags.take(9)).forEach { tag ->
-                FilterOption(tag, counts[tag] ?: 0, tag in b.tags, { b.toggleTag(tag) })
+            visibleTags.forEachIndexed { i, tag ->
+                TagRow(tag, counts[tag] ?: 0, visibleTags.getOrNull(i + 1) ?: visibleTags.getOrNull(i - 1) ?: ADD_TAG_KEY)
             }
             LinkButton(
                 if (b.allTags) "Fewer tags" else "All ${tags.size} tags",
@@ -258,6 +266,7 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
                 Modifier.padding(top = 4.dp),
             )
         }
+        if (b.hideTags.isNotEmpty()) HiddenTags(counts.keys.toList())
         Column {
             FacetHeading("Game version", b.game.isNotEmpty(), { b.game = "" })
             control(
@@ -301,6 +310,162 @@ private fun FacetHeading(title: String, clear: Boolean, onClear: () -> Unit) {
     }
 }
 
+private const val ADD_TAG_KEY = "\u0000add-tag"
+
+private fun hiddenKey(tag: String) = "\u0000hidden:$tag"
+
+/** Moves keyboard focus to the row with [key] once that row is composed. */
+@Composable
+private fun Modifier.takesFocus(key: String): Modifier {
+    val b = LocalApp.current.ui.browse
+    val req = remember { FocusRequester() }
+    LaunchedEffect(b.focusKey) {
+        if (b.focusKey == key) {
+            b.focusKey = null
+            req.requestFocus()
+        }
+    }
+    return focusRequester(req)
+}
+
+/** A tag filter. Pointing at it, or keyboard focus in it, turns its count into a Hide button. */
+@Composable
+private fun TagRow(tag: String, count: Int, focusAfterHide: String) {
+    val b = LocalApp.current.ui.browse
+    val mode = LocalFocusMode.current
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    var focusInside by remember { mutableStateOf(false) }
+    val showHide = hovered || (focusInside && mode.keyboard)
+    val hide = {
+        if (mode.keyboard) b.focusKey = focusAfterHide
+        b.hideTag(tag)
+    }
+    Box(
+        Modifier.fillMaxWidth()
+            .hoverable(source)
+            .onFocusChanged { focusInside = it.hasFocus }
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown && (it.key == Key.Minus || it.key == Key.NumPadSubtract)) {
+                    hide()
+                    true
+                } else false
+            }
+    ) {
+        FilterOption(
+            tag,
+            count,
+            tag in b.tags,
+            { b.toggleTag(tag) },
+            Modifier.takesFocus(tag),
+            countVisible = !showHide,
+        )
+        if (showHide) HideButton(tag, hide, Modifier.align(Alignment.CenterEnd))
+    }
+}
+
+@Composable
+private fun HideButton(tag: String, onClick: () -> Unit, modifier: Modifier) {
+    val c = LocalNnTheme.current.colors
+    Box(modifier) {
+        Tooltip("Hide mods with $tag (minus key)") {
+            control(Modifier.semantics { contentDescription = "Hide mods with $tag" }, onClick = onClick) { m, h, _ ->
+                Row(
+                    m.height(21.dp)
+                        .background(if (h) c.line2 else c.raise2, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(NnIcons.eyeOff, Modifier.size(13.dp), if (h) c.text else c.text2)
+                    Label("Hide", color = if (h) c.text else c.text2, size = 11.5f)
+                }
+            }
+        }
+    }
+}
+
+/** The group of hidden tags. It exists only while a tag is hidden. */
+@Composable
+private fun HiddenTags(order: List<String>) {
+    val b = LocalApp.current.ui.browse
+    val mode = LocalFocusMode.current
+    val c = LocalNnTheme.current.colors
+    val hidden = b.hideTags.toList()
+    val shownTags = order.filter { it !in b.hideTags }
+    // After "show again", the tag's own row takes focus if it is in the visible part of the list.
+    fun visibleAfterShow(tag: String) = b.allTags || order.filter { it == tag || it !in b.hideTags }.indexOf(tag) in 0 until 9
+    Column {
+        FacetHeading("Hide mods with", true, {
+            b.hideTags = emptySet()
+            b.hidePick = false
+        })
+        hidden.forEachIndexed { i, tag ->
+            Tooltip("Show mods with $tag again") {
+                control(
+                    Modifier.fillMaxWidth().takesFocus(hiddenKey(tag)).semantics { contentDescription = "Stop hiding $tag" },
+                    onClick = {
+                        if (mode.keyboard)
+                            b.focusKey =
+                                (hidden.getOrNull(i + 1) ?: hidden.getOrNull(i - 1))?.let(::hiddenKey)
+                                    ?: tag.takeIf(::visibleAfterShow)
+                        b.hideTags -= tag
+                    },
+                ) { m, h, _ ->
+                    Row(
+                        m.height(25.dp)
+                            .background(if (h) c.raise else Color.Transparent, RoundedCornerShape(4.dp))
+                            .offset(x = (-4).dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            Modifier.size(15.dp).border(1.5.dp, c.text2, RoundedCornerShape(4.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(NnIcons.minus, Modifier.size(11.dp), c.text2, strokeWidth = 2.2f)
+                        }
+                        Label(tag, Modifier.weight(1f), color = c.text, maxLines = 1)
+                        Icon(NnIcons.x, Modifier.size(12.dp), if (h) c.text else c.text3)
+                    }
+                }
+            }
+        }
+        control(
+            Modifier.fillMaxWidth().takesFocus(ADD_TAG_KEY),
+            onClick = { b.hidePick = !b.hidePick },
+        ) { m, h, _ ->
+            Row(
+                m.height(25.dp)
+                    .background(if (h) c.raise else Color.Transparent, RoundedCornerShape(4.dp))
+                    .offset(x = (-4).dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(NnIcons.plus, color = if (h) c.text else c.text2)
+                Label("Add a tag", color = if (h) c.text else c.text2)
+            }
+        }
+        if (b.hidePick)
+            FlowRow(
+                Modifier.padding(top = 4.dp, bottom = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                shownTags.forEach { tag ->
+                    Tooltip("Hide mods with $tag") {
+                        Tag(tag, {
+                            if (mode.keyboard) b.focusKey = ADD_TAG_KEY
+                            b.hideTag(tag)
+                        })
+                    }
+                }
+            }
+    }
+}
+
 private fun BrowseView.toggleTag(tag: String) {
     tags = if (tag in tags) tags - tag else tags + tag
 }
@@ -308,6 +473,8 @@ private fun BrowseView.toggleTag(tag: String) {
 private fun BrowseView.clearFilters() {
     query = ""
     tags = emptySet()
+    hideTags = emptySet()
+    hidePick = false
     have = ""
     kind = ""
     game = ""
@@ -465,6 +632,7 @@ private fun ActiveFilters(s: AppState, count: Int) {
                 if (b.tagMode == "any") "any of these tags" else "all of these tags",
                 color = c.text3,
             )
+        b.hideTags.forEach { tag -> HiddenChip("Without $tag") { b.hideTags -= tag } }
         LinkButton("Clear all", b::clearFilters)
     }
 }
@@ -472,6 +640,42 @@ private fun ActiveFilters(s: AppState, count: Int) {
 @Composable
 private fun FilterChip(text: String, remove: () -> Unit) {
     Tooltip("Remove this filter") { Chip(text, selected = true, onClick = remove, trailingIcon = NnIcons.x) }
+}
+
+/** A hidden tag over the list: a dashed outline, so it does not read as a selected filter. */
+@Composable
+private fun HiddenChip(text: String, remove: () -> Unit) {
+    val c = LocalNnTheme.current.colors
+    Tooltip("Show these mods again") {
+        control(Modifier, onClick = remove) { m, h, _ ->
+            Row(
+                m.height(26.dp)
+                    .drawBehind {
+                        val w = 1.dp.toPx()
+                        drawRoundRect(
+                            if (h) c.text2 else c.text3,
+                            topLeft = androidx.compose.ui.geometry.Offset(w / 2, w / 2),
+                            size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2),
+                            style =
+                                androidx.compose.ui.graphics.drawscope.Stroke(
+                                    w,
+                                    pathEffect =
+                                        androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                            floatArrayOf(3.dp.toPx(), 2.dp.toPx())
+                                        ),
+                                ),
+                        )
+                    }
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Label(text, color = c.text, weight = 600)
+                Icon(NnIcons.x, Modifier.size(16.dp), if (h) c.text else c.text2)
+            }
+        }
+    }
 }
 
 @Composable
@@ -538,7 +742,7 @@ private fun BrowseCard(
             Spacer(Modifier.height(8.dp))
             Row(Modifier.clipToBounds(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 x.tags.take(3).forEach { tag ->
-                    Tooltip("Show mods with this tag") { Tag(tag, { model.ui.browse.tags += tag }) }
+                    Tooltip("Show mods with this tag") { Tag(tag, { model.ui.browse.showTag(tag) }) }
                 }
                 if (x.newestRelease?.type == ModType.ADDON)
                     Tooltip(

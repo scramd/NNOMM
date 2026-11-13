@@ -58,6 +58,7 @@ val mockShots =
         MockShot("31-friday", "page=library&prof=friday&panel=mod:harrier-kai", 1328, 792),
         MockShot("32-settings-registry", "page=settings&cat=browse", 1328, 792),
         MockShot("36-browse-tags", "page=browse&tags=HUD,Map", 1328, 792),
+        MockShot("37-browse-hide-tags", "page=browse&tags=HUD&hide=Map,Multiplayer", 1328, 792),
     )
 
 val followupShots = listOf("dark", "light").flatMap { theme ->

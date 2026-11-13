@@ -278,6 +278,24 @@ object NnIcons {
             }
             .build()
     }
+    val eyeOff: ImageVector by lazy {
+        ImageVector.Builder("eyeoff", 16.dp, 16.dp, 16f, 16f)
+            .apply {
+                addPath(
+                    PathParser()
+                        .parsePathString(
+                            "M2 8s2.2-4 6-4c1 0 1.9.3 2.6.7M14 8s-2.2 4-6 4c-1 0-1.9-.3-2.6-.7M2.5 2.5l11 11"
+                        )
+                        .toNodes(),
+                    fill = null,
+                    stroke = SolidColor(Color.Black),
+                    strokeLineWidth = 1.5f,
+                    strokeLineCap = StrokeCap.Round,
+                    strokeLineJoin = StrokeJoin.Round,
+                )
+            }
+            .build()
+    }
     val more: ImageVector by lazy {
         ImageVector.Builder("more", 16.dp, 16.dp, 16f, 16f)
             .apply {

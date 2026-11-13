@@ -86,6 +86,25 @@ class RegistryTest {
     }
 
     @Test
+    fun hiddenTagsRemoveTheirModsWhateverTagMode() {
+        val s = Demo.state()
+        val hide = BrowseFilter(hideTags = listOf("Map"))
+        assertTrue(browseFiltered(hide))
+        assertTrue(browseList(s, hide).none { "Map" in it.mod.tags })
+        assertTrue(browseList(s, hide).isNotEmpty())
+        for (mode in listOf("any", "all")) {
+            val f = BrowseFilter(tags = listOf("HUD"), tagMode = mode, hideTags = listOf("Map"))
+            val rows = browseList(s, f)
+            assertTrue(rows.isNotEmpty())
+            assertTrue(rows.all { "HUD" in it.mod.tags && "Map" !in it.mod.tags })
+            // A count is still what a click gives: hidden mods are not counted.
+            assertEquals(0, tagCounts(s, f)["Map"])
+            assertEquals(rows.size, tagCounts(s, f)["HUD"])
+        }
+        assertEquals(BrowseFilter(), hide.clear("hide"))
+    }
+
+    @Test
     fun librarySortingDirection() {
         val s = Demo.state()
         val asc = libList(s, LibraryFilter(sort = LibrarySort.SIZE))

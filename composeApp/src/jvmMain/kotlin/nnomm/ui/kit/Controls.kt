@@ -401,6 +401,8 @@ fun FilterOption(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     radio: Boolean = false,
+    /** False keeps the count's space free for a button drawn over it. */
+    countVisible: Boolean = true,
 ) {
     val c = LocalNnTheme.current.colors
     control(
@@ -422,7 +424,7 @@ fun FilterOption(
                 color = if (selected || h) c.text else c.text2,
                 maxLines = 1,
             )
-            Label("$count", color = c.text3, size = 11.5f)
+            Label("$count", Modifier.alpha(if (countVisible) 1f else 0f), color = c.text3, size = 11.5f)
         }
     }
 }

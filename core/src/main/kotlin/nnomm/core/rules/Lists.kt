@@ -122,6 +122,8 @@ data class BrowseFilter(
     val type: String = "all",
     val have: String = "all",
     val fits: Boolean = false,
+    /** Tags whose mods leave the list, whatever [tagMode] is. */
+    val hideTags: List<String> = emptyList(),
 ) {
     fun toggleHave(v: String) = copy(have = if (have == v) "all" else v)
 
@@ -132,6 +134,7 @@ data class BrowseFilter(
     fun clear(key: String) =
         when (key) {
             "tags" -> copy(tags = emptyList())
+            "hide" -> copy(hideTags = emptyList())
             "fits" -> copy(fits = false)
             "type" -> copy(type = "all")
             "have" -> copy(have = "all")
@@ -142,7 +145,7 @@ data class BrowseFilter(
 data class BrowseRow(val mod: CatalogMod, val match: ModMatch, val action: ModAction? = null)
 
 fun browseFiltered(b: BrowseFilter) =
-    b.query.isNotBlank() || b.tags.isNotEmpty() || b.type != "all" || b.have != "all" || b.fits
+    b.query.isNotBlank() || b.tags.isNotEmpty() || b.hideTags.isNotEmpty() || b.type != "all" || b.have != "all" || b.fits
 
 fun browseList(
     s: AppState,
@@ -162,6 +165,7 @@ fun browseList(
                         b.tags.isEmpty() ||
                         if (b.tagMode == "all") b.tags.all { it in x.tags }
                         else b.tags.any { it in x.tags }) &&
+                    b.hideTags.none { it in x.tags } &&
                     (skip == "have" ||
                         when (b.have) {
                             "new" -> x.id !in s.installed

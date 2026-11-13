@@ -29,6 +29,7 @@ fun applyMockAddress(model: AppModel, address: String) {
     ui.library.query = p["q"].orEmpty()
     ui.browse.view = p["view"] ?: "grid"
     ui.browse.tags = p["tags"]?.split(',')?.toSet().orEmpty()
+    ui.browse.hideTags = p["hide"]?.split(',')?.toSet().orEmpty()
     ui.library.filter = p["lf"] ?: "all"
     ui.library.selection = p["sel"]?.split(',')?.toSet().orEmpty()
     ui.settings.category = p["cat"] ?: "game"

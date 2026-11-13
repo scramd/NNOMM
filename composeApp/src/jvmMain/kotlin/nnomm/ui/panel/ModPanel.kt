@@ -331,7 +331,7 @@ fun ModPanel(ref: PanelRef) {
                                         Tag(
                                             tag,
                                             {
-                                                model.ui.browse.tags = model.ui.browse.tags + tag
+                                                model.ui.browse.showTag(tag)
                                                 model.ui.go(Page.Browse)
                                             },
                                         )
