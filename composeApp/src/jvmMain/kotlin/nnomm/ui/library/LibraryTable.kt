@@ -65,9 +65,8 @@ internal fun LibraryTable(
                     { rowMenu(key) },
                     onOpen = {
                         focus.requestFocus()
-                        // The menu and the keys it names must mean this row, as in a file manager.
-                        if (key !in selection.picked) selection.clear()
-                        selection.focus(key)
+                        // The menu and the keys it names must mean this row.
+                        selection.contextTarget(key)
                     },
                 ) {
                     TableRow(

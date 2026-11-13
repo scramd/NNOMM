@@ -69,6 +69,18 @@ class RowSelection<K> {
         focused = key
     }
 
+    /**
+     * A right-click on [key], before its menu opens. A row outside the selection becomes the only
+     * target, as in a file manager: the selection is dropped and the next range starts here.
+     */
+    fun contextTarget(key: K) {
+        if (key in picked) focus(key)
+        else {
+            clear()
+            activate(key)
+        }
+    }
+
     fun activate(key: K) {
         focused = key
         anchor = key

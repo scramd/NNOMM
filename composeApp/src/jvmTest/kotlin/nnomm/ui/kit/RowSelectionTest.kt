@@ -33,6 +33,29 @@ class RowSelectionTest {
     }
 
     @Test
+    fun rightClickOutsideTheSelectionStartsTheNextRangeAtThatRow() {
+        val rows = listOf("a", "b", "c", "d")
+        val selection = RowSelection<String>()
+        selection.select(rows, "a", ctrl = true)
+        selection.contextTarget("c")
+        assertEquals(emptySet(), selection.picked)
+        selection.select(rows, "d", shift = true)
+        assertEquals(setOf("c", "d"), selection.picked)
+    }
+
+    @Test
+    fun rightClickOnASelectedRowKeepsTheSelectionAndItsAnchor() {
+        val rows = listOf("a", "b", "c", "d")
+        val selection = RowSelection<String>()
+        selection.select(rows, "a", ctrl = true)
+        selection.select(rows, "c", ctrl = true)
+        selection.contextTarget("a")
+        assertEquals(setOf("a", "c"), selection.picked)
+        assertEquals("a", selection.focused)
+        assertEquals("c", selection.anchor)
+    }
+
+    @Test
     fun filteringDropsMissingKeysAndSortingPreservesIdentity() {
         val selection = RowSelection<String>()
         selection.select(listOf("a", "b", "c"), "b")
