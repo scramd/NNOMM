@@ -768,12 +768,38 @@ fun tileHash(id: String): UInt {
     return h
 }
 
-fun tileInitials(name: String): String {
-    val words = name.replace(Regex("[^A-Za-z0-9 ]"), "").split(' ').filter { it.isNotEmpty() }
-    return (if (words.size > 1) "${words[0][0]}${words[1][0]}" else name.take(2)).uppercase(
-        java.util.Locale.ROOT
-    )
+private val nameBreaks = Regex("[^\\p{L}\\p{N}]+")
+private val caseBreaks = Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})")
+
+/** The words of a name without spaces: snake_case, kebab-case, camelCase and acronyms such as NOTacMap. */
+fun nameWords(name: String): List<String> =
+    name.split(nameBreaks).flatMap { it.split(caseBreaks) }.filter { it.isNotEmpty() }
+
+private fun String.firstLetters(count: Int) =
+    substring(0, offsetByCodePoints(0, minOf(count, codePointCount(0, length))))
+
+/**
+ * Two letters for a mod without a picture. A name with spaces uses the first letters of its first
+ * two words. A name without spaces is split into words first. With [skipNuclear], a first word
+ * "Nuclear" is left out when two or more words follow it.
+ */
+fun tileInitials(name: String, skipNuclear: Boolean = false): String {
+    val spaced = name.replace(Regex("[^A-Za-z0-9 ]"), "").split(' ').filter { it.isNotEmpty() }
+    val split = spaced.size < 2 && ' ' !in name.trim()
+    var words = if (split) nameWords(name) else spaced
+    if (skipNuclear && words.size > 2 && words[0].equals("nuclear", ignoreCase = true))
+        words = words.drop(1)
+    val letters =
+        when {
+            words.size > 1 -> words[0].firstLetters(1) + words[1].firstLetters(1)
+            split && words.size == 1 -> words[0].firstLetters(2)
+            else -> name.take(2)
+        }
+    return letters.uppercase(java.util.Locale.ROOT)
 }
+
+/** The player's choice "Leave out Nuclear in mod letters" (Settings, Appearance). */
+val LocalTileSkipNuclear = staticCompositionLocalOf { false }
 
 enum class TileSize(val pixels: Int, val radius: Int, val text: Float) {
     Small(22, 5, 9.5f),
@@ -808,7 +834,7 @@ fun ModTile(
         if (vector != null) Image(vector, null, Modifier.fillMaxSize(), colorFilter = filter)
         else
             Label(
-                tileInitials(name),
+                tileInitials(name, LocalTileSkipNuclear.current),
                 color = if (off) Color(0xffebebeb) else Color(0xfff0ecd8),
                 size = size.text,
                 weight = 700,

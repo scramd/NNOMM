@@ -370,7 +370,11 @@ fun main(args: Array<String>) {
                 val colors = LocalNnTheme.current.colors
                 val maximized = state.placement == WindowPlacement.Maximized
                 val focusMode = remember { nnomm.ui.kit.FocusMode() }
-                CompositionLocalProvider(nnomm.ui.kit.LocalFocusMode provides focusMode) {
+                CompositionLocalProvider(
+                    nnomm.ui.kit.LocalFocusMode provides focusMode,
+                    nnomm.ui.kit.LocalTileSkipNuclear provides
+                        (values["tileSkipNuclear"]?.content == "true"),
+                ) {
                     Box(
                         Modifier.fillMaxSize()
                             .onKeyEvent { model?.shortcut(it) ?: false }

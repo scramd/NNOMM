@@ -99,9 +99,21 @@ function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) 
 function icon(x, sz = '') {
   const bg = TILE[hash(x.id) % TILE.length];
   if (x.img) return `<span class="ico ${sz}" style="background:${bg}"><svg viewBox="0 0 40 40">${PICS[x.img]}</svg></span>`;
-  const w = x.name.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean);
-  const ini = (w.length > 1 ? w[0][0] + w[1][0] : x.name.slice(0, 2)).toUpperCase();
-  return `<span class="ico ${sz}" style="background:${bg}">${esc(ini)}</span>`;
+  return `<span class="ico ${sz}" style="background:${bg}">${esc(initials(x.name, VAL.tileSkipNuclear))}</span>`;
+}
+// A name with spaces uses its first two words. A name without spaces is split at snake_case,
+// kebab-case and camelCase breaks first (NOTacMap: NO, Tac, Map). With skipNuclear a first word
+// "Nuclear" is left out when two or more words follow it, so NuclearMinimap stays NM.
+function nameWords(name) {
+  return name.split(/[^\p{L}\p{N}]+/u).flatMap(p => p.split(/(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u)).filter(Boolean);
+}
+function initials(name, skipNuclear) {
+  const spaced = name.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean);
+  const split = spaced.length < 2 && !name.trim().includes(' ');
+  let w = split ? nameWords(name) : spaced;
+  if (skipNuclear && w.length > 2 && w[0].toLowerCase() === 'nuclear') w = w.slice(1);
+  const first = (s, n) => [...s].slice(0, n).join('');
+  return (w.length > 1 ? first(w[0], 1) + first(w[1], 1) : split && w.length ? first(w[0], 2) : name.slice(0, 2)).toUpperCase();
 }
 
 // Search: forgiving match on the name, plain match on tags, author and description. Returns why it matched.

@@ -162,6 +162,7 @@ const SETTINGS = [
   { cat: 'look', key: 'density', label: 'Row height in lists', type: 'select', val: 'Compact', options: ['Compact', 'Comfortable'] },
   { cat: 'look', key: 'textSize', label: 'Text size', type: 'select', val: '100%', options: ['90%', '100%', '110%', '125%'] },
   { cat: 'look', key: 'motion', label: 'Animations', type: 'select', val: 'Same as Windows', options: ['Same as Windows', 'On', 'Off'] },
+  { cat: 'look', key: 'tileSkipNuclear', label: 'Leave out "Nuclear" in mod letters', help: 'Mods without a picture show two letters from their name. Many names start with Nuclear. With this on, NuclearMapTrails shows MT, not NM. NuclearMinimap keeps NM.', type: 'toggle', val: false },
   { cat: 'look', key: 'startPage', label: 'NNOMM opens on', type: 'select', val: 'The page I used last', options: ['The page I used last', 'Browse', 'Library'] },
 
   { cat: 'keys', key: 'keys', type: 'keys' },

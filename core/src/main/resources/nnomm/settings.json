@@ -245,6 +245,14 @@
     },
     {
       "cat": "look",
+      "key": "tileSkipNuclear",
+      "label": "Leave out \"Nuclear\" in mod letters",
+      "help": "Mods without a picture show two letters from their name. Many names start with Nuclear. With this on, NuclearMapTrails shows MT, not NM. NuclearMinimap keeps NM.",
+      "type": "toggle",
+      "val": false
+    },
+    {
+      "cat": "look",
       "key": "startPage",
       "label": "NNOMM opens on",
       "type": "select",
