@@ -55,6 +55,7 @@ if ($Shots) {
         '34-servers-join-new' = @('page=servers&panel=server:s9&join=new', 1360, 860)
         '35-servers-narrow'   = @('page=servers', 760, 820)
         '36-browse-tags'      = @('page=browse&tags=HUD,Map', 1360, 860)
+        '37-browse-hide-tags' = @('page=browse&tags=HUD&hide=Map,Multiplayer', 1360, 860)
     }
     foreach ($k in $list.Keys) {
         $v = $list[$k]

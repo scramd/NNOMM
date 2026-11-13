@@ -226,11 +226,22 @@ const ACT = {
   toggle(el) { const id = el.dataset.id; INST[id].on[S.profile] = !isOn(id); S.lib.focus = id; },
   toggleIn(el) { const id = el.dataset.id, p = el.dataset.p; INST[id].on[p] = !isOn(id, p); },
   remove(el) { removeMods([el.dataset.id]); },
-  tag(el) { const t = el.dataset.tag; if (!S.browse.tags.includes(t)) S.browse.tags.push(t); S.page = 'browse'; },
+  tag(el) { const t = el.dataset.tag, b = S.browse; b.hideTags = b.hideTags.filter(x => x !== t); if (!b.tags.includes(t)) b.tags.push(t); S.page = 'browse'; },
   btag(el) { const t = el.dataset.tag, a = S.browse.tags, i = a.indexOf(t); i >= 0 ? a.splice(i, 1) : a.push(t); },
+  // Hide a tag: its mods leave the list, and the tag moves to the "Hide mods with" group.
+  bhide(el, e) {
+    const t = el.dataset.tag, b = S.browse, shown = ALL_TAGS.map(r => r[0]).filter(x => !b.hideTags.includes(x)), i = shown.indexOf(t);
+    b.tags = b.tags.filter(x => x !== t); if (!b.hideTags.includes(t)) b.hideTags.push(t); b.hidePick = false;
+    if (e && e.detail === 0) { const nx = shown[i + 1] || shown[i - 1]; S._focus = el.closest('.hpick') || !nx ? 'fh-add' : 'ft-' + nx; }
+  },
+  bunhide(el, e) {
+    const t = el.dataset.tag, b = S.browse, i = b.hideTags.indexOf(t); b.hideTags.splice(i, 1);
+    if (e && e.detail === 0) S._focus = b.hideTags.length ? 'fh-' + b.hideTags[Math.min(i, b.hideTags.length - 1)] : 'ft-' + t;
+  },
+  bhidepick() { S.browse.hidePick = !S.browse.hidePick; S._focus = 'fh-add'; },
   bset(el) { const { k, v } = el.dataset, b = S.browse; b[k] = v === 'toggle' ? !b[k] : (k === 'have' || k === 'type') && b[k] === v ? 'all' : v; },
-  bclear(el) { const k = el.dataset.k, b = S.browse; if (k === 'tags') b.tags = []; else if (k === 'fits') b.fits = false; else b[k] = 'all'; },
-  clearfilters() { Object.assign(S.browse, { q: '', tags: [], type: 'all', have: 'all', fits: false }); },
+  bclear(el) { const k = el.dataset.k, b = S.browse; if (k === 'tags') b.tags = []; else if (k === 'hide') { b.hideTags = []; b.hidePick = false; } else if (k === 'fits') b.fits = false; else b[k] = 'all'; },
+  clearfilters() { Object.assign(S.browse, { q: '', tags: [], hideTags: [], hidePick: false, type: 'all', have: 'all', fits: false }); },
   facets() { S.browse.facets = !S.browse.facets; },
   libfilter(el) { S.lib.filter = el.dataset.v; S.lib.sel.clear(); S.lib.focus = null; },
   libclear() { S.lib.filter = 'all'; S.lib.q = ''; S.lib.sel.clear(); S.lib.focus = null; },
@@ -485,6 +496,7 @@ document.addEventListener('keydown', e => {
   else if (ctrl && ['1', '2', '3'].includes(k)) { const p = ['browse', 'library', 'servers'][+k - 1]; if (p !== 'servers' || VAL.showServers) { S.page = p; S.panel = null; } }
   else if (ctrl && k === ',') { S.page = 'settings'; S.panel = null; }
   else if (ctrl && k.toLowerCase() === 'z' && !typing && S.toasts.some(t => t.action === 'Undo')) { const t = S.toasts.filter(q => q.action === 'Undo').pop(); S.toasts.splice(S.toasts.indexOf(t), 1); t.fn(); }
+  else if (k === '-' && !typing && e.target.matches && e.target.matches('.facets [data-act="btag"]')) ACT.bhide(e.target, { detail: 0 });
   else if (k === '/' && !typing && !S.overlay) { const inp = $('#main .field input'); if (inp) { e.preventDefault(); inp.focus(); } return; }
   else if (S.page === 'library' && !S.overlay && !typing && !S.menu) {
     const l = S.lib, ids = libList(), onCtl = e.target.closest && e.target.closest('button, a, select, [tabindex]');
@@ -523,6 +535,7 @@ window.addEventListener('error', e => { const d = document.createElement('div');
   if (g('q')) S.browse.q = g('q');
   if (g('view')) S.browse.view = g('view');
   if (g('tags')) S.browse.tags = g('tags').split(',');
+  if (g('hide')) S.browse.hideTags = g('hide').split(',');
   if (g('lf')) S.lib.filter = g('lf');
   if (g('sel')) g('sel').split(',').forEach(id => S.lib.sel.add(id));
   if (g('cat')) S.set.cat = g('cat');

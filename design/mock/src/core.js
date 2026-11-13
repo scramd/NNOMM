@@ -12,7 +12,7 @@ const ICONS = {
   check: '<path d="m3.5 8.5 3 3 6-7"/>',
   x: '<path d="m4 4 8 8M12 4l-8 8"/>',
   chevd: '<path d="m4 6 4 4 4-4"/>', chevu: '<path d="m4 10 4-4 4 4"/>', chevr: '<path d="m6 4 4 4-4 4"/>',
-  plus: '<path d="M8 3v10M3 8h10"/>', minus: '<path d="M3 8h10"/>',
+  plus: '<path d="M8 3v10M3 8h10"/>', minus: '<path d="M3 8h10"/>', eyeoff: '<path d="M2 8s2.2-4 6-4c1 0 1.9.3 2.6.7M14 8s-2.2 4-6 4c-1 0-1.9-.3-2.6-.7M2.5 2.5l11 11"/>',
   more: '<circle cx="3.5" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1" fill="currentColor" stroke="none"/>',
   star: '<path d="m8 2 1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z"/>',
   lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
@@ -41,7 +41,7 @@ const I = (n, c = '') => `<svg class="i ${c}" viewBox="0 0 16 16" aria-hidden="t
 
 const S = {
   theme: 'dark', page: 'browse', profile: 'default', mock: 'normal', running: false,
-  browse: { q: '', sort: 'downloads', view: 'grid', tags: [], tagMode: 'any', type: 'all', have: 'all', fits: false, facets: false, allTags: false },
+  browse: { q: '', sort: 'downloads', view: 'grid', tags: [], tagMode: 'any', hideTags: [], hidePick: false, type: 'all', have: 'all', fits: false, facets: false, allTags: false },
   lib: { filter: 'all', q: '', sort: 'name', dir: 1, sel: new Set(), anchor: null, focus: null },
   srv: { q: '', chips: new Set(), sort: 'p', dir: -1 },
   set: { cat: 'game', q: '', scope: 'all', ov: { hardcore: { ownSettingsP: true, console: true }, friday: {}, default: {} } },
@@ -158,6 +158,8 @@ function browseList(skip) {
   let list = MODS.filter(x => !x.local).filter(x => VAL.hideServer ? x.side !== 'server' : true);
   if (b.type !== 'all' && skip !== 'type') list = list.filter(x => x.type === b.type);
   if (b.tags.length && skip !== 'tags') list = list.filter(x => b.tagMode === 'all' ? b.tags.every(t => x.tags.includes(t)) : b.tags.some(t => x.tags.includes(t)));
+  // A hidden tag removes its mods, whatever Any or All is set to for the selected tags.
+  if (b.hideTags.length) list = list.filter(x => !b.hideTags.some(t => x.tags.includes(t)));
   if (skip !== 'have' && b.have === 'new') list = list.filter(x => !isInst(x.id));
   if (skip !== 'have' && b.have === 'inst') list = list.filter(x => isInst(x.id));
   if (skip !== 'have' && b.have === 'upd') list = list.filter(x => hasUpdate(x.id));
@@ -167,7 +169,7 @@ function browseList(skip) {
   res.sort(b.q.trim() ? (a, c) => c.m.score - a.m.score || by.downloads(a, c) : by[b.sort]);
   return res;
 }
-const browseFiltered = () => { const b = S.browse; return !!(b.q.trim() || b.tags.length || b.type !== 'all' || b.have !== 'all' || b.fits); };
+const browseFiltered = () => { const b = S.browse; return !!(b.q.trim() || b.tags.length || b.hideTags.length || b.type !== 'all' || b.have !== 'all' || b.fits); };
 
 function libList() {
   const l = S.lib;

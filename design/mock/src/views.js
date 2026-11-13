@@ -71,13 +71,19 @@ function vBrowse() {
   const cntH = f => browseList('have').filter(r => f(r.x)).length, cntT = f => browseList('type').filter(r => f(r.x)).length, tc = tagCounts();
   const fo = (k, v, label, n) => `<button class="fopt ${b[k] === v ? 'cur' : ''}" data-act="bset" data-k="${k}" data-v="${v}"><span class="radio" style="margin:0;${b[k] === v ? 'border:4.5px solid var(--strong)' : ''}"></span>${label}<span class="n">${n}</span></button>`;
   const clr = k => `<button class="linkbtn" style="font-size:11.5px;font-weight:400" data-act="bclear" data-k="${k}" title="Show all again">Clear</button>`;
-  const tags = b.allTags ? ALL_TAGS : ALL_TAGS.slice(0, 9);
+  const shownTags = ALL_TAGS.filter(([t]) => !b.hideTags.includes(t)), tags = b.allTags ? shownTags : shownTags.slice(0, 9);
+  // A hidden tag moves to its own group, which exists only while something is hidden.
+  const hideGroup = b.hideTags.length ? `<div><h3>Hide mods with${clr('hide')}</h3>
+      ${b.hideTags.map(t => `<button class="fopt cur" id="fh-${esc(t)}" data-act="bunhide" data-tag="${esc(t)}" title="Show mods with ${esc(t)} again"><span class="ck ex">${I('minus')}</span>${esc(t)}<span class="n">${I('x')}</span></button>`).join('')}
+      <button class="fopt" id="fh-add" data-act="bhidepick" aria-expanded="${b.hidePick}">${I('plus')}Add a tag</button>
+      ${b.hidePick ? `<div class="hpick">${shownTags.map(([t]) => `<button class="tag" data-act="bhide" data-tag="${esc(t)}" title="Hide mods with ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}</div>` : '';
   h += `<div class="br"><div class="facets ${b.facets ? 'open' : ''}" data-scroll="facets">
     <div><h3>Show${b.have !== 'all' ? clr('have') : ''}</h3>${fo('have', 'new', 'Not installed', cntH(x => !isInst(x.id)))}${fo('have', 'inst', 'Installed', cntH(x => isInst(x.id)))}${fo('have', 'upd', 'With an update', cntH(x => hasUpdate(x.id)))}</div>
     <div><h3>Kind${b.type !== 'all' ? clr('type') : ''}</h3>${fo('type', 'plugin', 'Mods', cntT(x => x.type === 'plugin'))}${fo('type', 'addon', 'Add-ons', cntT(x => x.type === 'addon'))}</div>
     <div><h3>Tags<span class="row" style="gap:7px">${b.tags.length ? clr('tags') : ''}${b.tags.length > 1 ? `<span class="seg" title="A mod must have any, or all, of the tags you select"><button class="${b.tagMode === 'any' ? 'cur' : ''}" data-act="bset" data-k="tagMode" data-v="any" style="height:20px;padding:0 6px;font-size:11.5px">Any</button><button class="${b.tagMode === 'all' ? 'cur' : ''}" data-act="bset" data-k="tagMode" data-v="all" style="height:20px;padding:0 6px;font-size:11.5px">All</button></span>` : ''}</span></h3>
-      ${tags.map(([t]) => `<button class="fopt ${b.tags.includes(t) ? 'cur' : ''}" data-act="btag" data-tag="${esc(t)}"><span class="ck ${b.tags.includes(t) ? 'cur' : ''}">${I('check')}</span>${esc(t)}<span class="n">${tc[t]}</span></button>`).join('')}
-      <button class="linkbtn" data-act="bset" data-k="allTags" data-v="toggle" style="font-size:12px;margin-top:4px">${b.allTags ? 'Fewer tags' : `All ${ALL_TAGS.length} tags`}</button></div>
+      ${tags.map(([t]) => `<div class="trow"><button class="fopt ${b.tags.includes(t) ? 'cur' : ''}" id="ft-${esc(t)}" data-act="btag" data-tag="${esc(t)}"><span class="ck ${b.tags.includes(t) ? 'cur' : ''}">${I('check')}</span>${esc(t)}<span class="n">${tc[t]}</span></button><button class="hb" data-act="bhide" data-tag="${esc(t)}" title="Hide mods with ${esc(t)} (minus key)" aria-label="Hide mods with ${esc(t)}">${I('eyeoff')}Hide</button></div>`).join('')}
+      ${shownTags.length > 9 ? `<button class="linkbtn" data-act="bset" data-k="allTags" data-v="toggle" style="font-size:12px;margin-top:4px">${b.allTags ? 'Fewer tags' : `All ${shownTags.length} tags`}</button>` : ''}</div>
+    ${hideGroup}
     <div><h3>Game version${b.fits ? clr('fits') : ''}</h3><button class="fopt ${b.fits ? 'cur' : ''}" data-act="bset" data-k="fits" data-v="toggle"><span class="ck ${b.fits ? 'cur' : ''}">${I('check')}</span>Made for ${GAME_VERSION}</button></div>
   </div><div class="results" data-scroll="browse-results">`;
   if (S.mock === 'loading') return h + `<div class="sec"><h2>Reading the registry</h2><div class="grid">${'<div class="skel"></div>'.repeat(9)}</div></div></div></div>`;
@@ -89,7 +95,8 @@ function vBrowse() {
     if (b.fits) chips.push(['Made for ' + GAME_VERSION, 'fits', 'toggle']);
     h += `<div class="active-filters"><b style="color:var(--text)">${plural(res.length, 'mod', 'mods')}</b>${searching ? `<span>for "${esc(b.q.trim())}"</span>` : ''}
       ${chips.map(([t, k, v]) => `<button class="chip cur" data-act="${k === 'tag' ? 'btag' : 'bset'}" data-k="${k}" data-v="${v}" data-tag="${esc(v)}" title="Remove this filter">${esc(t)}${I('x')}</button>`).join('')}
-      ${b.tags.length > 1 ? `<span class="faint">${b.tagMode === 'any' ? 'any of these tags' : 'all of these tags'}</span>` : ''}<button class="linkbtn" data-act="clearfilters">Clear all</button></div>`;
+      ${b.tags.length > 1 ? `<span class="faint">${b.tagMode === 'any' ? 'any of these tags' : 'all of these tags'}</span>` : ''}
+      ${b.hideTags.map(t => `<button class="chip ex" data-act="bunhide" data-tag="${esc(t)}" title="Show these mods again">Without ${esc(t)}${I('x')}</button>`).join('')}<button class="linkbtn" data-act="clearfilters">Clear all</button></div>`;
     h += res.length ? showMods(res, b.view) : `<div class="empty"><h2>No mod matches</h2><p>Try fewer letters or remove a filter. The search also looks in descriptions, tags and author names.</p><button class="btn" data-act="clearfilters">Clear search and filters</button></div>`;
   } else if (b.sort !== 'downloads') {
     h += `<div class="sec"><h2>All mods<small>${{ updated: 'last updated first', newest: 'newest first', name: 'by name' }[b.sort]}</small></h2>${showMods(res, b.view)}</div>`;

@@ -164,6 +164,17 @@ button.badge:hover { filter: brightness(1.15); }
 .fopt:hover { color: var(--text); background: var(--raise); }
 .fopt .n { margin-left: auto; color: var(--text-3); font-size: 11.5px; }
 .fopt.cur { color: var(--text); }
+.fopt .n .i { width: 12px; height: 12px; }
+/* tag rows: the count turns into a Hide button on hover or keyboard focus */
+.trow { position: relative; }
+.trow .hb { position: absolute; right: 0; top: 2px; height: 21px; padding: 0 6px; border-radius: 4px; display: none; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-2); background: var(--raise-2); }
+.trow .hb .i { width: 13px; height: 13px; }
+.trow .hb:hover { color: var(--text); background: var(--line-2); }
+.trow:hover .hb, .trow:has(:focus-visible) .hb { display: inline-flex; }
+.trow:hover .fopt .n, .trow:has(:focus-visible) .fopt .n { visibility: hidden; }
+.ck.ex { border-color: var(--text-2); color: var(--text-2); }
+.hpick { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 2px; }
+.chip.ex { border-style: dashed; border-color: var(--text-3); color: var(--text); font-weight: 600; }
 .linkbtn { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-2); }
 .linkbtn:hover { color: var(--text); }
 .results { flex: 1; min-width: 0; overflow-y: auto; padding: 0 18px 18px 12px; }
