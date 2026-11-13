@@ -87,14 +87,24 @@ fun AppShell(model: AppModel) {
                 .dragAndDropTarget({ it.dragData() is DragData.FilesList }, dropTarget)
         ) {
             val narrow = maxWidth <= 940.dp
+            // The page between the side areas keeps at least this width; the mod panel gives way
+            // first, then the sidebar.
+            val pageRoom = maxWidth - 480.dp
+            val panelWidth =
+                PaneWidths.fit(Pane.ModPanel, pageRoom - Pane.Sidebar.min)
+            val sideWidth =
+                PaneWidths.fit(Pane.Sidebar, pageRoom - if (ui.panel != null) panelWidth else 0.dp)
             Row(Modifier.fillMaxSize()) {
-                Sidebar(model, narrow)
+                Box(Modifier.fillMaxHeight()) {
+                    Sidebar(model, narrow, sideWidth)
+                    if (!narrow) PaneEdge(Pane.Sidebar, sideWidth)
+                }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Row(Modifier.fillMaxSize()) {
                         Box(Modifier.weight(1f).fillMaxHeight()) { PageContent(ui.page) }
-                        if (!narrow) PanelHost(ui.panel)
+                        if (!narrow) PanelHost(ui.panel, panelWidth, resizable = true)
                     }
-                    if (narrow) Box(Modifier.align(Alignment.CenterEnd)) { PanelHost(ui.panel) }
+                    if (narrow) Box(Modifier.align(Alignment.CenterEnd)) { PanelHost(ui.panel, Pane.ModPanel.default, resizable = false) }
                 }
             }
         }
@@ -189,7 +199,7 @@ private fun PageContent(page: Page) {
 }
 
 @Composable
-private fun PanelHost(ref: PanelRef?) {
+private fun PanelHost(ref: PanelRef?, width: Dp, resizable: Boolean) {
     val line = LocalNnTheme.current.colors.line
     val duration = LocalNnTheme.current.panelMillis
     if (ref == null) return
@@ -198,7 +208,7 @@ private fun PanelHost(ref: PanelRef?) {
     LaunchedEffect(Unit) { entered = true }
     val offset by animateDpAsState(if (entered) 0.dp else 24.dp, tween(duration))
     Box(
-        Modifier.width(400.dp)
+        Modifier.width(width)
             .fillMaxHeight()
             .offset(x = if (duration == 0) 0.dp else offset)
             .background(LocalNnTheme.current.colors.side)
@@ -212,6 +222,7 @@ private fun PanelHost(ref: PanelRef?) {
             }
     ) {
         ModPanel(ref)
+        if (resizable) PaneEdge(Pane.ModPanel, width, atStart = true)
     }
 }
 
@@ -267,7 +278,7 @@ private fun Nav(
 }
 
 @Composable
-private fun Sidebar(model: AppModel, narrow: Boolean) {
+private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
     val s by
         remember(model) {
                 model.store.state
@@ -296,7 +307,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean) {
         ui.dismissMenu = dismiss
     }
     Column(
-        Modifier.width(if (narrow) 52.dp else 216.dp)
+        Modifier.width(if (narrow) 52.dp else width)
             .fillMaxHeight()
             .background(c.side)
             .drawBehind {

@@ -77,6 +77,7 @@ The Windows run used another method: run the real app first, change code only wh
 ## Differences from the mock
 
 - No Servers page content, join helper or server settings in this version (agreed).
+- The sidebar, the Browse filters, the mod panel and the Settings section list can be resized by dragging their inner edge (owner's request, 2026-11-13); a double-click on the edge restores the mock's width. Widths are kept in `window.properties`. The page between them keeps at least 480 px, the Browse results 300 px; a pane gives way first when the window is too small. The narrow layouts keep their fixed widths.
 - Font shaping and line wrapping differ slightly from Chromium in some pictures; Browse strips leave room for their scrollbar.
 - Safety texts are longer than the mock where the real behaviour needs saying: ownership and recovery notices, "Remove all mods" (local and taken-over mods stay in the Library, turned off; only loader files NNOMM installed are removed), storage numbers.
 - Pack previews can show several bundled-file warnings and the pack's mod settings switch.

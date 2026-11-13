@@ -81,9 +81,15 @@ fun BrowsePage() {
                 },
             )
         }
-        Box(Modifier.weight(1f)) {
+        BoxWithConstraints(Modifier.weight(1f)) {
+            // The results keep at least 300 dp beside the filters.
+            val filtersWidth = PaneWidths.fit(Pane.BrowseFilters, maxWidth - 300.dp)
             Row(Modifier.fillMaxSize()) {
-                if (!narrow) Facets(state, filter, Modifier.width(186.dp))
+                if (!narrow)
+                    Box(Modifier.width(filtersWidth).fillMaxHeight()) {
+                        Facets(state, filter, Modifier.fillMaxSize())
+                        PaneEdge(Pane.BrowseFilters, filtersWidth)
+                    }
                 Results(state, filter, rows, sections, narrow, Modifier.weight(1f))
             }
             if (narrow && b.facetsOpen) {

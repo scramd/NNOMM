@@ -68,6 +68,7 @@ fun SettingsPage() {
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth <= 800.dp
+        val sectionsWidth = PaneWidths.fit(Pane.SettingsSections, maxWidth - 380.dp)
         Column(Modifier.fillMaxSize()) {
             FlowRow(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -90,7 +91,8 @@ fun SettingsPage() {
                 SettingField(view.query, { view.query = it }, Modifier.width(230.dp), "Search settings", focus, NnIcons.search)
             }
             Row(Modifier.weight(1f)) {
-                Column(Modifier.width(if (narrow) 132.dp else 176.dp).fillMaxHeight()
+                Box(Modifier.width(if (narrow) 132.dp else sectionsWidth).fillMaxHeight()) {
+                Column(Modifier.fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(start = if (narrow) 8.dp else 12.dp, end = 6.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (personal) {
@@ -108,6 +110,8 @@ fun SettingsPage() {
                             view.query = ""
                         }
                     }
+                }
+                if (!narrow) PaneEdge(Pane.SettingsSections, sectionsWidth)
                 }
                 key(view.category, personal) {
                     val scroll = rememberScrollState()

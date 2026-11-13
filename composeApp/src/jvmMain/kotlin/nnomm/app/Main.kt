@@ -107,6 +107,7 @@ fun main(args: Array<String>) {
         Properties().apply {
             if (placementFile.isFile) placementFile.inputStream().use { load(it) }
         }
+    nnomm.ui.kit.PaneWidths.load(properties)
     // A window that was never moved has no position; such a saved value is not a number.
     fun saved(key: String) = properties.getProperty(key)?.toFloatOrNull()?.takeIf { it.isFinite() }
     val initialPlacement =
@@ -220,6 +221,7 @@ fun main(args: Array<String>) {
             if (!closing) {
                 closing = true
                 properties.setProperty("placement", state.placement.name)
+                nnomm.ui.kit.PaneWidths.save(properties)
                 if (state.placement == WindowPlacement.Floating) {
                     // The window reports itself up to 1 dp larger than the size it was opened
                     // with. Keep the opened size unless the player resized, so that the window
