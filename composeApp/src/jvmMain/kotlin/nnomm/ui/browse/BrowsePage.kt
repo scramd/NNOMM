@@ -14,6 +14,9 @@ import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +60,14 @@ fun BrowsePage() {
             b.hideTags.toList(),
         )
     val rows = remember(state, filter) { browseList(state, filter) }
+    // A focus target whose row is not on screen (beyond "All N tags", or filters closed) is dropped,
+    // so it cannot take focus later.
+    LaunchedEffect(b.focusKey) {
+        if (b.focusKey != null) {
+            repeat(2) { withFrameNanos {} }
+            b.focusKey = null
+        }
+    }
     val sections = remember(state, filter) { browseSections(state, filter) }
     val narrow =
         with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() <= 940.dp }
@@ -194,6 +205,21 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
     val visibleTags = if (b.allTags) tags else tags.take(9)
     Column(
         modifier
+            .pointerInput(b) {
+                // Ends the hide guard once the pointer really moves; a relayout under a still
+                // pointer sends events at the same place.
+                var last = androidx.compose.ui.geometry.Offset.Unspecified
+                var guardAt = androidx.compose.ui.geometry.Offset.Unspecified
+                awaitPointerEventScope {
+                    while (true) {
+                        val p = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull()?.position ?: continue
+                        if (!b.hideGuard) guardAt = androidx.compose.ui.geometry.Offset.Unspecified
+                        else if (!guardAt.isSpecified) guardAt = if (last.isSpecified) last else p
+                        else if ((p - guardAt).getDistance() > 3f) b.hideGuard = false
+                        last = p
+                    }
+                }
+            }
             .verticalScroll(rememberScrollState())
             .padding(start = 18.dp, end = 6.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -258,15 +284,17 @@ private fun Facets(s: AppState, filter: BrowseFilter, modifier: Modifier) {
                     }
             }
             visibleTags.forEachIndexed { i, tag ->
-                TagRow(tag, counts[tag] ?: 0, visibleTags.getOrNull(i + 1) ?: visibleTags.getOrNull(i - 1) ?: ADD_TAG_KEY)
+                // Keyed, so a row that moves into this place after a hide starts without hover.
+                key(tag) { TagRow(tag, counts[tag] ?: 0, tags.getOrNull(i + 1) ?: tags.getOrNull(i - 1) ?: ADD_TAG_KEY) }
             }
-            LinkButton(
-                if (b.allTags) "Fewer tags" else "All ${tags.size} tags",
-                { b.allTags = !b.allTags },
-                Modifier.padding(top = 4.dp),
-            )
+            if (tags.size > 9)
+                LinkButton(
+                    if (b.allTags) "Fewer tags" else "All ${tags.size} tags",
+                    { b.allTags = !b.allTags },
+                    Modifier.padding(top = 4.dp),
+                )
         }
-        if (b.hideTags.isNotEmpty()) HiddenTags(counts.keys.toList())
+        if (b.hideTags.isNotEmpty()) HiddenTags(tags)
         Column {
             FacetHeading("Game version", b.game.isNotEmpty(), { b.game = "" })
             control(
@@ -336,17 +364,27 @@ private fun TagRow(tag: String, count: Int, focusAfterHide: String) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     var focusInside by remember { mutableStateOf(false) }
-    val showHide = hovered || (focusInside && mode.keyboard)
+    val showHide = (hovered && !b.hideGuard) || (focusInside && mode.keyboard)
     val hide = {
         if (mode.keyboard) b.focusKey = focusAfterHide
+        else {
+            b.hideGuard = true
+            b.hideAtMillis = System.currentTimeMillis()
+        }
         b.hideTag(tag)
     }
+    // The second click of a double click on Hide lands on the next row; it must not select it.
+    val select = { if (!(b.hideGuard && System.currentTimeMillis() - b.hideAtMillis < 600)) b.toggleTag(tag) }
     Box(
         Modifier.fillMaxWidth()
             .hoverable(source)
             .onFocusChanged { focusInside = it.hasFocus }
             .onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyDown && (it.key == Key.Minus || it.key == Key.NumPadSubtract)) {
+                if (
+                    it.type == KeyEventType.KeyDown &&
+                        (it.key == Key.Minus || it.key == Key.NumPadSubtract) &&
+                        !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed
+                ) {
                     hide()
                     true
                 } else false
@@ -356,7 +394,7 @@ private fun TagRow(tag: String, count: Int, focusAfterHide: String) {
             tag,
             count,
             tag in b.tags,
-            { b.toggleTag(tag) },
+            select,
             Modifier.takesFocus(tag),
             countVisible = !showHide,
         )
@@ -387,28 +425,24 @@ private fun HideButton(tag: String, onClick: () -> Unit, modifier: Modifier) {
 
 /** The group of hidden tags. It exists only while a tag is hidden. */
 @Composable
-private fun HiddenTags(order: List<String>) {
+private fun HiddenTags(shownTags: List<String>) {
     val b = LocalApp.current.ui.browse
     val mode = LocalFocusMode.current
     val c = LocalNnTheme.current.colors
     val hidden = b.hideTags.toList()
-    val shownTags = order.filter { it !in b.hideTags }
-    // After "show again", the tag's own row takes focus if it is in the visible part of the list.
-    fun visibleAfterShow(tag: String) = b.allTags || order.filter { it == tag || it !in b.hideTags }.indexOf(tag) in 0 until 9
     Column {
         FacetHeading("Hide mods with", true, {
             b.hideTags = emptySet()
             b.hidePick = false
         })
-        hidden.forEachIndexed { i, tag ->
+        hidden.forEachIndexed { i, tag -> key(tag) {
             Tooltip("Show mods with $tag again") {
                 control(
                     Modifier.fillMaxWidth().takesFocus(hiddenKey(tag)).semantics { contentDescription = "Stop hiding $tag" },
                     onClick = {
                         if (mode.keyboard)
-                            b.focusKey =
-                                (hidden.getOrNull(i + 1) ?: hidden.getOrNull(i - 1))?.let(::hiddenKey)
-                                    ?: tag.takeIf(::visibleAfterShow)
+                            // The tag's own row takes focus when it is in the visible part of the list.
+                            b.focusKey = (hidden.getOrNull(i + 1) ?: hidden.getOrNull(i - 1))?.let(::hiddenKey) ?: tag
                         b.hideTags -= tag
                     },
                 ) { m, h, _ ->
@@ -431,7 +465,7 @@ private fun HiddenTags(order: List<String>) {
                     }
                 }
             }
-        }
+        } }
         control(
             Modifier.fillMaxWidth().takesFocus(ADD_TAG_KEY),
             onClick = { b.hidePick = !b.hidePick },
@@ -632,7 +666,14 @@ private fun ActiveFilters(s: AppState, count: Int) {
                 if (b.tagMode == "any") "any of these tags" else "all of these tags",
                 color = c.text3,
             )
-        b.hideTags.forEach { tag -> HiddenChip("Without $tag") { b.hideTags -= tag } }
+        val mode = LocalFocusMode.current
+        b.hideTags.forEach { tag ->
+            HiddenChip("Without $tag") {
+                // With the keyboard, focus goes to the tag's row, as the chip goes away.
+                if (mode.keyboard) b.focusKey = tag
+                b.hideTags -= tag
+            }
+        }
         LinkButton("Clear all", b::clearFilters)
     }
 }
