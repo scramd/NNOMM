@@ -58,10 +58,17 @@ internal fun profileItems(model: AppModel, s: AppState): List<MenuEntry> = build
     }
 }
 
-internal fun modItems(model: AppModel, s: AppState, id: String): List<MenuEntry> = buildList {
-    add(MenuEntry.Item("Open details", hint = "Enter") { model.ui.openMod(id) })
+/** [keys] is false where the Library's keys do not work, so the menu must not name them. */
+internal fun modItems(
+    model: AppModel,
+    s: AppState,
+    id: String,
+    keys: Boolean = true,
+): List<MenuEntry> = buildList {
+    fun key(name: String) = name.takeIf { keys }
+    add(MenuEntry.Item("Open details", hint = key("Enter")) { model.ui.openMod(id) })
     add(
-        MenuEntry.Item(if (isOn(s, id)) "Turn off" else "Turn on", hint = "Space") {
+        MenuEntry.Item(if (isOn(s, id)) "Turn off" else "Turn on", hint = key("Space")) {
             model.store.toggle(id)
         }
     )
@@ -81,7 +88,7 @@ internal fun modItems(model: AppModel, s: AppState, id: String): List<MenuEntry>
         MenuEntry.Item(
             if (s.settings.bool("showProfiles") && s.profiles.size > 1) "Uninstall (all profiles)"
             else "Uninstall",
-            hint = "Delete",
+            hint = key("Delete"),
             icon = NnIcons.trash,
             danger = true,
         ) {
@@ -111,3 +118,54 @@ internal fun moreItems(model: AppModel): List<MenuEntry> =
             model.store.state.value.game.folder?.let { model.openPath(File(it, "BepInEx/plugins")) }
         },
     )
+
+/** The row menu when the row is one of several selected mods: the actions of the selection bar. */
+internal fun selectionItems(
+    model: AppModel,
+    s: AppState,
+    picked: Set<String>,
+    remove: (Set<String>) -> Unit,
+    clear: () -> Unit,
+): List<MenuEntry> = buildList {
+    val ids = picked.toList()
+    add(MenuEntry.Heading("${ids.size} selected"))
+    add(MenuEntry.Item("Turn on") { model.store.setOn(ids, true) })
+    add(MenuEntry.Item("Turn off") { model.store.setOn(ids, false) })
+    val updates = ids.filter { hasUpdate(s, it) }
+    if (updates.isNotEmpty())
+        add(
+            MenuEntry.Item("Update (${updates.size})", icon = NnIcons.up) {
+                updates.forEach(model.store::update)
+            }
+        )
+    add(MenuEntry.Separator)
+    add(
+        MenuEntry.Item(
+            if (s.settings.bool("showProfiles") && s.profiles.size > 1) "Uninstall (all profiles)"
+            else "Uninstall",
+            hint = "Delete",
+            icon = NnIcons.trash,
+            danger = true,
+        ) {
+            remove(picked)
+        }
+    )
+    add(MenuEntry.Separator)
+    add(MenuEntry.Item("Clear the selection", icon = NnIcons.x, action = clear))
+}
+
+/** Right-click on a mod in Browse. An installed mod gets the Library's menu. */
+internal fun browseItems(model: AppModel, s: AppState, id: String): List<MenuEntry> {
+    if (id in s.installed) return modItems(model, s, id, keys = false)
+    val next = modAction(s, id)
+    return buildList {
+        add(MenuEntry.Item("Open details") { model.ui.openMod(id) })
+        next.action?.let { action ->
+            add(
+                MenuEntry.Item(next.label, icon = NnIcons.download, enabled = !next.disabled) {
+                    model.perform(action)
+                }
+            )
+        }
+    }
+}
