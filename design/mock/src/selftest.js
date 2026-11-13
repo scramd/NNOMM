@@ -5,6 +5,13 @@
   const step = (name, fn) => { try { const r = fn(); render(); out.push((r === false ? 'FAIL ' : 'ok   ') + name); } catch (e) { out.push('ERROR ' + name + ': ' + e.message); } };
   const pages = () => ['browse', 'library', 'servers', 'settings'].forEach(p => { S.page = p; render(); });
   step('all pages render', () => { pages(); });
+  step('tile letters split names without spaces, Nuclear left out only when chosen', () => {
+    const cases = [['Auto Pilot', false, 'AP'], ['Minimap', false, 'MI'], ['F-18   XL', false, 'FX'], ['Ægis', false, 'ÆG'], ['NuclearMinimap', false, 'NM'], ['NuclearMapTrails', false, 'NM'], ['ChaseCamPlus', false, 'CC'], ['NOAutopilot', false, 'NA'], ['KaceyTronic-RWR', false, 'KT'], ['NO-FuelBurnEnduranceTimer', false, 'NF'], ['mouse_dpi_plus', false, 'MD'], ['F-18', false, 'F1'], ['SITREP', false, 'SI'], ['uuvr', false, 'UU'], ['ÆgisKai', false, 'ÆK'], ['Nuclear Minimap', false, 'NM'], ['MapTrails 日本語', false, 'MA'],
+      ['NuclearMapTrails', true, 'MT'], ['Nuclear Map Trails', true, 'MT'], ['NuclearOptionVRFix', true, 'OV'], ['NuclearMinimap', true, 'NM'], ['Nuclear', true, 'NU'], ['BothBrakesMod', true, 'BB']];
+    const bad = cases.filter(([n, k, want]) => initials(n, k) !== want);
+    if (bad.length) throw new Error(bad.map(([n, k, want]) => `${n}/${k}: ${initials(n, k)} not ${want}`).join(', '));
+    VAL.tileSkipNuclear = true; S.page = 'library'; render(); VAL.tileSkipNuclear = false; render();
+  });
   step('install with dependency, then undo removes both', () => { ACT.install(el('carrier-ops')); drain(); return isOn('carrier-ops'); });
   step('install keeps its profile when the user switches', () => { ACT.install(el('wingman')); ACT.profile(el('hardcore')); drain(); const r = isOn('wingman', 'default') && !isOn('wingman', 'hardcore'); ACT.profile(el('default')); return r; });
   step('update is per profile', () => { ACT.update(el('harrier-kai')); drain(); return verOf('harrier-kai', 'default') === '1.4.0' && verOf('harrier-kai', 'friday') === '1.3.2'; });
