@@ -491,7 +491,7 @@ private fun LibraryCell(
                     problems(s, id).forEach { problem ->
                         Tooltip(
                             if ((problem.kind == nnomm.core.model.ProblemKind.INFO))
-                                "The author made this version for game ${mod.newestRelease?.gameVersion}. It may still work."
+                                "The author made this version for game ${s.artifact(id)?.gameVersion}. The current game version is ${effectiveGameVersion(s) ?: "unknown"}. It may still work."
                             else "${problem.text}. Click for ways to fix it."
                         ) {
                             if ((problem.kind == nnomm.core.model.ProblemKind.INFO))

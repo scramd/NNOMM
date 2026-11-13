@@ -1012,7 +1012,7 @@ function vLibrary() {
     <button class="ck ${allSel ? 'cur' : ''}" data-act="libselall" title="Select all">${I('check')}</button>${sh('on', 'On')}<span></span>${sh('name', 'Name')}<span title="Sort: mods with an update first">${sh('ver', 'Version')}</span><span class="c-src">${sh('source', 'Source')}</span><span class="c-size r">${sh('size', 'Size')}</span><span title="Release date of the version you have">${sh('upd', 'Released')}</span><span></span></div>`;
   ids.forEach(id => {
     const x = MOD[id], on = isOn(id), sel = l.sel.has(id), d = dlOf(id), v = verOf(id);
-    const badges = problems(id).map(pr => pr.kind ? `<button class="badge ${pr.kind}" data-act="problem" data-id="${id}" data-key="${pr.key}" title="${esc(pr.text)}. Click for ways to fix it.">${I('alert')}<span class="ell">${esc(pr.text)}</span></button>` : `<span class="badge" title="The author made this version for game ${x.game}. It may still work.">${esc(pr.text)}</span>`).join('');
+    const badges = problems(id).map(pr => pr.kind ? `<button class="badge ${pr.kind}" data-act="problem" data-id="${id}" data-key="${pr.key}" title="${esc(pr.text)}. Click for ways to fix it.">${I('alert')}<span class="ell">${esc(pr.text)}</span></button>` : `<span class="badge" title="The author made this version for game ${x.game}. The current game version is ${GAME_VERSION}. It may still work.">${esc(pr.text)}</span>`).join('');
     const ver = d ? `<span class="dlpill" style="height:auto"><span class="bar"><i data-dlbar="${id}" style="width:${d.pct}%"></i></span><span data-dlpct="${id}">${d.pct}%</span></span>`
       : hasUpdate(id) ? `<button class="verup" data-act="update" data-id="${id}" title="Update to ${x.v}${multi() ? ' in ' + esc(p.name) : ''}">${v}${I('chevr')}${x.v}</button>`
         : packManaged(id) ? `<span title="The modpack sets this version. It changes when the pack updates.">${esc(v)}</span>` : esc(v);
@@ -1144,7 +1144,7 @@ function pMod() {
         <div class="kv"><button class="linkbtn row" data-act="remove" data-id="${x.id}" style="gap:6px;color:var(--danger)">${I('trash')}Uninstall</button></div></div></div>`;
   }
   h += `<div class="pn-meta"><div><span>Downloads</span>${num(x.dl)}</div><div><span>Newest version</span>${x.v}, ${ago(x.upd)}</div><div><span>Size</span>${size(x.size)}</div>
-      <div><span>${inst ? (multi() ? 'Version in ' + esc(p.name) : 'Your version') : 'First release'}</span>${inst ? v : ago(x.added)}</div><div><span>Made for game</span><span style="display:inline;color:${x.game === GAME_VERSION ? 'inherit' : 'var(--warn)'}">${x.game}</span></div><div><span>Kind</span>${x.type === 'addon' ? 'Add-on' : 'Mod'}${x.side === 'server' ? ', server only' : ''}</div></div></div>
+      <div><span>${inst ? (multi() ? 'Version in ' + esc(p.name) : 'Your version') : 'First release'}</span>${inst ? v : ago(x.added)}</div><div><span>Made for game</span>${x.game === GAME_VERSION ? `<span style="display:inline">${x.game}</span>` : `<span style="display:inline;color:var(--warn)" title="The current game version is ${GAME_VERSION}.">${x.game}</span>`}</div><div><span>Kind</span>${x.type === 'addon' ? 'Add-on' : 'Mod'}${x.side === 'server' ? ', server only' : ''}</div></div></div>
     <div class="pn-tabs">${[['about', 'About'], ['new', "What's new"], ['needs', 'Needs' + (needN ? ' ' + needN : '')]].map(([k, t]) => `<button class="${tab === k ? 'cur' : ''}" data-act="tab" data-v="${k}">${t}</button>`).join('')}</div><div class="pn-body" data-scroll="pn-${x.id}-${tab}">`;
   if (tab === 'about') {
     h += `<p>${esc(x.desc)}</p>`;

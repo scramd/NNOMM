@@ -278,18 +278,24 @@ fun ModPanel(ref: PanelRef) {
                                     size = 12f,
                                     color = c.text3,
                                 )
-                                Label(
-                                    value,
-                                    Modifier.heightIn(min = 16.8.dp),
-                                    size = 12f,
-                                    color =
-                                        if (
-                                            label == "Made for game" &&
-                                                latest?.gameVersion != effectiveGameVersion(state)
-                                        )
-                                            c.warn
-                                        else c.text,
-                                )
+                                val current = effectiveGameVersion(state)
+                                val old =
+                                    label == "Made for game" && latest?.gameVersion != current
+                                val cell: @Composable () -> Unit = {
+                                    Label(
+                                        value,
+                                        Modifier.heightIn(min = 16.8.dp),
+                                        size = 12f,
+                                        color = if (old) c.warn else c.text,
+                                    )
+                                }
+                                if (old)
+                                    Tooltip(
+                                        "The current game version is ${current ?: "unknown"}."
+                                    ) {
+                                        cell()
+                                    }
+                                else cell()
                             }
                         }
                     }
