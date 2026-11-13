@@ -362,6 +362,14 @@ fun LibraryPage() {
                                 }
                             },
                             cell = { id, column -> LibraryCell(s, id, column, selection, ids) },
+                            rowMenu = { id ->
+                                val now = model.store.state.value
+                                if (id in selection.picked && selection.picked.size > 1)
+                                    selectionItems(model, now, selection.picked, ::remove) {
+                                        selection.clear()
+                                    }
+                                else modItems(model, now, id)
+                            },
                             footer = {
                                 if (ids.isEmpty())
                                     LibraryEmpty("No mod in this view", "") {

@@ -296,10 +296,8 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
     val ui = model.ui
     val c = LocalNnTheme.current.colors
     var menu by remember { mutableStateOf<String?>(null) }
-    var contextPoint by remember { mutableStateOf<DpOffset?>(null) }
     val dismiss = {
         menu = null
-        contextPoint = null
         ui.dismissMenu = null
     }
     fun open(kind: String) {
@@ -339,6 +337,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
         if (model.showServers())
             Nav("Servers", NnIcons.server, narrow, ui.page == Page.Servers) { ui.go(Page.Servers) }
         if (s.settings.general["showProfiles"]?.content != "false") {
+            RightClickMenu({ profileListItems(model) }) {
             Row(
                 Modifier.padding(top = if (narrow) 8.dp else 14.dp)
                     .height(28.dp)
@@ -349,13 +348,14 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                 if (!narrow) Label("Profiles", Modifier.weight(1f), size = 12f, color = c.text3)
                 IconButton(NnIcons.plus, "New profile", { model.openOverlay("newprofile") })
             }
+            }
+            RightClickMenu({ profileListItems(model) }, Modifier.weight(1f)) {
             Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 s.profiles.forEach { profile ->
-                    Box {
-                        val density = androidx.compose.ui.platform.LocalDensity.current
+                    RightClickMenu({ profileItems(model, profile.id) }) {
                         Tooltip(
                             "${profile.name}${if (profile.id == s.profileId) " (in use)" else ""}. Right-click for more."
                         ) {
@@ -370,17 +370,6 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                             if (hover) c.raise else Color.Transparent,
                                             RoundedCornerShape(6.dp),
                                         )
-                                        .onPointerEvent(PointerEventType.Press) { event ->
-                                            if (event.buttons.isSecondaryPressed) {
-                                                contextPoint =
-                                                    with(density) {
-                                                        event.changes.first().position.let {
-                                                            DpOffset(it.x.toDp(), it.y.toDp())
-                                                        }
-                                                    }
-                                                open(profile.id)
-                                            }
-                                        }
                                         .padding(horizontal = if (narrow) 0.dp else 9.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -444,14 +433,9 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                 }
                             }
                         }
-                        Menu(
-                            menu == profile.id,
-                            dismiss,
-                            profileItems(model, profile.id),
-                            pointerOffset = contextPoint,
-                        )
                     }
                 }
+            }
             }
         }
         if (s.settings.general["showProfiles"]?.content == "false") Spacer(Modifier.weight(1f))
@@ -531,9 +515,13 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                     }
                 }
             else
+                RightClickMenu({ playItems(model) }) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
                     Box(Modifier.weight(1f)) {
-                        Tooltip("Start Nuclear Option (Ctrl Enter)") {
+                        Tooltip(
+                            "Start Nuclear Option (Ctrl Enter)" +
+                                if (narrow) ". Right-click for more." else ""
+                        ) {
                             control(Modifier.fillMaxWidth(), onClick = { model.store.play() }) {
                                 m,
                                 hover,
@@ -582,37 +570,9 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                     }
                                 }
                             }
-                            Menu(
-                                menu == "play",
-                                dismiss,
-                                listOf(
-                                    MenuEntry.Item(
-                                        "Play without mods",
-                                        icon = NnIcons.play,
-                                        action = { model.store.play(true) },
-                                    ),
-                                    MenuEntry.Separator,
-                                    MenuEntry.Item(
-                                        "Open the game folder",
-                                        icon = NnIcons.folder,
-                                        action = {
-                                            s.game.folder?.let { model.openPath(java.io.File(it)) }
-                                        },
-                                    ),
-                                    MenuEntry.Item(
-                                        "Open the mod log",
-                                        icon = NnIcons.file,
-                                        action = {
-                                            s.game.folder?.let {
-                                                model.openPath(
-                                                    java.io.File(it, "BepInEx/LogOutput.log")
-                                                )
-                                            }
-                                        },
-                                    ),
-                                ),
-                            )
+                            Menu(menu == "play", dismiss, playItems(model))
                         }
+                }
                 }
         }
         Nav("Settings", NnIcons.gear, narrow, ui.page == Page.Settings) { ui.go(Page.Settings) }
@@ -730,7 +690,41 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
         }
 }
 
-private fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildList {
+/** The Play button's menu, also on a right-click on Play (the only way in the narrow rail). */
+internal fun playItems(model: AppModel): List<MenuEntry> {
+    fun open(path: String?) {
+        model.store.state.value.game.folder?.let {
+            model.openPath(if (path == null) java.io.File(it) else java.io.File(it, path))
+        }
+    }
+    return listOf(
+        MenuEntry.Item(
+            "Play without mods",
+            icon = NnIcons.play,
+            action = { model.store.play(true) },
+        ),
+        MenuEntry.Separator,
+        MenuEntry.Item("Open the game folder", icon = NnIcons.folder, action = { open(null) }),
+        MenuEntry.Item(
+            "Open the mod log",
+            icon = NnIcons.file,
+            action = { open("BepInEx/LogOutput.log") },
+        ),
+    )
+}
+
+/** Right-click on the profile list, beside the profiles. */
+internal fun profileListItems(model: AppModel): List<MenuEntry> =
+    listOf(
+        MenuEntry.Item(
+            "New profile",
+            icon = NnIcons.plus,
+            action = { model.openOverlay("newprofile") },
+        ),
+        MenuEntry.Item("Import a modpack", icon = NnIcons.box, action = { model.importPack() }),
+    )
+
+internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildList {
     val s = model.store.state.value
     if (id != s.profileId)
         add(
@@ -740,6 +734,18 @@ private fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildLi
                 action = { model.useProfile(id) },
             )
         )
+    if (!s.gameRunning && !s.gameStarting)
+        add(
+            MenuEntry.Item(
+                if (id == s.profileId) "Play" else "Play with this profile",
+                icon = NnIcons.play,
+                action = {
+                    if (id != s.profileId) model.useProfile(id)
+                    if (model.store.state.value.profileId == id) model.store.play()
+                },
+            )
+        )
+    if (isNotEmpty()) add(MenuEntry.Separator)
     fun layer(kind: String) {
         model.ui.overlayProfileId = id
         model.openOverlay(kind)

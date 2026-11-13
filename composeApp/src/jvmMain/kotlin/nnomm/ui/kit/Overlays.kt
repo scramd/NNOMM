@@ -17,7 +17,7 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
@@ -150,6 +150,41 @@ fun Menu(
         ) {
             MenuSurface(entries, onDismiss, modifier, initialIndex = initialIndex)
         }
+    }
+}
+
+/**
+ * A right-click inside [content] opens [entries] at the pointer. An area inside another area wins;
+ * an empty list opens nothing.
+ */
+@Composable
+fun RightClickMenu(
+    entries: () -> List<MenuEntry>,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
+    var menu by remember { mutableStateOf<Pair<DpOffset, List<MenuEntry>>?>(null) }
+    val density = LocalDensity.current
+    Box(
+        modifier.onPointerEvent(PointerEventType.Press) { event ->
+            val change = event.changes.firstOrNull()
+            if (event.buttons.isSecondaryPressed && change != null && !change.isConsumed) {
+                change.consume()
+                val items = entries()
+                if (items.isNotEmpty()) {
+                    onOpen()
+                    menu =
+                        with(density) {
+                            DpOffset(change.position.x.toDp(), change.position.y.toDp())
+                        } to items
+                }
+            }
+        },
+        propagateMinConstraints = true,
+    ) {
+        content()
+        menu?.let { (at, items) -> Menu(true, { menu = null }, items, pointerOffset = at) }
     }
 }
 

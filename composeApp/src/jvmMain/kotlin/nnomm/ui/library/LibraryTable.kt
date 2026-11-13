@@ -28,6 +28,7 @@ internal fun LibraryTable(
     isOff: (String) -> Boolean,
     header: @Composable (String) -> Unit,
     cell: @Composable (String, String) -> Unit,
+    rowMenu: (String) -> List<MenuEntry>,
     footer: @Composable () -> Unit,
 ) {
     val model = LocalApp.current
@@ -60,21 +61,31 @@ internal fun LibraryTable(
         val dispose = model.store.metadataVisible(key)
         onDispose { dispose() }
     }
-                TableRow(
-                    Modifier.fillMaxWidth(),
-                    key in selection.picked,
-                    key == selection.focused,
-                    isOff(key),
-                    onSelect = { shift, ctrl ->
+                RightClickMenu(
+                    { rowMenu(key) },
+                    onOpen = {
                         focus.requestFocus()
-                        if (shift || ctrl) selection.select(keys, key, shift, ctrl = true)
-                        else {
-                            selection.activate(key)
-                            onOpen(key)
-                        }
+                        // The menu and the keys it names must mean this row, as in a file manager.
+                        if (key !in selection.picked) selection.clear()
+                        selection.focus(key)
                     },
                 ) {
-                    TableCells(LibraryColumns, narrow) { cell(key, it) }
+                    TableRow(
+                        Modifier.fillMaxWidth(),
+                        key in selection.picked,
+                        key == selection.focused,
+                        isOff(key),
+                        onSelect = { shift, ctrl ->
+                            focus.requestFocus()
+                            if (shift || ctrl) selection.select(keys, key, shift, ctrl = true)
+                            else {
+                                selection.activate(key)
+                                onOpen(key)
+                            }
+                        },
+                    ) {
+                        TableCells(LibraryColumns, narrow) { cell(key, it) }
+                    }
                 }
             }
             item(key = "library-footline") { footer() }

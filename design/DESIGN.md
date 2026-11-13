@@ -63,6 +63,12 @@ Read the mock for the details. The points below are the rules that are easy to m
 
 **Mod panel.** Tabs About, What's new, Needs. Per-profile switches and versions. A version selector to go back.
 
+**Right-click.** A right-click opens a menu at the pointer in these places only. The mock shows only the profile menu.
+- A Library row: the menu of its three dots. When the row is one of several selected mods: the actions of the selection bar, for all of them. A right-click on a row outside the selection clears the selection.
+- A mod in Browse (card or list row): the Library's menu when the mod is installed, otherwise Open details and Install.
+- A profile in the sidebar: Use this profile, Play with this profile ("Play" on the profile in use; not while the game runs or starts), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes (a pack with a newer version), Delete. On the Profiles heading and beside the profiles: New profile and Import a modpack.
+- The Play button: its menu (Play without mods, the game folder, the mod log). In the narrow rail this is the only way to that menu.
+
 **Settings.** Categories on the left, a search, a danger zone. "All profiles" and a selector for one profile: in the view of one profile, only the settings that can differ are shown, and a setting is locked until "Change for this profile". The complete list is `SETTINGS` in `data.js`.
 
 **First start, empty, loading, offline.** Each has its own state with a next action. Offline shows the saved list with a notice.

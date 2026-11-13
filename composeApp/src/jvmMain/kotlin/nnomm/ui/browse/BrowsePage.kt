@@ -22,6 +22,7 @@ import nnomm.core.model.*
 import nnomm.core.rules.*
 import nnomm.ui.*
 import nnomm.ui.kit.*
+import nnomm.ui.library.browseItems
 import nnomm.ui.theme.LocalNnTheme
 
 /** Browse owns only view state; registry work and mod operations stay in the store. */
@@ -500,8 +501,9 @@ private fun BrowseCard(
     val c = LocalNnTheme.current.colors
     val current = model.ui.panel?.modId == x.id
     val shape = RoundedCornerShape(9.dp)
+    RightClickMenu({ browseItems(model, model.store.state.value, x.id) }, modifier) {
     control(
-        modifier.fillMaxWidth().heightIn(min = 0.dp),
+        Modifier.fillMaxWidth().heightIn(min = 0.dp),
         onClick = { model.ui.openMod(x.id) },
     ) { m, hover, _ ->
         Column(
@@ -576,6 +578,7 @@ private fun BrowseCard(
             }
         }
     }
+    }
 }
 
 private fun age(s: AppState, x: CatalogMod) =
@@ -592,6 +595,7 @@ private fun BrowseRowView(s: AppState, row: BrowseRow) {
     val c = LocalNnTheme.current.colors
     BoxWithConstraints {
         val compact = maxWidth <= 800.dp
+        RightClickMenu({ browseItems(model, model.store.state.value, x.id) }) {
         control(Modifier.fillMaxWidth(), onClick = { model.ui.openMod(x.id) }) { m, hover, _ ->
             Row(
                 m.heightIn(min = 44.dp)
@@ -645,6 +649,7 @@ private fun BrowseRowView(s: AppState, row: BrowseRow) {
                     StateButton(x.id)
                 }
             }
+        }
         }
     }
 }
