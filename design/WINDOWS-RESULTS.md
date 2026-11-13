@@ -136,6 +136,10 @@ One independent reviewer (GPT Sol) read the whole batch once. It reported four f
 
 Two are limits and are listed in [STATUS](STATUS.md): a hostile 7z file can use much memory before the size limit applies, and a game version with a letter at its end would show as unknown. The reviewer found the other parts sound. After that the area was closed.
 
+### Found by the owner after the run
+
+12. A second click on a dropdown or a "…" button did not close its menu. Each menu keeps a transparent 24 px margin for its shadow, and that margin lay over the button: the click landed in the menu's own margin, so it was neither "outside" the menu nor on the button. A press in the margin now closes the menu. Checked in the running app for a settings dropdown, the Library profile button, the Library "…" button, the Play arrow and the "Play with" profile switch: open, close, open again. There is no automated test for it; the UI tests do not send real clicks.
+
 ## The tests on Windows
 
 The full normal suite was run once at the end (`gradlew.bat :core:test :composeApp:jvmJar :composeApp:jvmTest --rerun-tasks`): 4.4 minutes. The 24 UI tests pass. Of 405 core tests, 385 pass and 20 fail. The separate crash tests (`:core:crashTests`) were not run.

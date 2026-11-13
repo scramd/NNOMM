@@ -27,6 +27,33 @@ val LocalDialogAutofocus = staticCompositionLocalOf<FocusRequester?> { null }
 
 val LocalShortcutHandler = staticCompositionLocalOf<(KeyEvent) -> Boolean> { { false } }
 
+/**
+ * A popup keeps a transparent margin of [margin] around its surface for the shadow. The margin is
+ * part of the popup, so a press there is not "outside" and does not close it, and it often lies
+ * over the popup's own trigger: a second click on a dropdown then did nothing. A press in the margin
+ * closes the popup like a press outside it.
+ */
+private fun Modifier.closeOnMarginPress(margin: Dp, onDismiss: () -> Unit) =
+    pointerInput(margin) {
+        val edge = margin.toPx()
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type != androidx.compose.ui.input.pointer.PointerEventType.Press) continue
+                val at = event.changes.firstOrNull()?.position ?: continue
+                val inSurface =
+                    at.x >= edge &&
+                        at.y >= edge &&
+                        at.x <= size.width - edge &&
+                        at.y <= size.height - edge
+                if (!inSurface) {
+                    event.changes.forEach { it.consume() }
+                    onDismiss()
+                }
+            }
+        }
+    }
+
 @Composable
 fun Tooltip(text: String, content: @Composable () -> Unit) {
     val c = LocalNnTheme.current.colors
@@ -117,7 +144,7 @@ fun Menu(
     val shortcut = LocalShortcutHandler.current
     Popup(position, onDismiss, properties = PopupProperties(focusable = true)) {
         Box(
-            Modifier.padding(24.dp).onKeyEvent {
+            Modifier.closeOnMarginPress(24.dp, onDismiss).padding(24.dp).onKeyEvent {
                 if (it.key == Key.Escape) false else shortcut(it)
             }
         ) {
@@ -473,7 +500,8 @@ fun AnchoredPopover(
         properties = PopupProperties(focusable = true),
     ) {
         Column(
-            Modifier.padding(24.dp)
+            Modifier.closeOnMarginPress(24.dp, onDismiss)
+                .padding(24.dp)
                 .width(300.dp)
                 .onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
