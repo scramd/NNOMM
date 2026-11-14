@@ -97,54 +97,58 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 it.kind in listOf(PackKind.ADD, PackKind.UP, PackKind.OTHER) ||
                     it.kind == PackKind.CONFLICT && keep[it.id] == "pack"
             }
+        val canImport = !loading && !importing && error == null && registryReady
+        fun import() {
+            if (loading || importing || error != null || !registryReady) return
+            importing = true
+            scope.launch {
+                try {
+                    if (selectedLocalIds.isNotEmpty() && preview != null) {
+                        val records =
+                            withPackIo(state) {
+                                it.selectedLocals(preview!!, selectedLocalIds)
+                            }
+                        model.store.addPreparedLocalMods(records)
+                    }
+                    val target = java.util.UUID.randomUUID().toString()
+                    val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
+                    if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
+                    model.store.importPack(
+                        if (mode == ImportMode.NEW) pack.copy(name = profileName.trim().ifEmpty { pack.name }) else pack,
+                        mode,
+                        keep,
+                        target,
+                        settings,
+                        // Pack previews name bundled mods by content hash, the same id selectedLocals gives them.
+                        includedLocals = selectedLocalIds.toList(),
+                    )
+                    model.ui.go(Page.Library)
+                    model.ui.library.filter = "all"
+                    model.closeOverlay()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    error = "Could not import the modpack: ${e.message}"
+                } finally {
+                    importing = false
+                }
+            }
+        }
         Dialog(
             true,
             if (file != null && (loading || error != null)) "Import ${file.name}"
             else "Import ${pack.name} ${pack.version}",
             model::closeOverlay,
             wide = true,
+            onEnter = ::import,
             subtitle = if (!loading && error == null) "Modpack" + pack.by.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty() + ", from ${file?.name ?: pack.fileName.orEmpty()}" else null,
             footer = {
                 Cancel(model)
                 Button(
                     if (downloads == 0) "Import" else "Import, $downloads ${if (downloads == 1) "download" else "downloads"}",
-                    {
-                        scope.launch {
-                            importing = true
-                            try {
-                                if (selectedLocalIds.isNotEmpty() && preview != null) {
-                                    val records =
-                                        withPackIo(state) {
-                                            it.selectedLocals(preview!!, selectedLocalIds)
-                                        }
-                                    model.store.addPreparedLocalMods(records)
-                                }
-                                val target = java.util.UUID.randomUUID().toString()
-                                val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
-                                if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
-                                model.store.importPack(
-                                    if (mode == ImportMode.NEW) pack.copy(name = profileName.trim().ifEmpty { pack.name }) else pack,
-                                    mode,
-                                    keep,
-                                    target,
-                                    settings,
-                                    // Pack previews name bundled mods by content hash, the same id selectedLocals gives them.
-                                    includedLocals = selectedLocalIds.toList(),
-                                )
-                                model.ui.go(Page.Library)
-                                model.ui.library.filter = "all"
-                                model.closeOverlay()
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                error = "Could not import the modpack: ${e.message}"
-                            } finally {
-                                importing = false
-                            }
-                        }
-                    },
+                    ::import,
                     kind = ButtonKind.Strong,
-                    enabled = !loading && !importing && error == null && registryReady,
+                    enabled = canImport,
                 )
             },
         ) {
@@ -288,11 +292,16 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
             return
         }
         val rows = packUpdateRows(state, pack, p.id)
+        fun update() {
+            model.store.updatePack(pack, p.id)
+            model.closeOverlay()
+        }
         Dialog(
             true,
             "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
             model::closeOverlay,
             wide = true,
+            onEnter = ::update,
             subtitle = "Modpack" + (p.pack?.by ?: pack.by).takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty(),
             leftFooter = { Button("Stop following this pack", {
                 model.store.stopFollowingPack(p.id)
@@ -300,14 +309,7 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
             }, kind = ButtonKind.Ghost) },
             footer = {
                 Cancel(model, "Not now")
-                Button(
-                    "Update the profile",
-                    {
-                        model.store.updatePack(pack, p.id)
-                        model.closeOverlay()
-                    },
-                    kind = ButtonKind.Strong,
-                )
+                Button("Update the profile", ::update, kind = ButtonKind.Strong)
             },
         ) {
             Summary(

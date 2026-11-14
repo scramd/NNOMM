@@ -623,7 +623,7 @@ const SETTINGS = [
   { cat: 'danger', key: 'dzAll', label: 'Remove all mods and the mod loader', help: 'The game goes back to its plain state. NNOMM keeps your profiles, so you can install everything again.', type: 'actions', actions: ['Remove everything'], danger: true },
 ];
 const CATS = [['game', 'Game'], ['mods', 'Mods and updates'], ['profiles', 'Profiles'], ['browse', 'Registry'], ['servers', 'Servers'], ['storage', 'Storage'], ['look', 'Appearance'], ['keys', 'Keyboard'], ['app', 'About and updates'], ['danger', 'Danger zone']];
-const KEYS = [['Search or run a command', 'Ctrl K'], ['Start the game', 'Ctrl Enter'], ['Find on this page', '/'], ['Move in a list', 'Up, Down'], ['Turn the mod on or off', 'Space'], ['Open details', 'Enter'], ['Select a range', 'Shift click'], ['Select all', 'Ctrl A'], ['Remove the selected mods', 'Delete'], ['Undo', 'Ctrl Z'], ['Close a panel or window', 'Esc'], ['Browse, Library, Servers', 'Ctrl 1, 2, 3'], ['Settings', 'Ctrl ,']];
+const KEYS = [['Search or run a command', 'Ctrl K'], ['Start the game', 'Ctrl Enter'], ['Find on this page', '/'], ['Move in a list', 'Up, Down'], ['Turn the mod on or off', 'Space'], ['Open details', 'Enter'], ['Select a range', 'Shift click'], ['Select all', 'Ctrl A'], ['Remove the selected mods', 'Delete'], ['Undo', 'Ctrl Z'], ['Close a panel or window', 'Esc'], ['Confirm a window', 'Enter'], ['Browse, Library, Servers', 'Ctrl 1, 2, 3'], ['Settings', 'Ctrl ,']];
 
 // State, helpers and mock logic.
 const $ = (s, r = document) => r.querySelector(s);
@@ -1739,7 +1739,11 @@ document.addEventListener('keydown', e => {
   }
   else if (ctrl && k.toLowerCase() === 'k') S.overlay && S.overlay.kind === 'palette' ? S.overlay = null : ACT.palette();
   else if (k === 'Escape') { if (S.menu || S.dlpop) { S.menu = null; S.dlpop = false; } else if (S.overlay) S.overlay = null; else if (typing && e.target.value) { setPath(e.target.dataset.in, ''); } else if (S.panel) S.panel = null; else if (S.lib.sel.size) S.lib.sel.clear(); else hit = false; }
-  else if (ctrl && k === 'Enter') ACT.play();
+  else if (k === 'Enter' && !ctrl && !e.shiftKey && !e.altKey && S.overlay && ['import', 'newprofile', 'share', 'rename', 'packupdate'].includes(S.overlay.kind) && !(e.target.closest && e.target.closest('button'))) {
+    // Enter confirms a dialog, also from a text field. Never in the danger zone.
+    e.preventDefault(); const b = $('.dlg-f .btn.strong'); if (b && !b.disabled) b.click(); return;
+  }
+  else if (ctrl && k === 'Enter') { if (!S.overlay) ACT.play(); }
   else if (ctrl && ['1', '2', '3'].includes(k)) { const p = ['browse', 'library', 'servers'][+k - 1]; if (p !== 'servers' || VAL.showServers) { S.page = p; S.panel = null; } }
   else if (ctrl && k === ',') { S.page = 'settings'; S.panel = null; }
   else if (ctrl && k.toLowerCase() === 'z' && !typing && S.toasts.some(t => t.action === 'Undo')) { const t = S.toasts.filter(q => q.action === 'Undo').pop(); S.toasts.splice(S.toasts.indexOf(t), 1); t.fn(); }

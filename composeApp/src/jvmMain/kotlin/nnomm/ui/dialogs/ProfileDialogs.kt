@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.*
 import nnomm.core.model.*
@@ -41,24 +42,26 @@ class NewProfileDialog(private val model: AppModel) : Overlay {
         var own by remember { mutableStateOf(model.store.state.value.settings.bool("ownSettings")) }
         val scope = rememberCoroutineScope()
         val focus = remember { FocusRequester() }
+        fun confirm() {
+            if (from == "pack") scope.launch { model.choosePack() }
+            else {
+                model.store.newProfile(name, from == "copy", own)
+                model.ui.library.filter = "all"
+                model.ui.go(Page.Library)
+                model.closeOverlay()
+            }
+        }
         Dialog(
             true,
             "New profile",
             model::closeOverlay,
             initialFocus = focus,
+            onEnter = ::confirm,
             footer = {
                 Cancel(model)
                 Button(
                     if (from == "pack") "Choose the modpack file" else "Create profile",
-                    {
-                        if (from == "pack") scope.launch { model.choosePack() }
-                        else {
-                            model.store.newProfile(name, from == "copy", own)
-                            model.ui.library.filter = "all"
-                            model.ui.go(Page.Library)
-                            model.closeOverlay()
-                        }
-                    },
+                    ::confirm,
                     kind = ButtonKind.Strong,
                 )
             },
@@ -103,21 +106,19 @@ class RenameDialog(private val model: AppModel) : Overlay {
     override fun Content() {
         var name by remember { mutableStateOf(profile.name) }
         val focus = remember { FocusRequester() }
+        fun confirm() {
+            model.store.renameProfile(profile.id, name)
+            model.closeOverlay()
+        }
         Dialog(
             true,
             "Rename profile",
             model::closeOverlay,
             initialFocus = focus,
+            onEnter = ::confirm,
             footer = {
                 Cancel(model)
-                Button(
-                    "Rename",
-                    {
-                        model.store.renameProfile(profile.id, name)
-                        model.closeOverlay()
-                    },
-                    kind = ButtonKind.Strong,
-                )
+                Button("Rename", ::confirm, kind = ButtonKind.Strong)
             },
         ) {
             DialogTextField(
@@ -150,10 +151,56 @@ class ShareDialog(private val model: AppModel) : Overlay {
         val locals = on.filter { state.installed[it]?.source == ModSource.LOCAL }
         val problems = on.count { hasProblem(state.copy(profileId = profile.id,
                                                 game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game), it) }
+        fun save() {
+            if (saving) return
+            if (model.isDemo) {
+                model.store.toast("This does nothing in demo mode.")
+                return
+            }
+            saving = true
+            scope.launch {
+                try {
+                    val file =
+                        model.platform.chooseSaveFile(
+                            "Save the modpack file",
+                            "${name.replace(Regex("\\s+"), "-")}-$version.nommpack",
+                            "nommpack",
+                        )
+                    if (file != null) {
+                        val pack =
+                            model.store.shareProfile(
+                                name,
+                                version,
+                                includeLocal = local,
+                                includeSettings = settings,
+                                followAddress = address.takeIf { it.isNotBlank() },
+                                profileId = profile.id,
+                            )
+                        val recovery = withPackRecovery(file) {
+                            withPackIo(state) {
+                                it.write(
+                                    file.toPath(),
+                                    pack,
+                                    state.copy(profileId = profile.id,
+                                        game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game),
+                                )
+                            }
+                        }
+                        model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.openPath(file.parentFile) })
+                        model.closeOverlay()
+                    }
+                } catch (e: Exception) {
+                    error = "Could not save the modpack: ${e.message}"
+                } finally {
+                    saving = false
+                }
+            }
+        }
         Dialog(
             true,
             "Share ${profile.name} as a modpack",
             model::closeOverlay,
+            onEnter = ::save,
             leftFooter = {
                 Button(
                     "Copy the mod list as text",
@@ -170,55 +217,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
             },
             footer = {
                 Cancel(model)
-                Button(
-                    "Save the modpack file",
-                    {
-                        scope.launch {
-                            if (model.isDemo) {
-                                model.store.toast("This does nothing in demo mode.")
-                                return@launch
-                            }
-                            saving = true
-                            try {
-                                val file =
-                                    model.platform.chooseSaveFile(
-                                        "Save the modpack file",
-                                        "${name.replace(Regex("\\s+"), "-")}-$version.nommpack",
-                                        "nommpack",
-                                    )
-                                if (file != null) {
-                                    val pack =
-                                        model.store.shareProfile(
-                                            name,
-                                            version,
-                                            includeLocal = local,
-                                            includeSettings = settings,
-                                            followAddress = address.takeIf { it.isNotBlank() },
-                                            profileId = profile.id,
-                                        )
-                                    val recovery = withPackRecovery(file) {
-                                        withPackIo(state) {
-                                            it.write(
-                                                file.toPath(),
-                                                pack,
-                                                state.copy(profileId = profile.id,
-                                                    game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game),
-                                            )
-                                        }
-                                    }
-                                    model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.openPath(file.parentFile) })
-                                    model.closeOverlay()
-                                }
-                            } catch (e: Exception) {
-                                error = "Could not save the modpack: ${e.message}"
-                            } finally {
-                                saving = false
-                            }
-                        }
-                    },
-                    kind = ButtonKind.Strong,
-                    enabled = !saving,
-                )
+                Button("Save the modpack file", ::save, kind = ButtonKind.Strong, enabled = !saving)
             },
         ) {
             Label(
@@ -337,10 +336,27 @@ internal fun DialogTextField(
     TextField(
         value,
         onValueChange,
-        modifier.onFocusChanged {
-            if (it.hasFocus) model.ui.focusedField = field
-            else if (model.ui.focusedField === field) model.ui.focusedField = null
-        },
+        modifier
+            .onFocusChanged {
+                if (it.hasFocus) model.ui.focusedField = field
+                else if (model.ui.focusedField === field) model.ui.focusedField = null
+            }
+            .onPreviewKeyEvent {
+                // Enter in a dialog's text field confirms the dialog, as Enter elsewhere in it does.
+                val enter = model.ui.dialogEnter
+                if (
+                    enter != null &&
+                        it.type == KeyEventType.KeyDown &&
+                        (it.key == Key.Enter || it.key == Key.NumPadEnter) &&
+                        !it.isCtrlPressed &&
+                        !it.isMetaPressed &&
+                        !it.isAltPressed &&
+                        !it.isShiftPressed
+                ) {
+                    enter()
+                    true
+                } else false
+            },
         placeholder = placeholder,
         bg = true,
         focusRequester = focusRequester,

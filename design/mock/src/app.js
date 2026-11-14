@@ -495,7 +495,11 @@ document.addEventListener('keydown', e => {
   }
   else if (ctrl && k.toLowerCase() === 'k') S.overlay && S.overlay.kind === 'palette' ? S.overlay = null : ACT.palette();
   else if (k === 'Escape') { if (S.menu || S.dlpop) { S.menu = null; S.dlpop = false; } else if (S.overlay) S.overlay = null; else if (typing && e.target.value) { setPath(e.target.dataset.in, ''); } else if (S.panel) S.panel = null; else if (S.lib.sel.size) S.lib.sel.clear(); else hit = false; }
-  else if (ctrl && k === 'Enter') ACT.play();
+  else if (k === 'Enter' && !ctrl && !e.shiftKey && !e.altKey && S.overlay && ['import', 'newprofile', 'share', 'rename', 'packupdate'].includes(S.overlay.kind) && !(e.target.closest && e.target.closest('button'))) {
+    // Enter confirms a dialog, also from a text field. Never in the danger zone.
+    e.preventDefault(); const b = $('.dlg-f .btn.strong'); if (b && !b.disabled) b.click(); return;
+  }
+  else if (ctrl && k === 'Enter') { if (!S.overlay) ACT.play(); }
   else if (ctrl && ['1', '2', '3'].includes(k)) { const p = ['browse', 'library', 'servers'][+k - 1]; if (p !== 'servers' || VAL.showServers) { S.page = p; S.panel = null; } }
   else if (ctrl && k === ',') { S.page = 'settings'; S.panel = null; }
   else if (ctrl && k.toLowerCase() === 'z' && !typing && S.toasts.some(t => t.action === 'Undo')) { const t = S.toasts.filter(q => q.action === 'Undo').pop(); S.toasts.splice(S.toasts.indexOf(t), 1); t.fn(); }

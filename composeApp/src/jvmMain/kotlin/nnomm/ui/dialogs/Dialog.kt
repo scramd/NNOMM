@@ -19,10 +19,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.*
+import nnomm.ui.LocalOptionalApp
 import nnomm.ui.kit.*
 import nnomm.ui.theme.*
 
-/** Dialogs use the mock's wrapping footer, including the four guided-test actions. */
+/**
+ * Dialogs use the mock's wrapping footer, including the four guided-test actions.
+ *
+ * [onEnter] is the primary action that Enter runs, also from a text field, when the focused control
+ * does not use Enter itself. Pass null while the action is not possible, and always for an action
+ * that cannot be undone: Enter must never start a destructive action.
+ */
 @Composable
 internal fun Dialog(
     open: Boolean,
@@ -31,6 +38,7 @@ internal fun Dialog(
     wide: Boolean = false,
     subtitle: String? = null,
     initialFocus: FocusRequester? = null,
+    onEnter: (() -> Unit)? = null,
     leftFooter: @Composable RowScope.() -> Unit = {},
     footer: @Composable RowScope.() -> Unit,
     content: @Composable ColumnScope.() -> Unit,
@@ -39,6 +47,13 @@ internal fun Dialog(
     val c = LocalNnTheme.current.colors
     val focus = remember { FocusRequester() }
     val manager = LocalFocusManager.current
+    val model = LocalOptionalApp.current
+    val enter by rememberUpdatedState(onEnter)
+    val runEnter: () -> Unit = remember { { enter?.invoke() } }
+    SideEffect { model?.ui?.dialogEnter = if (onEnter != null) runEnter else null }
+    DisposableEffect(model) {
+        onDispose { if (model?.ui?.dialogEnter === runEnter) model.ui.dialogEnter = null }
+    }
     BoxWithConstraints(
         Modifier.fillMaxSize()
             .background(c.scrim)

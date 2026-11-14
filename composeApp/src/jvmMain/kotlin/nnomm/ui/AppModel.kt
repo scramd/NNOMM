@@ -188,7 +188,15 @@ class AppModel(
                     ui.library.selection.isNotEmpty() -> ui.library.selection = emptySet()
                     else -> return false
                 }
-            ctrl && event.key == Key.Enter -> store.play()
+            // Enter runs the dialog's primary action when no focused control took it.
+            ui.overlay != null &&
+                (event.key == Key.Enter || event.key == Key.NumPadEnter) &&
+                !ctrl &&
+                !event.isAltPressed &&
+                !event.isShiftPressed &&
+                ui.dismissMenu == null -> ui.dialogEnter?.invoke() ?: return false
+            // Ctrl Enter starts the game, but not from inside a dialog.
+            ctrl && event.key == Key.Enter -> if (ui.overlay == null && !ui.dragging) store.play()
             ctrl && event.key == Key.One -> ui.go(Page.Browse)
             ctrl && event.key == Key.Two -> ui.go(Page.Library)
             ctrl && event.key == Key.Three -> if (showServers()) ui.go(Page.Servers)

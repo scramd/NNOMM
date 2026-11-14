@@ -282,7 +282,7 @@ Click **Settings** at the bottom of the sidebar (or press Ctrl ,). Use the searc
 | Key | Action |
 | --- | --- |
 | Ctrl K | Search or run a command |
-| Ctrl Enter | Start the game |
+| Ctrl Enter | Start the game (not while a window is open) |
 | / | Find on this page |
 | Up, Down | Move in a list |
 | Space | Turn the mod on or off |
@@ -292,6 +292,7 @@ Click **Settings** at the bottom of the sidebar (or press Ctrl ,). Use the searc
 | Delete | Remove the selected mods |
 | Ctrl Z | Undo |
 | Esc | Close a panel or window |
+| Enter | Confirm a window, for example Create profile or Import. Not in the danger zone. |
 | Ctrl 1, 2, 3 | Browse, Library, Servers |
 | Ctrl , | Settings |
 

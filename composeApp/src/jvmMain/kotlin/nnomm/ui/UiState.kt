@@ -55,6 +55,8 @@ class UiState {
     var mock by mutableStateOf("normal")
     var dragging by mutableStateOf(false)
     var dismissMenu: (() -> Unit)? = null
+    /** The open dialog's primary action, run by Enter. Null when Enter must not act. */
+    var dialogEnter: (() -> Unit)? = null
     var focusedField: FocusedField? by mutableStateOf(null)
     var pageKeysEnabled by mutableStateOf(true)
     var downloadsOpen by mutableStateOf(false)
