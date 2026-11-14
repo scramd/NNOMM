@@ -471,7 +471,10 @@ fun ModPanel(ref: PanelRef) {
                         CompositionLocalProvider(LocalReadmeViewport provides viewport) {
                             ReadmeTab(
                                 mod,
-                                if (demo) ReadmeLoad(LoadStatus.READY, Demo.readme(mod.id))
+                                if (demo)
+                                    remember(mod.id) {
+                                        ReadmeLoad(LoadStatus.READY, Demo.readme(mod.id))
+                                    }
                                 else readmes[mod.id],
                             ) {
                                 model.store.loadReadme(mod.id)

@@ -290,15 +290,23 @@ class RealReleaseNotes(private val client: HttpClient, home: Path) : ReleaseNote
  * branch `HEAD` is the repository's default branch. Each repository is asked once per run; the text
  * is kept for offline use. A repository without a readme is kept as such too.
  */
-class RealReadmes(private val client: HttpClient, home: Path) : ReadmeSource {
+class RealReadmes(
+    private val client: HttpClient,
+    home: Path,
+    private val host: String = "https://raw.githubusercontent.com",
+) : ReadmeSource {
     private val file =
         JsonFile(
             home.resolve("readmes.json"),
             MapSerializer(String.serializer(), SavedReadme.serializer()),
         )
     private val mutex = Mutex()
-    private val loaded = mutableSetOf<String>()
+    /** Readmes asked for in this run; null is a repository without a readme. */
+    private val fetched = mutableMapOf<String, String?>()
     private val pictures = Semaphore(4)
+
+    /** The saved copies are only a fallback, so a damaged file counts as empty. */
+    private fun saved() = runCatching { file.read() }.getOrNull().orEmpty()
 
     override suspend fun readme(mod: CatalogMod): Readme? =
         withContext(Dispatchers.IO) {
@@ -307,28 +315,31 @@ class RealReadmes(private val client: HttpClient, home: Path) : ReadmeSource {
             component(owner)
             component(repo)
             val key = "$owner/$repo"
+            // The lock covers the files only, so one slow repository never holds up another.
+            val (known, earlier) = mutex.withLock { (key in fetched) to fetched[key] }
             val text =
-                mutex.withLock {
-                    val cache = file.read().orEmpty()
-                    if (key in loaded) return@withLock cache[key]?.text
+                if (known) earlier
+                else
                     try {
-                        fetch(key).also {
-                            file.write(cache + (key to SavedReadme(it)))
-                            loaded += key
+                        fetch(key).also { text ->
+                            mutex.withLock {
+                                fetched[key] = text
+                                runCatching { file.write(saved() + (key to SavedReadme(text))) }
+                            }
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        if (key in cache) cache.getValue(key).text else throw e
+                        val copy = mutex.withLock { saved() }
+                        if (key in copy) copy.getValue(key).text else throw e
                     }
-                }
             text?.let { parseReadme(it, owner, repo, mod.name) }
         }
 
     private suspend fun fetch(key: String): String? {
         for (name in README_NAMES) {
             try {
-                return client.get("https://raw.githubusercontent.com/$key/HEAD/$name").boundedText()
+                return client.get("$host/$key/HEAD/$name").boundedText()
             } catch (e: ClientRequestException) {
                 if (e.response.status.value != 404) throw e
             }

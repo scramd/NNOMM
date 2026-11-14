@@ -167,6 +167,13 @@ val readmeShots =
                 728,
                 720,
             ),
+            // Tall enough to show the whole demo readme: tables, code and a closed section.
+            MockShot(
+                "readme-$theme-tall",
+                "page=library&panel=mod:minimap&tab=readme&theme=$theme",
+                728,
+                1500,
+            ),
         )
     }
 

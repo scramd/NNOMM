@@ -371,6 +371,9 @@ val LocalOptionalApp = staticCompositionLocalOf<AppModel?> { null }
 
 val LocalApp = staticCompositionLocalOf<AppModel> { error("No AppModel provided") }
 
+/** True while the window is minimised, so that moving pictures can stop. */
+val LocalWindowMinimized = androidx.compose.runtime.compositionLocalOf { false }
+
 /**
  * Tao sends character input separately with an unknown key/type on X11. Interpret only the two page
  * commands; never turn arbitrary typed text into physical key presses.

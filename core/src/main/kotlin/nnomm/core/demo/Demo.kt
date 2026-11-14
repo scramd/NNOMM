@@ -336,12 +336,24 @@ object Demo {
             appendLine("| `F1` | Open the settings |")
             appendLine("| `Ctrl` + `M` | Show or hide the mod |")
             appendLine()
+            appendLine("## Compatibility")
+            appendLine()
+            appendLine("| Game | Mod | Multiplayer | Notes |")
+            appendLine("| --- | --- | --- | --- |")
+            appendLine(
+                "| 0.34.6 | ${m.newestRelease?.version ?: "1.0"} | Yes | Every player needs the mod |"
+            )
+            appendLine("| 0.34.2 | older | Yes | Use the version selector to go back |")
+            appendLine()
             appendLine("<details>")
             appendLine("<summary>Settings file</summary>")
             appendLine()
             appendLine("```ini")
             appendLine("[General]")
             appendLine("Enabled = true")
+            appendLine(
+                "; Keys: any Unity KeyCode, for example LeftControl, RightShift, Keypad0 or Mouse3"
+            )
             appendLine("```")
             appendLine()
             appendLine("</details>")

@@ -1,6 +1,7 @@
 package nnomm.core
 
 import kotlin.test.*
+import kotlinx.coroutines.test.runCurrent
 import nnomm.core.model.*
 import nnomm.core.model.ReadmeBlock.*
 import nnomm.core.rules.parseReadme
@@ -147,4 +148,136 @@ class ReadmeParserTest {
             parse("Just text\non two lines."),
         )
     }
+}
+
+class ReadmeParserVideoAndBadgeTest {
+    private fun parse(text: String) = parseReadme(text.trimIndent(), "owner", "repo").blocks
+
+    @Test
+    fun inlineCodeKeepsItsSpaces() {
+        val spans = (parse("Set `a  =  b` here").single() as Paragraph).text
+        assertEquals("a  =  b", spans.single { it.code }.text)
+    }
+
+    @Test
+    fun bareVideoLinkBecomesAShortLink() {
+        val url = "https://github.com/user-attachments/assets/10162380-c014-4509-9179-6aee1cb5a91d"
+        val span = (parse(url).single() as Paragraph).text.single()
+        assertEquals("Watch the video", span.text)
+        assertEquals(url, span.link)
+        val named = (parse("[demo]($url)").single() as Paragraph).text.single()
+        assertEquals("demo", named.text)
+    }
+
+    @Test
+    fun linkedBadgeKeepsItsLinkAsText() {
+        val blocks =
+            parse(
+                "[![Steam](https://img.shields.io/badge/Steam-Workshop-blue)](https://store.steampowered.com/app/2168680) " +
+                    "![build](https://github.com/a/b/actions/workflows/ci.yml/badge.svg) " +
+                    "![shot](docs/badge/shot.png)"
+            )
+        val text = blocks[0] as Paragraph
+        assertEquals("Steam", text.text.single().text)
+        assertEquals("https://store.steampowered.com/app/2168680", text.text.single().link)
+        assertEquals(
+            "https://raw.githubusercontent.com/owner/repo/HEAD/docs/badge/shot.png",
+            (blocks[1] as Images).images.single().url,
+        )
+        assertEquals(2, blocks.size)
+    }
+}
+
+class ReadmeLoadTest {
+    @Test
+    fun loadsOnceAndTriesAgainAfterAFailure() =
+        kotlinx.coroutines.test.runTest {
+            var calls = 0
+            var fail = true
+            val source =
+                object : nnomm.core.io.ReadmeSource {
+                    override suspend fun readme(mod: CatalogMod): Readme? {
+                        calls++
+                        if (fail) throw java.io.IOException("offline")
+                        return parseReadme("Hello", "o", "r")
+                    }
+
+                    override suspend fun image(url: String) = ByteArray(0)
+                }
+            val store =
+                nnomm.core.store.AppStore(
+                    nnomm.core.demo.Demo.state(),
+                    nnomm.core.demo.Demo.io().copy(readme = source),
+                    backgroundScope,
+                )
+            store.loadReadme("minimap")
+            assertEquals(LoadStatus.LOADING, store.readmes.value["minimap"]?.status)
+            runCurrent()
+            assertEquals(LoadStatus.FAILED, store.readmes.value["minimap"]?.status)
+            fail = false
+            store.loadReadme("minimap")
+            runCurrent()
+            assertEquals(LoadStatus.READY, store.readmes.value["minimap"]?.status)
+            assertNotNull(store.readmes.value["minimap"]?.readme)
+            store.loadReadme("minimap")
+            runCurrent()
+            assertEquals(2, calls)
+            store.close()
+        }
+}
+
+class RealReadmesTest {
+    @Test
+    fun findsTheReadmeKeepsItAndUsesTheSavedCopyOffline() =
+        kotlinx.coroutines.runBlocking {
+            val home = kotlin.io.path.createTempDirectory("readmes")
+            val requests = mutableListOf<String>()
+            var down = false
+            val server =
+                com.sun.net.httpserver.HttpServer.create(
+                    java.net.InetSocketAddress("127.0.0.1", 0),
+                    0,
+                )
+            server.createContext("/") { exchange ->
+                val path = exchange.requestURI.path
+                synchronized(requests) { requests += path }
+                val body =
+                    when {
+                        down -> null
+                        path == "/o/r/HEAD/readme.md" -> "# R\n\nText".toByteArray()
+                        else -> null
+                    }
+                exchange.sendResponseHeaders(
+                    if (down) 500 else if (body == null) 404 else 200,
+                    body?.size?.toLong() ?: -1,
+                )
+                body?.let { exchange.responseBody.write(it) }
+                exchange.close()
+            }
+            server.start()
+            val client = nnomm.core.io.real.networkClient("test")
+            try {
+                val host = "http://127.0.0.1:${server.address.port}"
+                val mod =
+                    CatalogMod("m", "M", listOf("a"), "", githubOwner = "o", githubRepository = "r")
+                val first = nnomm.core.io.real.RealReadmes(client, home, host).readme(mod)
+                assertEquals("Text", (first!!.blocks.last() as Paragraph).text.single().text)
+                assertEquals(listOf("/o/r/HEAD/README.md", "/o/r/HEAD/readme.md"), requests)
+                down = true
+                // A new run while GitHub is down: the saved copy is used.
+                val offline = nnomm.core.io.real.RealReadmes(client, home, host).readme(mod)
+                assertEquals(first, offline)
+                // A repository without a readme is null, not an error.
+                down = false
+                assertNull(
+                    nnomm.core.io.real
+                        .RealReadmes(client, home, host)
+                        .readme(mod.copy(githubRepository = "none"))
+                )
+            } finally {
+                client.close()
+                server.stop(0)
+                home.toFile().deleteRecursively()
+            }
+        }
 }

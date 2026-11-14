@@ -1,5 +1,6 @@
 package nnomm.ui.panel
 
+import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -16,14 +18,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.LayoutBoundsHolder
 import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.text.LinkAnnotation
@@ -44,7 +54,8 @@ import kotlin.math.sqrt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import nnomm.core.model.*
 import nnomm.ui.LocalApp
@@ -145,21 +156,22 @@ private fun Block(block: ReadmeBlock) {
                     .clip(RoundedCornerShape(t.radius))
                     .background(c.raise)
                     .border(1.dp, c.line, RoundedCornerShape(t.radius))
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                BasicText(
-                    block.text,
-                    style =
-                        t.text(12f)
-                            .copy(
-                                color = c.text,
-                                fontFamily = FontFamily.Monospace,
-                                fontFeatureSettings = null,
-                                lineHeight = (12f * 1.5f * t.textPercent / 100f).sp,
-                            ),
-                    softWrap = false,
-                )
+                SideScroll {
+                    BasicText(
+                        block.text,
+                        Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        style =
+                            t.text(12f)
+                                .copy(
+                                    color = c.text,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontFeatureSettings = null,
+                                    lineHeight = (12f * 1.5f * t.textPercent / 100f).sp,
+                                ),
+                        softWrap = false,
+                    )
+                }
             }
         is ReadmeBlock.Quote -> {
             val ink =
@@ -203,11 +215,12 @@ private fun Block(block: ReadmeBlock) {
                         Label(
                             if (block.ordered) "${block.start + index}."
                             else listOf("•", "◦", "▪")[depth % 3],
-                            Modifier.width(if (block.ordered) 22.dp else 16.dp),
+                            Modifier.width(if (block.ordered) 22.dp else 16.dp)
+                                .alignBy(FirstBaseline),
                             color = c.text3,
                             lineHeight = (13f * 1.5f * t.textPercent / 100f).sp,
                         )
-                        Box(Modifier.weight(1f)) {
+                        Box(Modifier.weight(1f).alignBy(FirstBaseline)) {
                             CompositionLocalProvider(LocalListDepth provides depth + 1) {
                                 Blocks(item, 4.dp)
                             }
@@ -229,10 +242,7 @@ private fun Table(block: ReadmeBlock.Table) {
     val columns = block.rows.maxOf { it.size }
     // Up to three columns share the width; more columns keep a fixed width and scroll sideways.
     val wide = columns > 3
-    Box(
-        Modifier.fillMaxWidth()
-            .then(if (wide) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
-    ) {
+    val grid: @Composable () -> Unit = {
         Column(
             Modifier.then(if (wide) Modifier else Modifier.fillMaxWidth())
                 .clip(RoundedCornerShape(t.radius))
@@ -251,6 +261,7 @@ private fun Table(block: ReadmeBlock.Table) {
                             Modifier.then(
                                     if (wide) Modifier.width(150.dp) else Modifier.weight(1f)
                                 )
+                                .alignBy(FirstBaseline)
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Blocks(if (head) cell.map(::bold) else cell, 4.dp)
@@ -259,6 +270,39 @@ private fun Table(block: ReadmeBlock.Table) {
                 }
             }
         }
+    }
+    if (wide) SideScroll { grid() } else grid()
+}
+
+/** Content wider than the panel scrolls sideways; a fade and a scrollbar show that more is there. */
+@Composable
+private fun SideScroll(content: @Composable () -> Unit) {
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier.fillMaxWidth()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    if (scroll.canScrollForward)
+                        drawRect(
+                            Brush.horizontalGradient(
+                                listOf(Color.Black, Color.Transparent),
+                                startX = (size.width - 40.dp.toPx()).coerceAtLeast(0f),
+                                endX = size.width,
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                }
+                .horizontalScroll(scroll)
+        ) {
+            content()
+        }
+        if (scroll.maxValue > 0)
+            HorizontalScrollbar(
+                rememberScrollbarAdapter(scroll),
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+            )
     }
 }
 
@@ -399,10 +443,18 @@ private object Pictures {
 private const val MAX_WIDTH = 1600
 private const val MAX_PIXELS = 1600 * 1600
 
+/** Larger pictures are not drawn: their canvas alone would take hundreds of MB. */
+private const val MAX_STILL_PIXELS = 25_000_000L
+private const val MAX_MOVING_PIXELS = 4_000_000L
+
 private fun decode(bytes: ByteArray): Decoded {
     val codec = Codec.makeFromData(Data.makeFromBytes(bytes))
     try {
+        // A small file can declare a huge canvas, so check the size before allocating anything.
+        val pixels = codec.width.toLong() * codec.height
+        require(pixels in 1..MAX_STILL_PIXELS) { "Picture too large" }
         if (codec.frameCount > 1) {
+            require(pixels <= MAX_MOVING_PIXELS) { "Moving picture too large" }
             Bitmap().use { bitmap ->
                 bitmap.allocPixels(codec.imageInfo)
                 codec.readPixels(bitmap, 0)
@@ -451,14 +503,25 @@ private fun Picture(image: ReadmeImage) {
     val model = LocalApp.current
     val t = LocalNnTheme.current
     val c = t.colors
-    var decoded by remember(image.url) { mutableStateOf(Pictures.get(image.url)) }
+    // A picture loads when it comes into view and lets go of its pixels when it leaves; the
+    // cache of decoded pictures keeps recent ones for a quick return.
+    var visible by remember(image.url) { mutableStateOf(false) }
+    var decoded by remember(image.url) { mutableStateOf<Decoded?>(null) }
+    var natural by remember(image.url) { mutableStateOf<Pair<Int, Int>?>(null) }
     var failed by remember(image.url) { mutableStateOf(false) }
-    LaunchedEffect(image.url) {
-        if (decoded != null) return@LaunchedEffect
+    LaunchedEffect(image.url, visible) {
+        if (!visible) {
+            decoded = null
+            return@LaunchedEffect
+        }
         try {
-            val bytes = model.store.readmeImage(image.url)
-            val result = withContext(Dispatchers.Default) { decode(bytes) }
-            Pictures.put(image.url, result)
+            val result =
+                Pictures.get(image.url)
+                    ?: withContext(Dispatchers.Default) {
+                            decode(model.store.readmeImage(image.url))
+                        }
+                        .also { Pictures.put(image.url, it) }
+            natural = result.width to result.height
             decoded = result
         } catch (e: CancellationException) {
             throw e
@@ -466,61 +529,87 @@ private fun Picture(image: ReadmeImage) {
             failed = true
         }
     }
-    val picture = decoded
-    if (picture == null) {
-        if (failed) {
-            if (image.alt.isNotBlank())
-                Label(image.alt, color = c.text3, size = 12f)
-        } else
-            Box(
-                Modifier.widthIn(max = (image.width ?: 480).dp)
-                    .fillMaxWidth()
-                    .then(
-                        if (image.width != null && image.height != null)
-                            Modifier.aspectRatio(image.width!!.toFloat() / image.height!!)
-                        else Modifier.height(140.dp)
-                    )
-                    .background(c.raise, RoundedCornerShape(t.radius))
-            )
+    if (failed) {
+        // GitHub writes "image" as the alt text of pasted pictures; it says nothing.
+        if (image.alt.isNotBlank() && !image.alt.equals("image", true))
+            Label(image.alt, color = c.text3, size = 12f)
         return
     }
     // Pixels count as dp, the way a browser shows a picture at 100 %.
-    val width = (image.width ?: picture.width).coerceAtLeast(1)
-    val height =
-        image.height ?: (picture.height.toLong() * width / picture.width.coerceAtLeast(1)).toInt()
-    var playing by remember(image.url) { mutableStateOf(!t.reduceMotion) }
+    val size =
+        natural?.let { (w, h) ->
+            val width = (image.width ?: w).coerceAtLeast(1)
+            width to (image.height ?: (h.toLong() * width / w.coerceAtLeast(1)).toInt())
+        } ?: image.width?.let { w -> image.height?.let { h -> w to h } }
+    val frame =
+        Modifier.widthIn(max = (size?.first ?: image.width ?: 480).dp)
+            .then(
+                if (size != null)
+                    Modifier.aspectRatio(size.first.toFloat() / size.second.coerceAtLeast(1))
+                else Modifier.fillMaxWidth().height(140.dp)
+            )
+            .onVisibilityChanged(
+                minFractionVisible = 0.01f,
+                viewportBounds = LocalReadmeViewport.current,
+            ) {
+                visible = it
+            }
+    val picture = decoded
+    if (picture == null) {
+        Box(
+            frame.then(if (size != null) Modifier.fillMaxWidth() else Modifier)
+                .background(c.raise, RoundedCornerShape(t.radius))
+        )
+        return
+    }
+    // With Reduce motion, a GIF stands still until the player starts it with a click.
+    var started by remember(image.url) { mutableStateOf(false) }
     val modifier =
-        Modifier.widthIn(max = width.dp)
-            .aspectRatio(width.toFloat() / height.coerceAtLeast(1))
+        frame
             .clip(RoundedCornerShape(4.dp))
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(remember { MutableInteractionSource() }, indication = null) {
-                if (picture is Decoded.Moving && t.reduceMotion) playing = !playing
+                if (picture is Decoded.Moving && t.reduceMotion) started = !started
                 else model.platform.openUrl(image.link ?: image.url)
             }
     when (picture) {
         is Decoded.Still ->
             Image(picture.bitmap, image.alt.ifBlank { null }, modifier, contentScale = ContentScale.Fit)
-        is Decoded.Moving -> Moving(picture, image.alt, modifier, playing)
+        is Decoded.Moving -> Moving(picture, image.alt, modifier, !t.reduceMotion || started)
     }
 }
 
-/** Plays a GIF while it is on screen. Frames are decoded one at a time into one bitmap. */
+/**
+ * Plays a GIF (it exists only while on screen) while the window is not minimised and the game
+ * does not run. Frames are decoded one at a time into one bitmap.
+ */
 @Composable
 private fun Moving(picture: Decoded.Moving, alt: String, modifier: Modifier, playing: Boolean) {
-    var frame by remember(picture) { mutableStateOf(picture.first) }
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(picture, playing && visible) {
-        if (!playing || !visible) return@LaunchedEffect
-        withContext(Dispatchers.Default) {
-            Codec.makeFromData(Data.makeFromBytes(picture.bytes)).use { codec ->
-                val info = codec.framesInfo
-                Bitmap().use { bitmap ->
-                    bitmap.allocPixels(codec.imageInfo)
-                    var index = 0
-                    var prior = -1
-                    while (isActive) {
-                        val start = System.nanoTime()
+    val model = LocalApp.current
+    // The current frame, drawn straight onto the canvas. A Compose ImageBitmap per frame would
+    // copy each frame into memory that only the garbage collector frees.
+    var frame by remember(picture) { mutableStateOf<org.jetbrains.skia.Image?>(null) }
+    val gameRunning by
+        remember(model) { model.store.state.map { it.gameRunning }.distinctUntilChanged() }
+            .collectAsState(false)
+    val run = playing && !gameRunning && !nnomm.ui.LocalWindowMinimized.current
+    LaunchedEffect(picture, run) {
+        if (!run) return@LaunchedEffect
+        val codec = withContext(Dispatchers.Default) { Codec.makeFromData(Data.makeFromBytes(picture.bytes)) }
+        val bitmap = Bitmap().apply { allocPixels(codec.imageInfo) }
+        // Each frame is a copy of the bitmap. A frame is freed four frames later, so that a slow
+        // redraw never draws a freed frame.
+        val shown = ArrayDeque<org.jetbrains.skia.Image>()
+        try {
+            val info = codec.framesInfo
+            // -1 means for ever; otherwise the number of repeats after the first play.
+            val repeats = codec.repetitionCount
+            var played = 0
+            var index = 0
+            var prior = -1
+            while (true) {
+                val image =
+                    withContext(Dispatchers.Default) {
                         try {
                             if (
                                 prior >= 0 &&
@@ -532,28 +621,49 @@ private fun Moving(picture: Decoded.Moving, alt: String, modifier: Modifier, pla
                         } catch (_: Exception) {
                             codec.readPixels(bitmap, index)
                         }
-                        frame =
-                            org.jetbrains.skia.Image.makeFromBitmap(bitmap).toComposeImageBitmap()
-                        // Browsers show frames of 10 ms or less for 100 ms.
-                        val duration = info[index].duration.let { if (it <= 10) 100 else it }
-                        delay((duration - (System.nanoTime() - start) / 1_000_000).coerceAtLeast(10))
-                        prior = index
-                        index = (index + 1) % info.size
-                        if (index == 0) prior = -1
+                        org.jetbrains.skia.Image.makeFromBitmap(bitmap)
                     }
-                }
+                frame = image
+                shown.addLast(image)
+                if (shown.size > 4) shown.removeFirst().close()
+                // Browsers show frames of 10 ms or less for 100 ms.
+                delay(info[index].duration.let { if (it <= 10) 100L else it.toLong() })
+                if (index == info.size - 1 && repeats >= 0 && ++played > repeats) break
+                prior = index
+                index = (index + 1) % info.size
+                if (index == 0) prior = -1
             }
+        } finally {
+            // The last frame stays on screen; it is freed with its picture.
+            while (shown.size > 1) shown.removeFirst().close()
+            bitmap.close()
+            codec.close()
         }
     }
-    Box(
-        modifier.onVisibilityChanged(
-            minFractionVisible = 0.01f,
-            viewportBounds = LocalReadmeViewport.current,
-        ) {
-            visible = it
-        }
-    ) {
-        Image(frame, alt.ifBlank { null }, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    Box(modifier) {
+        val current = frame
+        if (current == null)
+            Image(picture.first, alt.ifBlank { null }, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        else
+            Box(
+                Modifier.fillMaxSize().drawBehind {
+                    val scale = minOf(size.width / current.width, size.height / current.height)
+                    val w = current.width * scale
+                    val h = current.height * scale
+                    val left = (size.width - w) / 2
+                    val top = (size.height - h) / 2
+                    drawIntoCanvas {
+                        it.nativeCanvas.drawImageRect(
+                            current,
+                            Rect.makeWH(current.width.toFloat(), current.height.toFloat()),
+                            Rect.makeXYWH(left, top, w, h),
+                            SamplingMode.LINEAR,
+                            null,
+                            true,
+                        )
+                    }
+                }
+            )
         if (!playing)
             Box(
                 Modifier.align(Alignment.Center)

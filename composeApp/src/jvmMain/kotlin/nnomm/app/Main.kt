@@ -374,6 +374,7 @@ fun main(args: Array<String>) {
                     nnomm.ui.kit.LocalFocusMode provides focusMode,
                     nnomm.ui.kit.LocalTileSkipNuclear provides
                         (values["tileSkipNuclear"]?.content == "true"),
+                    nnomm.ui.LocalWindowMinimized provides state.isMinimized,
                 ) {
                     Box(
                         Modifier.fillMaxSize()

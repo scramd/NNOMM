@@ -139,7 +139,7 @@ Click a mod in Browse or in the Library to open its panel. Press Esc to close it
   - **Version:** choose another version, for example to go back after an update,
   - **Open the mod folder** and **Open its settings file**,
   - **Uninstall**.
-- **Readme:** the readme from the mod's page on GitHub, often a better guide than the short description: features, setup, keys, screenshots and moving pictures (GIFs). Click a picture to open it, or its link, in your browser. Sections that are closed on GitHub ("Screenshot", "Details") open with a click. A GIF moves only while you can see it; with **Reduce motion** on, it stands still until you click it. Badges (the small status labels) are left out.
+- **Readme:** the readme from the mod's page on GitHub, often a better guide than the short description: features, setup, keys, screenshots and moving pictures (GIFs). Click a picture to open it, or its link, in your browser. Sections that are closed on GitHub ("Screenshot", "Details") open with a click. A GIF moves only while you can see it, and not while the game runs or NNOMM is minimised; with **Reduce motion** on, it stands still until you click it. Badges (the small status labels) are left out.
 - **What's new:** the release notes from the mod's release page. Your version is marked.
 - **Needs:** the mods that this mod needs, the mods that need it, and the mods it does not work together with.
 

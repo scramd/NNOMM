@@ -114,7 +114,10 @@ private class BlockBuilder(private val urls: ReadmeUrls, private val center: Boo
     }
 
     private fun text(raw: String, style: ReadmeSpan) {
-        val t = raw.replace(Regex("\\s+"), " ")
+        // Code keeps its spaces; CommonMark has already joined its lines.
+        val t =
+            if (style.code) raw.replace(Regex("[\\r\\n\\t]"), " ")
+            else raw.replace(Regex("\\s+"), " ")
         if (t.isBlank() && (spans.isEmpty() || images.isNotEmpty())) return
         flushImages()
         spans += style.copy(text = t)
@@ -145,7 +148,7 @@ private class BlockBuilder(private val urls: ReadmeUrls, private val center: Boo
             "sub",
             "sup",
             "small" -> children(e, style.copy(small = true))
-            "a" -> children(e, style.copy(link = urls.link(e.attr("href")) ?: style.link))
+            "a" -> link(e, style)
             "img" -> image(e, style)
             "video" -> video(e)
             "h1",
@@ -268,9 +271,25 @@ private class BlockBuilder(private val urls: ReadmeUrls, private val center: Boo
             )
     }
 
+    private fun link(e: Element, style: ReadmeSpan) {
+        val href = urls.link(e.attr("href"))
+        // GitHub plays a bare link to an uploaded video in place; here it becomes a short link.
+        if (href != null && e.text().trim() == e.attr("href").trim() && isVideo(href)) {
+            flushImages()
+            spans += style.copy(text = "Watch the video", link = href)
+            return
+        }
+        children(e, style.copy(link = href ?: style.link))
+    }
+
     private fun image(e: Element, style: ReadmeSpan) {
         val url = urls.image(e.attr("src")) ?: return
-        if (isBadge(url)) return
+        if (isBadge(url)) {
+            // A badge that links somewhere (a Steam page, a Discord) keeps its link, as text.
+            val alt = e.attr("alt").trim()
+            if (style.link != null && alt.isNotEmpty()) text(" $alt ", style)
+            return
+        }
         flushText()
         images +=
             ReadmeImage(
@@ -364,8 +383,13 @@ private val badgeHosts =
 internal fun isBadge(url: String): Boolean {
     val uri = runCatching { URI(url) }.getOrNull() ?: return false
     val path = uri.path.orEmpty()
-    return uri.host in badgeHosts || path.endsWith("/badge.svg") || path.contains("/badge/")
+    return uri.host in badgeHosts || path.endsWith("/badge.svg")
 }
+
+/** Videos that GitHub uploads for a readme, and links straight to a video file. */
+internal fun isVideo(url: String): Boolean =
+    url.startsWith("https://github.com/user-attachments/assets/") ||
+        Regex("\\.(mp4|mov|webm)([?#].*)?$", RegexOption.IGNORE_CASE).containsMatchIn(url)
 
 /** Makes readme addresses absolute, the way GitHub shows the readme on the repository page. */
 internal class ReadmeUrls(owner: String, repo: String) {
