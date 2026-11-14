@@ -760,10 +760,7 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
             )
         )
     if (isNotEmpty()) add(MenuEntry.Separator)
-    fun layer(kind: String) {
-        model.ui.overlayProfileId = id
-        model.openOverlay(kind)
-    }
+    fun layer(kind: String) = model.openOverlay(kind, id)
     add(MenuEntry.Item("Rename", action = { layer("rename") }))
     add(
         MenuEntry.Item(
@@ -779,10 +776,7 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
         MenuEntry.Item(
             "Share as a modpack",
             icon = NnIcons.share,
-            action = {
-                model.useProfile(id)
-                layer("share")
-            },
+            action = { layer("share") },
         )
     )
     add(
@@ -802,10 +796,7 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
             MenuEntry.Item(
                 "See what changes in $it",
                 icon = NnIcons.box,
-                action = {
-                    model.useProfile(id)
-                    layer("packupdate")
-                },
+                action = { layer("packupdate") },
             )
         )
     }

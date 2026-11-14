@@ -337,6 +337,33 @@ class CoreTest {
     }
 
     @Test
+    fun packUpdateOfAProfileNotInUseLeavesTheProfileInUse() = runTest {
+        val a = store()
+        val before = a.state.value
+        assertEquals("default", before.profileId)
+        a.updatePack(Demo.PACK_UPDATE, "friday")
+        drain()
+        val s = a.state.value
+        assertEquals("default", s.profileId)
+        assertEquals("1.5.0", verOf(s, "loadout-presets", "friday"))
+        assertEquals(verOf(before, "loadout-presets", "default"), verOf(s, "loadout-presets", "default"))
+        assertFalse(isOn(s, "better-flares", "friday"))
+        assertEquals(isOn(before, "better-flares", "default"), isOn(s, "better-flares", "default"))
+        assertEquals("1.4", s.profile("friday").pack!!.version)
+    }
+
+    @Test
+    fun shareAProfileNotInUse() = runTest {
+        val a = store()
+        val s = a.state.value
+        val pack = a.shareProfile("Friday", profileId = "friday")
+        assertEquals(s.installed.keys.filter { isOn(s, it, "friday") && s.installed[it]?.source != ModSource.LOCAL }.toSet(), pack.items.map { it.id }.toSet())
+        assertTrue(pack.items.all { it.version == verOf(s, it.id, "friday") })
+        assertNotEquals(a.shareProfile().items.map { it.id }.toSet(), pack.items.map { it.id }.toSet())
+        assertEquals("default", a.state.value.profileId)
+    }
+
+    @Test
     fun brokenTestFindsAndRestores() = runTest {
         val a = store()
         val before = a.state.value.installed.keys.filter { isOn(a.state.value, it) }

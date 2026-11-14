@@ -255,10 +255,17 @@ class ImportDialog(private val model: AppModel) : Overlay {
 }
 
 class PackUpdateDialog(private val model: AppModel) : Overlay {
+    /** The profile the menu was opened for. It does not need to be the profile in use. */
+    private val profileId = model.dialogProfile().id
+
     @Composable
     override fun Content() {
         val state by model.store.state.collectAsState()
-        val p = state.profile()
+        val p = state.profiles.find { it.id == profileId }
+        if (p == null) {
+            LaunchedEffect(Unit) { model.closeOverlay() }
+            return
+        }
         var fetched by remember { mutableStateOf<Pack?>(null) }
         var message by remember { mutableStateOf("Reading the pack update…") }
         LaunchedEffect(p.id) {
@@ -280,7 +287,7 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
                 footer = { Cancel(model, "Close") }) { Label(message) }
             return
         }
-        val rows = packUpdateRows(state, pack)
+        val rows = packUpdateRows(state, pack, p.id)
         Dialog(
             true,
             "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
@@ -296,7 +303,7 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
                 Button(
                     "Update the profile",
                     {
-                        model.store.updatePack(pack)
+                        model.store.updatePack(pack, p.id)
                         model.closeOverlay()
                     },
                     kind = ButtonKind.Strong,

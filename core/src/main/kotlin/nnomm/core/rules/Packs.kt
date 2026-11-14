@@ -69,15 +69,16 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
 data class PackUpdateRow(val kind: PackKind, val id: String, val text: String)
 
 /** Full packs are compared with their saved membership; legacy demo deltas remain readable. */
-fun packUpdateItems(s: AppState, pack: Pack): List<PackItem> {
+fun packUpdateItems(s: AppState, pack: Pack, profileId: String = s.profileId): List<PackItem> {
     if (
         pack.items.any {
             it.kind in setOf(PackKind.ADD, PackKind.REM, PackKind.CHG, PackKind.NEWER)
         }
     )
         return pack.items
-    val info = s.profile().pack ?: return pack.items
-    val previous = info.mods.associateWith { info.memberVersions[it] ?: verOf(s, it).orEmpty() }
+    val info = s.profile(profileId).pack ?: return pack.items
+    val previous =
+        info.mods.associateWith { info.memberVersions[it] ?: verOf(s, it, profileId).orEmpty() }
     val incoming = pack.items.filter { it.kind != PackKind.LOCAL }.associateBy { it.id }
     return (previous.keys + incoming.keys).map { id ->
         val old = previous[id]
@@ -94,8 +95,8 @@ fun packUpdateItems(s: AppState, pack: Pack): List<PackItem> {
     }
 }
 
-fun packUpdateRows(s: AppState, pack: Pack) =
-    packUpdateItems(s, pack).map { i ->
+fun packUpdateRows(s: AppState, pack: Pack, profileId: String = s.profileId) =
+    packUpdateItems(s, pack, profileId).map { i ->
         PackUpdateRow(
             i.kind,
             i.id,

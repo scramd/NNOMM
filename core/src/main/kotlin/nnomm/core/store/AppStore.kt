@@ -1370,16 +1370,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    fun updatePack(pack: Pack) {
+    /** Updates the profile [profileId] to [pack]. It does not need to be the profile in use. */
+    fun updatePack(pack: Pack, profileId: String = state.value.profileId) {
         if (state.value.trouble != null) stopBrokenModTest()
         if (state.value.connection.kind == ConnectionKind.OFFLINE) {
             toast("Needs a connection")
             return
         }
-        val p = state.value.profile()
+        val p = state.value.profiles.find { it.id == profileId } ?: return
         val info = p.pack ?: return
         var managed = info.mods
-        val items = packUpdateItems(state.value, pack)
+        val items = packUpdateItems(state.value, pack, p.id)
         items.forEach { i ->
             if (
                 state.value.installed[i.id]?.source == ModSource.LOCAL ||
@@ -1389,22 +1390,23 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 return@forEach
             when (i.kind) {
                 PackKind.ADD -> {
-                    if (i.id in state.value.installed) setOn(listOf(i.id), true)
+                    if (i.id in state.value.installed) setOn(listOf(i.id), true, p.id)
                     else
                         queue(
                             i.id,
                             DownloadKind.INSTALL,
+                            p.id,
                             version = i.nextVersion ?: i.version,
                             quiet = true,
                         )
                     if (i.id !in managed) managed = managed + i.id
                 }
                 PackKind.REM -> {
-                    setOn(listOf(i.id), false)
+                    setOn(listOf(i.id), false, p.id)
                     managed = managed - i.id
                 }
                 PackKind.CHG ->
-                    queue(i.id, DownloadKind.UPDATE, version = i.nextVersion, quiet = true)
+                    queue(i.id, DownloadKind.UPDATE, p.id, version = i.nextVersion, quiet = true)
                 else -> Unit
             }
         }
@@ -1431,7 +1433,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                                             (it.nextVersion ?: it.version).orEmpty()
                                                     }
                                                     ?: info.memberVersions[id]
-                                                    ?: verOf(state.value, id).orEmpty()
+                                                    ?: verOf(state.value, id, p.id).orEmpty()
                                             },
                                     )
                             )
@@ -1442,6 +1444,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         toast("${p.name} is now $v")
     }
 
+    /** The pack of the mods that are on in [profileId], which does not need to be the profile in use. */
     fun shareProfile(
         name: String = state.value.profile().name,
         version: String = "1.0",
@@ -1449,6 +1452,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         includeLocal: Boolean = false,
         includeSettings: Boolean = false,
         followAddress: String? = null,
+        profileId: String = state.value.profileId,
     ): Pack {
         val s = state.value
         return Pack(
@@ -1457,14 +1461,15 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             version,
             s.installed.keys
                 .filter {
-                    isOn(s, it) && (includeLocal || s.installed[it]?.source != ModSource.LOCAL)
+                    isOn(s, it, profileId) &&
+                        (includeLocal || s.installed[it]?.source != ModSource.LOCAL)
                 }
                 .map {
                     PackItem(
                         if (s.installed[it]?.source == ModSource.LOCAL) PackKind.LOCAL
                         else PackKind.VER,
                         it,
-                        verOf(s, it),
+                        verOf(s, it, profileId),
                     )
                 },
             followAddress = followAddress,

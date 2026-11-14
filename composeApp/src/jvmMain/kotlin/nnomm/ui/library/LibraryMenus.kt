@@ -26,10 +26,7 @@ internal fun LibraryMenu(entries: () -> List<MenuEntry>, anchor: @Composable (()
 
 internal fun profileItems(model: AppModel, s: AppState): List<MenuEntry> = buildList {
     val p = s.profile()
-    fun overlay(kind: String) {
-        model.ui.overlayProfileId = p.id
-        model.openOverlay(kind)
-    }
+    fun overlay(kind: String) = model.openOverlay(kind, p.id)
     add(MenuEntry.Item("Rename") { overlay("rename") })
     add(MenuEntry.Item("Make a copy", icon = NnIcons.copy) { model.store.copyProfile(p.id) })
     add(MenuEntry.Item("Share as a modpack", icon = NnIcons.share) { overlay("share") })
@@ -103,7 +100,6 @@ internal fun moreItems(model: AppModel): List<MenuEntry> =
     listOf(
         MenuEntry.Item("Import a modpack", icon = NnIcons.box) { model.importPack() },
         MenuEntry.Item("Share this profile as a modpack", icon = NnIcons.share) {
-            model.ui.overlayProfileId = model.store.state.value.profileId
             model.openOverlay("share")
         },
         MenuEntry.Separator,

@@ -40,7 +40,7 @@ function vImport() {
     </div><div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="doimport">Import, ${plural(dl, 'download', 'downloads')}</button></div>`, 'wide');
 }
 function vPackUpdate() {
-  const p = profile(), it = PACK_UPDATE.items, n = k => it.filter(i => i[0] === k).length;
+  const p = profile(S.overlay.pid), it = PACK_UPDATE.items, n = k => it.filter(i => i[0] === k).length;
   return dlgWrap(`<div class="dlg-h"><h2>${esc(p.name)} ${p.pack.v} to ${p.pack.next}</h2><p class="muted">Modpack by ${esc(p.pack.by)}</p></div><div class="dlg-b">
     <div class="sum"><div><b>${n('add')}</b>added</div><div><b>${n('rem')}</b>removed</div><div><b>${n('chg')}</b>updated</div><div><b>${n('same')}</b>not changed</div></div>
     <div class="diff">${it.map(diffRow).join('')}</div><p>Only this profile changes. Mods that you added to it yourself stay on.</p>
@@ -55,7 +55,7 @@ function vNewProfile() {
     </div><div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="docreate">${o.from === 'pack' ? 'Choose the modpack file' : 'Create profile'}</button></div>`);
 }
 function vShare() {
-  const o = S.overlay, p = profile(), on = installedIds().filter(id => isOn(id)), local = on.filter(id => INST[id].source === 'local');
+  const o = S.overlay, p = profile(o.pid), on = installedIds().filter(id => isOn(id, o.pid)), local = on.filter(id => INST[id].source === 'local');
   return dlgWrap(`<div class="dlg-h"><h2>Share ${esc(p.name)} as a modpack</h2></div><div class="dlg-b">
     <p>The file lists the ${on.length} mods that are on in this profile, with their versions. Other players import it and get the same set.</p>
     <div class="row"><label class="lbl grow">Pack name<div class="field"><input id="sh-name" data-in="overlay.name" value="${esc(o.name)}"></div></label><label class="lbl" style="width:110px">Version<div class="field"><input id="sh-v" data-in="overlay.v" value="${esc(o.v)}"></div></label></div>
@@ -187,8 +187,8 @@ function profileItems(id) {
   const p = profile(id), it = [];
   if (id !== S.profile) it.push({ label: 'Use this profile', ic: 'check', fn: () => ACT.profile({ dataset: { id } }) });
   it.push({ label: 'Rename', fn: () => { S.overlay = { kind: 'rename', id, name: p.name }; } }, { label: 'Make a copy', ic: 'copy', fn: () => { const c = { id: 'p' + Date.now(), name: p.name + ' copy' }; PROFILES.push(c); installedIds().forEach(m => { INST[m].on[c.id] = isOn(m, id); if (INST[m].ver && INST[m].ver[id]) setVer(m, INST[m].ver[id], c.id); }); S.set.ov[c.id] = Object.assign({}, S.set.ov[id]); S.profile = c.id; S.page = 'library'; toast(`Made ${c.name}`); } },
-    { label: 'Share as a modpack', ic: 'share', fn: () => { S.profile = id; ACT.share(); } }, { label: 'Settings for this profile', ic: 'gear', fn: () => { S.page = 'settings'; S.panel = null; S.set.scope = 'profile'; S.set.pid = id; S.set.q = ''; } });
-  if (p.pack && p.pack.next) it.push({ label: `See what changes in ${p.pack.next}`, ic: 'box', fn: () => { S.profile = id; S.overlay = { kind: 'packupdate' }; } });
+    { label: 'Share as a modpack', ic: 'share', fn: () => ACT.share(id) }, { label: 'Settings for this profile', ic: 'gear', fn: () => { S.page = 'settings'; S.panel = null; S.set.scope = 'profile'; S.set.pid = id; S.set.q = ''; } });
+  if (p.pack && p.pack.next) it.push({ label: `See what changes in ${p.pack.next}`, ic: 'box', fn: () => ACT.packupdate(id) });
   if (p.pack && p.pack.followed) it.push({ label: 'Stop following this pack', fn: () => ACT.stopfollow({ dataset: { id } }) });
   if (id !== 'default') it.push('-', { label: 'Delete this profile', ic: 'trash', dz: true, fn: () => { const i = PROFILES.indexOf(p); PROFILES.splice(i, 1); if (S.profile === id) S.profile = 'default'; toast(`Deleted the profile ${p.name}. Its mods stay installed.`, 'Undo', () => { PROFILES.splice(i, 0, p); }); } });
   return it;
@@ -274,8 +274,8 @@ const ACT = {
   addfile() { toast('A file window opens here. You can also drop a file on NNOMM.', 'Show the drop', () => { S.overlay = { kind: 'drop' }; }); },
   libmore(el) { openMenu(el, [{ label: 'Import a modpack', ic: 'box', fn: ACT.import }, { label: 'Share this profile as a modpack', ic: 'share', fn: ACT.share }, '-', { label: 'Look for updates', ic: 'refresh', fn: () => toast(`${updates().length} mods have an update`) }, { label: 'Find the mod that breaks the game', ic: 'split', fn: ACT.trouble }, '-', { label: 'Open the mods folder', ic: 'folder', fn: ACT.noop }]); },
   import() { S.overlay = { kind: 'import', mode: VAL.showProfiles ? 'new' : 'add', keep: {}, local: false }; },
-  share() { S.overlay = { kind: 'share', name: profile().name, v: '1.0', cfg: false, local: false, url: '' }; },
-  packupdate() { S.overlay = { kind: 'packupdate' }; },
+  share(pid) { pid = typeof pid === 'string' ? pid : S.profile; S.overlay = { kind: 'share', pid, name: profile(pid).name, v: '1.0', cfg: false, local: false, url: '' }; },
+  packupdate(pid) { S.overlay = { kind: 'packupdate', pid: typeof pid === 'string' ? pid : S.profile }; },
   keeptemp() { profile().temp = false; toast(`${profile().name} is now a normal profile`); },
   trouble() { S.overlay = { kind: 'trouble' }; },
   srvchip(el) { const c = S.srv.chips, v = el.dataset.v; c.has(v) ? c.delete(v) : c.add(v); },
@@ -341,13 +341,13 @@ const ACT = {
     S.overlay = null; S.page = 'library'; S.panel = null; S.toasts = []; S.lib.filter = 'all';
     toast(`Importing ${P.name}: ${plural(n, 'download', 'downloads')}`);
   },
-  stopfollow(el) { const p = profile(el.dataset.id || S.profile); Object.assign(p.pack, { next: null, mods: [], followed: false }); S.overlay = null; toast('Stopped following this pack. You can now update and change its mods yourself.'); },
+  stopfollow(el) { const p = profile(el.dataset.id || (S.overlay && S.overlay.pid) || S.profile); Object.assign(p.pack, { next: null, mods: [], followed: false }); S.overlay = null; toast('Stopped following this pack. You can now update and change its mods yourself.'); },
   dopackupdate() {
-    const p = profile();
+    const p = profile(S.overlay.pid);
     PACK_UPDATE.items.forEach(([k, id, a, b]) => {
-      if (k === 'add') { isInst(id) ? INST[id].on[S.profile] = true : install(id, true); if (!p.pack.mods.includes(id)) p.pack.mods.push(id); }
-      if (k === 'rem') { INST[id].on[S.profile] = false; p.pack.mods = p.pack.mods.filter(q => q !== id); }
-      if (k === 'chg') { download(id, 'update'); const d = S.downloads[S.downloads.length - 1]; d.quiet = true; d.ver = b; }
+      if (k === 'add') { if (isInst(id)) INST[id].on[p.id] = true; else { install(id, true); S.downloads[S.downloads.length - 1].profile = p.id; } if (!p.pack.mods.includes(id)) p.pack.mods.push(id); }
+      if (k === 'rem') { INST[id].on[p.id] = false; p.pack.mods = p.pack.mods.filter(q => q !== id); }
+      if (k === 'chg') { download(id, 'update'); const d = S.downloads[S.downloads.length - 1]; d.quiet = true; d.ver = b; d.profile = p.id; }
     });
     p.pack.v = p.pack.next; p.pack.next = null; S.overlay = null; S.toasts = []; toast(`${p.name} is now ${p.pack.v}`);
   },

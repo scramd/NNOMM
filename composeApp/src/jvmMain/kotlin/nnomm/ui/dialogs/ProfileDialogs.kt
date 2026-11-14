@@ -132,7 +132,8 @@ class RenameDialog(private val model: AppModel) : Overlay {
 }
 
 class ShareDialog(private val model: AppModel) : Overlay {
-    private val profile = model.store.state.value.profile()
+    /** The profile the menu was opened for. It does not need to be the profile in use. */
+    private val profile = model.dialogProfile()
 
     @Composable
     override fun Content() {
@@ -186,23 +187,14 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                         "nommpack",
                                     )
                                 if (file != null) {
-                                    // shareProfile operates on the active profile. Build explicitly
-                                    // for a sidebar target.
                                     val pack =
-                                        Pack(
+                                        model.store.shareProfile(
                                             name,
-                                            "",
                                             version,
-                                            on.filter { local || it !in locals }
-                                                .map {
-                                                    PackItem(
-                                                        if (it in locals) PackKind.LOCAL else PackKind.VER,
-                                                        it,
-                                                        verOf(state, it, profile.id),
-                                                    )
-                                                },
-                                            followAddress = address.takeIf { it.isNotBlank() },
+                                            includeLocal = local,
                                             includeSettings = settings,
+                                            followAddress = address.takeIf { it.isNotBlank() },
+                                            profileId = profile.id,
                                         )
                                     val recovery = withPackRecovery(file) {
                                         withPackIo(state) {

@@ -85,8 +85,10 @@ class AppModel(
     var checkAppUpdates: () -> Unit = {}
     var openAppReleases: () -> Unit = {}
 
-    fun openOverlay(kind: String) {
+    /** [profileId] is the profile a profile dialog acts on; null means the profile in use. */
+    fun openOverlay(kind: String, profileId: String? = null) {
         if (!store.state.value.firstStart.complete && kind != "first") return
+        ui.overlayProfileId = profileId
         val layer = overlayFactories[kind]?.invoke(this) ?: return
         if (kind == "palette") {
             ui.palette.query = ""
