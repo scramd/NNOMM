@@ -269,6 +269,11 @@
       ]
     },
     {
+      "cat": "look",
+      "key": "lastPage",
+      "type": "hidden"
+    },
+    {
       "cat": "keys",
       "key": "keys",
       "type": "keys"

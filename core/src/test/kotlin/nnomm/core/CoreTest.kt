@@ -20,6 +20,13 @@ class CoreTest {
     }
 
     @Test
+    fun lastPageIsRemembered() {
+        // "NNOMM opens on: The page I used last" reads lastPage; setSetting dropped unknown keys.
+        val s = setSetting(Demo.state(), "lastPage", JsonPrimitive("Library"))
+        assertEquals("Library", s.settings.general["lastPage"]?.content)
+    }
+
+    @Test
     fun browsePictureCounts() {
         val s = Demo.state()
         assertEquals(39, browseList(s).size)
