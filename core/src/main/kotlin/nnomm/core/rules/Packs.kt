@@ -11,6 +11,8 @@ data class ImportRow(
     val text: String,
     val local: Boolean = false,
     val defaultOn: Boolean = true,
+    /** The pack's version, when the registry no longer has it and no stored copy exists. */
+    val goneVersion: String? = null,
 )
 
 fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List<ImportRow> =
@@ -30,6 +32,18 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
                 false,
             )
         val have = verOf(s, i.id)
+        // The registry no longer lists the pack's version and no stored copy exists, so it cannot be installed.
+        // A mod you have then keeps your version; one you do not have is skipped.
+        if (
+            i.version != null &&
+                have != i.version &&
+                i.id in s.catalog.map { it.id } &&
+                s.mod(i.id).versions.none { it.version == i.version } &&
+                i.version !in s.installed[i.id]?.versions.orEmpty()
+        )
+            return@map if (have != null)
+                ImportRow(PackKind.SAME, i.id, have, have, "pack uses ${i.version}, not in the registry; you keep $have", goneVersion = i.version)
+            else ImportRow(PackKind.UNAVAILABLE, i.id, i.version, null, "Version ${i.version} is not in the registry", goneVersion = i.version)
         val k =
             when {
                 i.id !in s.catalog.map { it.id } -> PackKind.UNAVAILABLE

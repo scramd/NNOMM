@@ -129,12 +129,15 @@ class RealPacks(
                     it.toList().associate { p -> "local-" + p.name to p.toString() }
                 }
             else emptyMap()
+        // NOMM also lists a bundled mod in its mod list, by its folder or file name or the id in
+        // its meta.json. Such a mod comes from the file in the pack, not from the registry.
+        val bundled = locals.values.flatMap { bundledIds(Path.of(it)) }.toSet()
         return contentPreview(
             Pack(
                 name.substringBeforeLast('.'),
                 "",
                 "1.0",
-                refs.map { PackItem(PackKind.VER, it.id, it.version) } +
+                refs.filter { it.id !in bundled }.map { PackItem(PackKind.VER, it.id, it.version) } +
                     locals.keys.map { PackItem(PackKind.LOCAL, it) },
             ),
             locals,
@@ -323,6 +326,32 @@ class RealPacks(
 }
 
 /** Only mod behavior can be shared. Machine paths, sources and launch commands are private. */
+private fun bundledIds(path: Path): List<String> {
+    val meta = path.resolve("meta.json").takeIf { path.isDirectory() && it.isRegularFile() }
+    val metaId =
+        meta?.let {
+            runCatching { Json.parseToJsonElement(it.readText()).jsonObject["id"]?.jsonPrimitive?.contentOrNull }
+                .getOrNull()
+        }
+    return listOfNotNull(path.name, path.nameWithoutExtension, metaId)
+}
+
+/** A short name for a mod that a pack bundles: its only DLL, else its folder or file name. */
+fun bundledModName(path: Path): String {
+    if (!path.isDirectory()) return path.nameWithoutExtension
+    val dlls = Files.walk(path).use { s -> s.filter { it.isRegularFile() && it.name.endsWith(".dll", true) }.toList() }
+    return when {
+        dlls.size == 1 -> dlls.single().nameWithoutExtension
+        !path.name.startsWith("local-") -> path.name
+        else -> dlls.firstOrNull()?.nameWithoutExtension ?: path.name
+    }
+}
+
+/** The size of a mod that a pack bundles, in KB. */
+fun bundledSizeKb(path: Path): Long =
+    if (!path.isDirectory()) path.fileSize() / 1024
+    else Files.walk(path).use { s -> s.filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum() } / 1024
+
 internal fun packSettings(settings: SettingsValues): SettingsValues {
     val allowed =
         setOf("ownSettingsP", "ownSettings", "prerelease", "autoDeps", "warnOld", "console")

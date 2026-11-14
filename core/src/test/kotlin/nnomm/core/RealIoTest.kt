@@ -382,6 +382,36 @@ class RealIoTest {
     }
 
     @Test
+    fun nommPackBundledModIsNotAlsoAMissingRegistryMod() = runBlocking {
+        val home = temp()
+        val client = networkClient("test")
+        try {
+            val packs = RealPacks(home, RealModStore(home), client)
+            val path = home.resolve("adhoc.nommpack")
+            java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(path)).use { zip ->
+                fun put(name: String, text: String) {
+                    zip.putNextEntry(java.util.zip.ZipEntry(name))
+                    zip.write(text.toByteArray())
+                    zip.closeEntry()
+                }
+                put("modlist.nomm.json", """[{"id":"test","version":"1"},{"id":"dev.x.mapfocus","version":"0.2.0"},{"id":"Loose.dll"}]""")
+                put("mods/NuclearMapFocus/NuclearMapFocus.dll", "dll")
+                put("mods/NuclearMapFocus/README.md", "readme")
+                put("mods/NuclearMapFocus/meta.json", """{"id":"dev.x.mapfocus"}""")
+                put("mods/Loose.dll", "dll")
+            }
+            packs.read(path).use { preview ->
+                val items = preview.pack.items
+                assertEquals(listOf("test"), items.filter { it.kind != PackKind.LOCAL }.map { it.id })
+                val names = items.filter { it.kind == PackKind.LOCAL }.map { bundledModName(java.nio.file.Path.of(preview.localFiles.getValue(it.id))) }
+                assertEquals(setOf("NuclearMapFocus", "Loose"), names.toSet())
+            }
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
     fun movingStoreKeepsOriginalAndUsesDestination() = runBlocking {
         val home = temp()
         val store = RealModStore(home)

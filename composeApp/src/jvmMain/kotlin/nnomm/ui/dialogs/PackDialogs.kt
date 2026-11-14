@@ -28,6 +28,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
         val state by model.store.state.collectAsState()
         var pack by remember { mutableStateOf(Demo.PACK_IMPORT) }
         var localNames by remember { mutableStateOf(emptyMap<String, String>()) }
+        var localSizes by remember { mutableStateOf(emptyMap<String, Long>()) }
         var preview by remember { mutableStateOf<PackPreview?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
         var loading by remember { mutableStateOf(model.ui.importFile != null) }
@@ -41,7 +42,11 @@ class ImportDialog(private val model: AppModel) : Overlay {
             if (file != null) {
                 try {
                     preview = withPackIo(state) { it.read(file.toPath()) }
-                    localNames = withContext(Dispatchers.IO) { preview!!.pack.items.associate { it.id to bundledFileName(it, preview) } }
+                    withContext(Dispatchers.IO) {
+                        val files = preview!!.localFiles.mapValues { java.nio.file.Path.of(it.value) }
+                        localNames = files.mapValues { bundledModName(it.value) }
+                        localSizes = files.mapValues { bundledSizeKb(it.value) }
+                    }
                     val loaded = preview!!.pack
                     // TODO(core): classify serialized pack references in importRows itself.
                     pack =
@@ -81,7 +86,9 @@ class ImportDialog(private val model: AppModel) : Overlay {
         val registryReady = state.connection.kind == ConnectionKind.READY
         val skipped = if (registryReady) rows.filter { it.kind == PackKind.UNAVAILABLE } else emptyList()
         val missing = skipped.filter { row -> state.catalog.none { it.id == row.id } }
-        val noVersion = skipped - missing.toSet()
+        val goneKept = if (registryReady) rows.filter { it.kind == PackKind.SAME && it.goneVersion != null } else emptyList()
+        val bundled = pack.items.filter { it.kind == PackKind.LOCAL }
+        var profileName by remember(pack.name) { mutableStateOf(pack.name) }
         fun n(kind: PackKind) = rows.count { it.kind == kind }
         val downloads =
             rows.count {
@@ -113,7 +120,15 @@ class ImportDialog(private val model: AppModel) : Overlay {
                                 val target = java.util.UUID.randomUUID().toString()
                                 val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
                                 if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
-                                model.store.importPack(pack, mode, keep, target, settings)
+                                model.store.importPack(
+                                    if (mode == ImportMode.NEW) pack.copy(name = profileName.trim().ifEmpty { pack.name }) else pack,
+                                    mode,
+                                    keep,
+                                    target,
+                                    settings,
+                                    // Pack previews name bundled mods by content hash, the same id selectedLocals gives them.
+                                    includedLocals = selectedLocalIds.toList(),
+                                )
                                 model.ui.go(Page.Library)
                                 model.ui.library.filter = "all"
                                 model.closeOverlay()
@@ -141,24 +156,8 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     action = { Button("Try again", model.store::refreshRegistry, size = ControlSize.Small, icon = NnIcons.refresh) },
                 )
             }
-            if (!loading && error == null && missing.isNotEmpty()) {
-                val one = missing.size == 1
-                Note(
-                    (if (one) "1 mod in this pack is not in the registry: " else "${missing.size} mods in this pack are not in the registry: ") +
-                        missing.joinToString { it.id } +
-                        (if (one) ". The import skips it. Install it from Browse when it is in the registry."
-                        else ". The import skips them. Install them from Browse when they are in the registry."),
-                    warn = true,
-                )
-            }
-            if (!loading && error == null && noVersion.isNotEmpty()) {
-                val one = noVersion.size == 1
-                Note(
-                    (if (one) "1 mod in this pack has no version: " else "${noVersion.size} mods in this pack have no version: ") +
-                        noVersion.joinToString { it.id } +
-                        (if (one) ". The import skips it." else ". The import skips them."),
-                    warn = true,
-                )
+            if (!loading && error == null && (skipped.isNotEmpty() || goneKept.isNotEmpty())) {
+                Note(notInstallableText(state, skipped, missing, goneKept), warn = true)
             }
             if (!loading && error == null) {
                 Summary(
@@ -204,29 +203,44 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         }
                     }
                 }
-                pack.items
-                    .filter { it.kind == PackKind.LOCAL }
-                    .forEach { item ->
-                        Note(
-                            "This pack also contains a file that is not from the registry: ${localNames[item.id] ?: item.id} (${item.sizeKb?.let(::size) ?: "size unknown"}). A mod file can run any code on your computer. Include it only if you trust ${pack.by.takeIf { it.isNotBlank() } ?: "the source of this pack"}.",
-                            modifier = Modifier.heightIn(min = 54.dp),
-                            warn = true,
-                            action = {
-                                ToggleLine(item.id in selectedLocalIds, { include ->
-                                    selectedLocalIds = if (include) selectedLocalIds + item.id else selectedLocalIds - item.id
-                                }, "Include", "Include ${localNames[item.id] ?: item.id}")
-                            },
-                        )
+                if (bundled.isNotEmpty()) {
+                    val one = bundled.size == 1
+                    val who = pack.by.takeIf { it.isNotBlank() } ?: "the person who sent you this pack"
+                    Note(
+                        (if (one) "This pack also contains a mod as a file. It does not come from the registry, so NNOMM cannot check it."
+                        else "This pack also contains ${bundled.size} mods as files. They do not come from the registry, so NNOMM cannot check them.") +
+                            " A mod can run any code on your computer. Turn a file on only if you trust $who." +
+                            (if (mode == ImportMode.NEW) " Files you turn on are on in the new profile." else " Files you turn on are on in ${state.profile().name}."),
+                        warn = true,
+                    )
+                    Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        bundled.forEach { item ->
+                            val name = localNames[item.id] ?: item.id
+                            val kb = localSizes[item.id] ?: item.sizeKb
+                            ToggleLine(
+                                item.id in selectedLocalIds,
+                                { include -> selectedLocalIds = if (include) selectedLocalIds + item.id else selectedLocalIds - item.id },
+                                name + (kb?.let { ", ${size(it)}" } ?: ""),
+                                "Include $name",
+                            )
+                        }
                     }
+                }
                 if (mode == ImportMode.NEW && (preview?.settings != null || preview?.modSettingsFolder != null)) {
                     ToggleLine(includeSettings, { includeSettings = it }, "Include the pack's mod settings", "These settings change how mods behave.")
                 }
                 OptionCard(
-                    "Make a new profile \"${pack.name}\"",
+                    "Make a new profile",
                     "It gets the pack's mods in the pack's versions. ${state.profile().name} stays as it is.",
                     mode == ImportMode.NEW,
                     { model.ui.importMode = "new" },
                 )
+                if (mode == ImportMode.NEW) {
+                    Row(Modifier.padding(start = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Label("Profile name")
+                        DialogTextField(profileName, { profileName = it }, Modifier.weight(1f), placeholder = pack.name)
+                    }
+                }
                 OptionCard(
                     "Add the mods to ${state.profile().name}",
                     "The pack's mods are turned on in ${state.profile().name}. Your other mods stay as they are.",
@@ -412,10 +426,22 @@ internal fun PackKind.key(): String =
         else -> ""
     }
 
-/** Show payload names, never the content-derived identity used by the store. */
-internal fun bundledFileName(item: PackItem, preview: PackPreview?): String {
-    val payload = preview?.localFiles?.get(item.id)?.let({ java.io.File(it) })
-    val files = payload?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sortedBy { it.name }?.toList()
-    return if (!files.isNullOrEmpty()) files.joinToString(", ") { it.name }
-    else payload?.name ?: item.id
+/** One warning for every pack mod that cannot be installed the way the pack asks. */
+internal fun notInstallableText(s: AppState, skipped: List<ImportRow>, missing: List<ImportRow>, kept: List<ImportRow>): String {
+    val lines = buildList {
+        missing.forEach { add("${it.id}: not in the registry. Left out.") }
+        skipped.filter { it !in missing && it.goneVersion == null }
+            .forEach { add("${s.mod(it.id).name}: the pack does not say which version. Left out.") }
+        skipped.filter { it.goneVersion != null }
+            .forEach { add("${s.mod(it.id).name}: the registry no longer has version ${it.goneVersion}. Left out.") }
+        kept.forEach { add("${s.mod(it.id).name}: the registry no longer has version ${it.goneVersion}. Uses your version ${it.have}.") }
+    }
+    val head =
+        if (lines.size == 1) "1 mod in this pack cannot be installed the way the pack asks:"
+        else "${lines.size} mods in this pack cannot be installed the way the pack asks:"
+    val registry = missing.isNotEmpty() || kept.isNotEmpty() || skipped.any { it.goneVersion != null }
+    val foot =
+        (if (registry) "The registry is the online list of mods that NNOMM downloads from. " else "") +
+            "The rest of the pack installs normally."
+    return head + "\n" + lines.joinToString("\n") { "\u2022  $it" } + "\n" + foot
 }

@@ -1208,6 +1208,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         keep: Map<String, String> = emptyMap(),
         newProfileId: String = java.util.UUID.randomUUID().toString(),
         packSettings: SettingsValues? = null,
+        /** Mods from the pack's own files that the player chose to include: on in the imported profile. */
+        includedLocals: List<String> = emptyList(),
     ) {
         if (state.value.connection.kind == ConnectionKind.OFFLINE) {
             toast("Needs a connection")
@@ -1255,6 +1257,12 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                             ),
                 )
             }
+        }
+        val included = includedLocals.filter { it in state.value.installed }
+        if (included.isNotEmpty()) {
+            val target = state.value.profileId
+            change { s -> included.fold(s) { acc, id -> setProfileMod(acc, id, target, true) } }
+            applyAndSave(allowLoader = true)
         }
         var n = 0
         rows.forEach { r ->

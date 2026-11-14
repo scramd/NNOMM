@@ -187,12 +187,12 @@ Click **Save the modpack file**, then send the file to your friends. **Copy the 
 Open the `.nommpack` file, drag it onto the NNOMM window, or choose **Import a modpack**. NNOMM shows what the pack contains **before** it installs anything:
 
 - the number of mods, how many you already have, how many are new and their download size, and which mods are in another version,
-- a warning for each file in the pack that is not from the registry. Such files start **off**. A mod file can run any code on your computer. Include it only if you trust the person who made the pack.
-- a warning that names the mods that are not in the registry, for example a mod that is not released yet. The import skips them. Install them from Browse when they are in the registry.
+- one warning that names each mod that cannot be installed the way the pack asks, and why: the mod is not in the registry (for example, it is not released yet), the registry no longer has the pack's version, or the pack does not say which version. Such a mod is left out; if you already have it, NNOMM uses your version. The rest of the pack installs normally.
+- mods that the pack contains as files, because they are not in the registry. Each has a switch, and each starts **off**. A mod file can run any code on your computer, so turn a file on only if you trust the person who made the pack. A file that you turn on is on in the imported profile.
 
 Then choose:
 
-- **Make a new profile** (the default): the new profile gets the pack's mods in the pack's versions. Your other profiles stay as they are.
+- **Make a new profile** (the default): the new profile gets the pack's mods in the pack's versions. Type its name under **Profile name**; it starts as the pack's name. Your other profiles stay as they are.
 - **Add the mods to** your profile: the pack's mods are turned on in that profile. Your other mods stay as they are. If your profile has a newer version of a mod than the pack, choose **Keep** your version or **Use** the pack's version.
 
 ### Pack updates
