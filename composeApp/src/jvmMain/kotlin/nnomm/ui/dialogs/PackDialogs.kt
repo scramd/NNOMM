@@ -77,7 +77,9 @@ class ImportDialog(private val model: AppModel) : Overlay {
         DisposableEffect(Unit) {
             onDispose { preview?.let { p -> CoroutineScope(Dispatchers.IO).launch { p.close() } } }
         }
-        val mode = if (model.ui.importMode == "add") ImportMode.ADD else ImportMode.NEW
+        // With profiles hidden the player cannot see or leave a new profile, so the pack goes into Default.
+        val profilesShown = state.settings.bool("showProfiles")
+        val mode = if (!profilesShown || model.ui.importMode == "add") ImportMode.ADD else ImportMode.NEW
         val rows =
             importRows(state, pack, mode)
                 .filterNot { it.local }
@@ -229,7 +231,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 if (mode == ImportMode.NEW && (preview?.settings != null || preview?.modSettingsFolder != null)) {
                     ToggleLine(includeSettings, { includeSettings = it }, "Include the pack's mod settings", "These settings change how mods behave.")
                 }
-                OptionCard(
+                if (profilesShown) OptionCard(
                     "Make a new profile",
                     "It gets the pack's mods in the pack's versions. ${state.profile().name} stays as it is.",
                     mode == ImportMode.NEW,

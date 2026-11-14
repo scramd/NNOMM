@@ -27,6 +27,8 @@ fun palItems(s: AppState, query: String): List<PaletteItem> {
                 "New profile" to "newProfile",
                 "Open the game folder" to "openGameFolder",
             )
+            // With profiles hidden, a new profile would be one the player cannot see or leave.
+            .filter { it.second != "newProfile" || s.settings.bool("showProfiles") }
             .map { (label, key) ->
                 PaletteItem(
                     "Actions",

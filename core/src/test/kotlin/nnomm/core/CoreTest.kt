@@ -468,6 +468,19 @@ class CoreTest {
     }
 
     @Test
+    fun commandSearchOffersNewProfileOnlyWhenProfilesShow() {
+        val shown = Demo.state().let { s ->
+            s.copy(settings = s.settings.copy(general = s.settings.general + ("showProfiles" to JsonPrimitive(true))))
+        }
+        val hidden = shown.copy(
+            settings = shown.settings.copy(general = shown.settings.general + ("showProfiles" to JsonPrimitive(false)))
+        )
+        assertTrue(palItems(shown, "new profile").any { it.action.kind == ActionKind.NEWPROFILE })
+        assertTrue(palItems(hidden, "new profile").none { it.action.kind == ActionKind.NEWPROFILE })
+        assertTrue(palItems(hidden, "").none { it.action.kind == ActionKind.NEWPROFILE })
+    }
+
+    @Test
     fun noJoinSettings() {
         assertTrue(
             SETTINGS.none {

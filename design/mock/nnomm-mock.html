@@ -1279,7 +1279,7 @@ function vImport() {
     <div class="sum"><div><b>${rows.length}</b>mods in the pack</div><div><b>${n('same')}</b>you have</div><div><b>${n('add')}</b>new, ${size(addKb)}</div>${o.mode === 'new' ? `<div><b>${n('other')}</b>in another version</div>` : `<div><b>${n('up')}</b>get an update</div><div><b>${n('conflict')}</b>version ${n('conflict') === 1 ? 'conflict' : 'conflicts'}</div>`}</div>
     <div class="diff">${rows.slice().sort((a, b) => order[a.kind] - order[b.kind]).map(line).join('')}</div>
     ${local.map(([, name, kb]) => `<div class="note warn" style="margin:0;align-items:flex-start">${I('alert')}<span>This pack also contains a file that is not from the registry: ${esc(name)} (${size(kb)}). A mod file can run any code on your computer. Include it only if you trust ${esc(P.by)}.</span><span class="row" style="margin-left:auto;gap:7px;white-space:nowrap">${tog(o.local, 'oset', 'data-k="local" data-v="toggle"', 'Include the file')}Include</span></div>`).join('')}
-    <button class="opt ${o.mode === 'new' ? 'cur' : ''}" data-act="oset" data-k="mode" data-v="new"><span class="radio"></span><span><b>Make a new profile "${esc(P.name)}"</b>It gets the pack's mods in the pack's versions. ${esc(p.name)} stays as it is.</span></button>
+    ${VAL.showProfiles ? `<button class="opt ${o.mode === 'new' ? 'cur' : ''}" data-act="oset" data-k="mode" data-v="new"><span class="radio"></span><span><b>Make a new profile "${esc(P.name)}"</b>It gets the pack's mods in the pack's versions. ${esc(p.name)} stays as it is.</span></button>` : ''}
     <button class="opt ${o.mode === 'add' ? 'cur' : ''}" data-act="oset" data-k="mode" data-v="add"><span class="radio"></span><span><b>Add the mods to ${esc(p.name)}</b>The pack's mods are turned on in ${esc(p.name)}. Your other mods stay as they are.</span></button>
     </div><div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="doimport">Import, ${plural(dl, 'download', 'downloads')}</button></div>`, 'wide');
 }
@@ -1368,6 +1368,7 @@ function palItems() {
     ['Add a mod from a file', '', () => ACT.addfile(), 'plus'], ['Import a modpack', '', () => ACT.import(), 'box'], ['Share this profile as a modpack', '', () => ACT.share(), 'share'],
     ['Find the mod that breaks the game', '', () => ACT.trouble(), 'split'], ['New profile', '', () => ACT.newprofile(), 'plus'], ['Open the game folder', '', () => ACT.noop(), 'folder'],
   ];
+  if (!VAL.showProfiles) actions.splice(actions.findIndex(a => a[0] === 'New profile'), 1);
   const pages = [['browse', 'Browse', 'browse'], ['library', 'Library', 'library'], ['servers', 'Servers', 'server'], ['settings', 'Settings', 'gear']].filter(p => p[0] !== 'servers' || VAL.showServers);
   if (!q) {
     actions.slice(0, 6).forEach(a => add('Actions', a[0], a[1], a[2], a[3]));
@@ -1516,7 +1517,7 @@ const ACT = {
   },
   addfile() { toast('A file window opens here. You can also drop a file on NNOMM.', 'Show the drop', () => { S.overlay = { kind: 'drop' }; }); },
   libmore(el) { openMenu(el, [{ label: 'Import a modpack', ic: 'box', fn: ACT.import }, { label: 'Share this profile as a modpack', ic: 'share', fn: ACT.share }, '-', { label: 'Look for updates', ic: 'refresh', fn: () => toast(`${updates().length} mods have an update`) }, { label: 'Find the mod that breaks the game', ic: 'split', fn: ACT.trouble }, '-', { label: 'Open the mods folder', ic: 'folder', fn: ACT.noop }]); },
-  import() { S.overlay = { kind: 'import', mode: 'new', keep: {}, local: false }; },
+  import() { S.overlay = { kind: 'import', mode: VAL.showProfiles ? 'new' : 'add', keep: {}, local: false }; },
   share() { S.overlay = { kind: 'share', name: profile().name, v: '1.0', cfg: false, local: false, url: '' }; },
   packupdate() { S.overlay = { kind: 'packupdate' }; },
   keeptemp() { profile().temp = false; toast(`${profile().name} is now a normal profile`); },

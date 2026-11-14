@@ -81,6 +81,27 @@ val followupShots = listOf("dark", "light").flatMap { theme ->
         }
     }
 
+private fun nnomm.core.model.AppState.profilesHidden() =
+    copy(
+        profileId = "default",
+        settings =
+            settings.copy(
+                general =
+                    settings.general +
+                        ("showProfiles" to kotlinx.serialization.json.JsonPrimitive(false))
+            ),
+    )
+
+/** States of the basic-feature fixes: hidden profiles, profile menus, dialogs and toasts. */
+val featureShots =
+    listOf(
+        MockShot(
+            "feature-import-profiles-hidden",
+            "page=library&overlay=import",
+            initialState = { it.profilesHidden() },
+        ),
+    )
+
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {
