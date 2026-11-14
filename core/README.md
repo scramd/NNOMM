@@ -74,6 +74,9 @@ versions eligible for explicit Clear; it does not automatically delete them.
 `loadMetadata(ids)` lazily requests version metadata with bounded concurrency and
 caches successful requests. `loadReleaseNotes(id)` exposes notes in state. Both
 have independent `LoadStatus` maps; failure does not mark the registry offline.
+`loadReadme(id)` loads a mod's readme into the separate `readmes` flow (not `AppState`,
+so a readme never redraws the lists); `readmeImage(url)` returns the bytes of one of its
+pictures. `parseReadme` (rules) turns GitHub Markdown with mixed-in HTML into `ReadmeBlock`s.
 The injected `Logger` records technical errors; player text does not expose them.
 
 `findGameFolder` discovers through the real Steam-folder finder and selects only a

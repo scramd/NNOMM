@@ -2196,6 +2196,35 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
+    private val readmeLoads = MutableStateFlow<Map<String, ReadmeLoad>>(emptyMap())
+
+    /** Readmes by mod id. Kept apart from [state], so that a readme never redraws the lists. */
+    val readmes: StateFlow<Map<String, ReadmeLoad>> = readmeLoads.asStateFlow()
+
+    /** Loads a mod's readme once; after a failure, the next call tries again. */
+    fun loadReadme(id: String) {
+        synchronized(lock) {
+            val status = readmeLoads.value[id]?.status
+            if (status == LoadStatus.LOADING || status == LoadStatus.READY) return
+            readmeLoads.value += id to ReadmeLoad(LoadStatus.LOADING)
+        }
+        background {
+            val load =
+                try {
+                    ReadmeLoad(LoadStatus.READY, io.readme.readme(state.value.mod(id)))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    io.logger.error("readme", e)
+                    ReadmeLoad(LoadStatus.FAILED)
+                }
+            synchronized(lock) { readmeLoads.value += id to load }
+        }
+    }
+
+    /** The bytes of one picture of a readme; runs on the IO threads. */
+    suspend fun readmeImage(url: String): ByteArray = io.readme.image(url)
+
     private fun sameFailedRow(a: Download, b: Download) =
         a.error != null && a.id == b.id && a.profile == b.profile && a.version == b.version
 

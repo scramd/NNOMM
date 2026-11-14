@@ -316,6 +316,7 @@ class AppModel(
                     ui.openMod(
                         it,
                         when (action.value) {
+                            "readme" -> PanelTab.Readme
                             "new" -> PanelTab.WhatsNew
                             "needs" -> PanelTab.Needs
                             else -> PanelTab.About

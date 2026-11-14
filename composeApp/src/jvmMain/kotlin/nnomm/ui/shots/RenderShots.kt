@@ -30,6 +30,8 @@ object Shots {
             addAll(mockShots.map { it.spec() })
             addAll(followupShots.map { it.spec() })
             addAll(featureShots.map { it.spec() })
+
+            addAll(readmeShots.map { it.spec() })
             add(MockShot("browse-loading", "page=browse&mock=loading").spec())
             addAll(nnomm.ui.dialogs.dialogMockShots.map { it.spec() })
             for (dark in listOf(true, false)) {

@@ -156,6 +156,20 @@ val featureShots =
         ),
     )
 
+/** The Readme tab is not in the mock; these pictures show it with the demo readme. */
+val readmeShots =
+    listOf("dark", "light").flatMap { theme ->
+        listOf(
+            MockShot("readme-$theme-wide", "page=library&panel=mod:minimap&tab=readme&theme=$theme"),
+            MockShot(
+                "readme-$theme-narrow",
+                "page=library&panel=mod:minimap&tab=readme&theme=$theme",
+                728,
+                720,
+            ),
+        )
+    }
+
 fun MockShot.spec() =
     ShotSpec(name, !address.contains("theme=light"), width, height) {
         val model = remember {

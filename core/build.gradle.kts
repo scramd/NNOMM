@@ -23,6 +23,10 @@ dependencies {
     implementation(libs.core.sevenzip)
     runtimeOnly(libs.core.sevenzip.platforms)
     implementation(libs.core.jsoup)
+    implementation(libs.core.commonmark)
+    implementation(libs.core.commonmark.tables)
+    implementation(libs.core.commonmark.strikethrough)
+    implementation(libs.core.commonmark.autolink)
     testImplementation(kotlin("test"))
     testImplementation(libs.core.coroutines.test)
 }

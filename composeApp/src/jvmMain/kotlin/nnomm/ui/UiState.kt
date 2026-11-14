@@ -19,6 +19,7 @@ enum class Page {
 /** Tabs of the mod detail panel (`pMod` in the mock's views.js). */
 enum class PanelTab {
     About,
+    Readme,
     WhatsNew,
     Needs,
 }

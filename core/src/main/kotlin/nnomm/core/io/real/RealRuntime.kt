@@ -210,6 +210,7 @@ private constructor(
                                 persistence,
                                 packs,
                                 logger = NnommLog.logger,
+                                readme = RealReadmes(client, home),
                             ),
                         )
                     app.checkPackUpdates()

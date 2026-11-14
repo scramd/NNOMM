@@ -295,7 +295,58 @@ object Demo {
                 }
             },
             clock,
+            readme =
+                object : ReadmeSource {
+                    override suspend fun readme(mod: CatalogMod) = readme(mod.id)
+
+                    override suspend fun image(url: String): ByteArray =
+                        throw java.io.IOException("The demo has no network")
+                },
         )
+    }
+
+    /** An invented readme in the shape that real mod readmes have. */
+    fun readme(id: String): Readme {
+        val m = state().mod(id)
+        val needs = m.newestRelease?.dependencies.orEmpty().map { state().mod(it.id).name }
+        val text = buildString {
+            appendLine("# ${m.name}")
+            appendLine()
+            appendLine("${m.description} Made by **${m.authors.joinToString(", ")}**.")
+            appendLine()
+            appendLine("## Features")
+            appendLine()
+            appendLine("- Works in single player and in multiplayer")
+            appendLine("- Settings in the game with `F1` (BepInEx Configuration Manager)")
+            appendLine("- No changes to your saved missions")
+            appendLine()
+            appendLine("## Installation")
+            appendLine()
+            appendLine("1. Install [BepInEx 5](https://github.com/BepInEx/BepInEx/releases).")
+            if (needs.isNotEmpty()) appendLine("2. Install ${needs.joinToString(" and ")}.")
+            appendLine("${if (needs.isNotEmpty()) 3 else 2}. Put the mod in `BepInEx/plugins`.")
+            appendLine()
+            appendLine("> [!NOTE]")
+            appendLine("> Turn the mod off before you report a bug in the game itself.")
+            appendLine()
+            appendLine("## Keys")
+            appendLine()
+            appendLine("| Key | Action |")
+            appendLine("| --- | --- |")
+            appendLine("| `F1` | Open the settings |")
+            appendLine("| `Ctrl` + `M` | Show or hide the mod |")
+            appendLine()
+            appendLine("<details>")
+            appendLine("<summary>Settings file</summary>")
+            appendLine()
+            appendLine("```ini")
+            appendLine("[General]")
+            appendLine("Enabled = true")
+            appendLine("```")
+            appendLine()
+            appendLine("</details>")
+        }
+        return nnomm.core.rules.parseReadme(text, "nnomm-demo", m.id, m.name)
     }
 }
 

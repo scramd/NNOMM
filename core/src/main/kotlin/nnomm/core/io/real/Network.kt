@@ -18,6 +18,7 @@ import kotlinx.serialization.builtins.*
 import kotlinx.serialization.json.*
 import nnomm.core.io.*
 import nnomm.core.model.*
+import nnomm.core.rules.parseReadme
 import org.jsoup.Jsoup
 import org.w3c.dom.Element
 
@@ -282,6 +283,77 @@ class RealReleaseNotes(private val client: HttpClient, home: Path) : ReleaseNote
         }
 }
 
+@Serializable internal data class SavedReadme(val text: String? = null)
+
+/**
+ * Readmes come from raw.githubusercontent.com, which has no hourly limit like the GitHub API. The
+ * branch `HEAD` is the repository's default branch. Each repository is asked once per run; the text
+ * is kept for offline use. A repository without a readme is kept as such too.
+ */
+class RealReadmes(private val client: HttpClient, home: Path) : ReadmeSource {
+    private val file =
+        JsonFile(
+            home.resolve("readmes.json"),
+            MapSerializer(String.serializer(), SavedReadme.serializer()),
+        )
+    private val mutex = Mutex()
+    private val loaded = mutableSetOf<String>()
+    private val pictures = Semaphore(4)
+
+    override suspend fun readme(mod: CatalogMod): Readme? =
+        withContext(Dispatchers.IO) {
+            val owner = mod.githubOwner?.takeIf { it.isNotBlank() } ?: return@withContext null
+            val repo = mod.githubRepository?.takeIf { it.isNotBlank() } ?: return@withContext null
+            component(owner)
+            component(repo)
+            val key = "$owner/$repo"
+            val text =
+                mutex.withLock {
+                    val cache = file.read().orEmpty()
+                    if (key in loaded) return@withLock cache[key]?.text
+                    try {
+                        fetch(key).also {
+                            file.write(cache + (key to SavedReadme(it)))
+                            loaded += key
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (key in cache) cache.getValue(key).text else throw e
+                    }
+                }
+            text?.let { parseReadme(it, owner, repo, mod.name) }
+        }
+
+    private suspend fun fetch(key: String): String? {
+        for (name in README_NAMES) {
+            try {
+                return client.get("https://raw.githubusercontent.com/$key/HEAD/$name").boundedText()
+            } catch (e: ClientRequestException) {
+                if (e.response.status.value != 404) throw e
+            }
+        }
+        return null
+    }
+
+    override suspend fun image(url: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            pictures.withPermit { client.get(checkedUrl(url)).boundedBytes(24 * 1024 * 1024) }
+        }
+}
+
+/** The names GitHub shows as a readme, the most common first. */
+private val README_NAMES =
+    listOf(
+        "README.md",
+        "readme.md",
+        "Readme.md",
+        "README.MD",
+        "README.markdown",
+        "README.txt",
+        "README",
+    )
+
 fun parseAtom(text: String, mod: CatalogMod): List<ReleaseNote> {
     val factory =
         DocumentBuilderFactory.newInstance().apply {
@@ -441,17 +513,20 @@ internal fun checkedUrl(url: String): String {
     return url
 }
 
-internal suspend fun HttpResponse.boundedText(): String {
+internal suspend fun HttpResponse.boundedText(): String =
+    boundedBytes(16 * 1024 * 1024).toString(Charsets.UTF_8)
+
+internal suspend fun HttpResponse.boundedBytes(limit: Int): ByteArray {
     val bytes = java.io.ByteArrayOutputStream()
     val channel = bodyAsChannel()
     val buffer = ByteArray(65536)
     while (true) {
         val n = channel.readAvailable(buffer)
         if (n < 0) break
-        require(bytes.size() + n <= 16 * 1024 * 1024) { "Response exceeds 16 MiB" }
+        require(bytes.size() + n <= limit) { "Response exceeds ${limit / 1024 / 1024} MiB" }
         bytes.write(buffer, 0, n)
     }
-    return bytes.toString(Charsets.UTF_8)
+    return bytes.toByteArray()
 }
 
 private suspend fun retryTransfer(block: suspend () -> Unit) {

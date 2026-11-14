@@ -28,6 +28,23 @@ interface ReleaseNotesSource {
     suspend fun releases(mod: CatalogMod): List<ReleaseNote>
 }
 
+/** The readme of a mod's GitHub repository, and the pictures in it. */
+interface ReadmeSource {
+    /** Null when the mod has no GitHub repository or the repository has no readme. */
+    suspend fun readme(mod: CatalogMod): Readme?
+
+    /** The bytes of one picture of a readme. */
+    suspend fun image(url: String): ByteArray
+
+    /** For stores without a network, such as tests. */
+    object None : ReadmeSource {
+        override suspend fun readme(mod: CatalogMod): Readme? = null
+
+        override suspend fun image(url: String): ByteArray =
+            throw java.io.IOException("No network for readme pictures")
+    }
+}
+
 /**
  * Progress is 0..100, or -1 while the total is unknown; coroutine cancellation must abort transfer
  * and discard partial data.
@@ -189,6 +206,7 @@ data class AppIo(
         java.util.logging.Logger.getLogger("nnomm.core")
             .log(java.util.logging.Level.WARNING, action, error)
     },
+    val readme: ReadmeSource = ReadmeSource.None,
 )
 
 /** Durable domain snapshot, excluding transient downloads and Undo callbacks. */

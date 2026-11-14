@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +53,10 @@ fun ModPanel(ref: PanelRef) {
     val demo = state.nowMillis == Demo.NOW && model.store.io.modStore !is RealModStore
     LaunchedEffect(mod.id, tab) {
         if (tab == PanelTab.WhatsNew) model.store.loadReleaseNotes(mod.id)
+        if (tab == PanelTab.Readme) model.store.loadReadme(mod.id)
     }
+    val readmes by model.store.readmes.collectAsState()
+    val viewport = remember { LayoutBoundsHolder() }
     val loading = state.notesStatus[mod.id] == LoadStatus.LOADING
     val noteError = state.notesStatus[mod.id] == LoadStatus.FAILED
     val c = LocalNnTheme.current.colors
@@ -305,13 +310,22 @@ fun ModPanel(ref: PanelRef) {
         if (mod.localFile == null) {
             val count = dependencies.size + conflicts.size
             PanelTabBar(
-                listOf("About", "What's new", "Needs" + if (count > 0) " $count" else ""),
+                listOf(
+                    "About",
+                    "Readme",
+                    "What's new",
+                    "Needs" + if (count > 0) " $count" else "",
+                ),
                 tab.ordinal,
                 { openPanel(mod.id, PanelTab.entries[it]) },
             )
         }
         val scroll = memory.scrolls.getOrPut(mod.id to tab) { ScrollState(0) }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            Modifier.weight(1f)
+                .fillMaxWidth()
+                .layoutBounds(viewport)
+        ) {
             Column(
                 Modifier.fillMaxSize()
                     .verticalScroll(scroll)
@@ -453,6 +467,16 @@ fun ModPanel(ref: PanelRef) {
                                 }
                             }
                     }
+                    PanelTab.Readme ->
+                        CompositionLocalProvider(LocalReadmeViewport provides viewport) {
+                            ReadmeTab(
+                                mod,
+                                if (demo) ReadmeLoad(LoadStatus.READY, Demo.readme(mod.id))
+                                else readmes[mod.id],
+                            ) {
+                                model.store.loadReadme(mod.id)
+                            }
+                        }
                     PanelTab.WhatsNew -> {
                         when {
                             loading -> Paragraph("Loading release notes…")

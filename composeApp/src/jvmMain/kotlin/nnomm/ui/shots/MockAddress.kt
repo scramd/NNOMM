@@ -42,6 +42,7 @@ fun applyMockAddress(model: AppModel, address: String) {
             ui.openMod(
                 id,
                 when (p["tab"]) {
+                    "readme" -> PanelTab.Readme
                     "new" -> PanelTab.WhatsNew
                     "needs" -> PanelTab.Needs
                     else -> PanelTab.About
