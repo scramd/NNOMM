@@ -316,8 +316,10 @@ class DemoLauncher(
             }
     }
 
-    fun stop() {
+    override suspend fun stop(): Boolean {
+        end?.cancel()
         flow.value = false
+        return true
     }
 }
 

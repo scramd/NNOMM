@@ -9,19 +9,39 @@ import kotlinx.coroutines.sync.*
 import nnomm.core.io.*
 import nnomm.core.model.*
 
-internal fun gameProcessRunning(): Boolean =
-    ProcessHandle.allProcesses().use { all ->
-        all.anyMatch { p ->
-            p.info().command().orElse("").substringAfterLast('/').substringAfterLast('\\').let {
-                it.equals("NuclearOption.exe", true) ||
-                    it == "NuclearOption" ||
-                    p.info().arguments().orElse(emptyArray()).any { arg ->
-                        arg.substringAfterLast('/')
-                            .substringAfterLast('\\')
-                            .equals("NuclearOption.exe", true)
-                    }
+private fun isGameProcess(p: ProcessHandle): Boolean =
+    p.info().command().orElse("").substringAfterLast('/').substringAfterLast('\\').let {
+        it.equals("NuclearOption.exe", true) ||
+            it == "NuclearOption" ||
+            p.info().arguments().orElse(emptyArray()).any { arg ->
+                arg.substringAfterLast('/')
+                    .substringAfterLast('\\')
+                    .equals("NuclearOption.exe", true)
             }
+    }
+
+internal fun gameProcessRunning(): Boolean =
+    ProcessHandle.allProcesses().use { all -> all.anyMatch(::isGameProcess) }
+
+/**
+ * Closes Nuclear Option like Stop in Steam: first ask its windows to close (taskkill without /F on
+ * Windows, SIGTERM elsewhere), then end it after [graceMs].
+ */
+internal suspend fun stopGameProcesses(extra: ProcessHandle? = null, graceMs: Long = 10_000): Boolean =
+    withContext(Dispatchers.IO) {
+        val targets =
+            (ProcessHandle.allProcesses().use { all -> all.filter(::isGameProcess).toList() } + listOfNotNull(extra))
+                .distinctBy { it.pid() }
+                .filter { it.isAlive }
+        val windows = System.getProperty("os.name").startsWith("Windows")
+        targets.forEach { p ->
+            if (windows) runCatching { ProcessBuilder("taskkill", "/PID", p.pid().toString()).start().waitFor() }
+            else p.destroy()
         }
+        withTimeoutOrNull(graceMs) { while (targets.any { it.isAlive }) delay(250) }
+        targets.filter { it.isAlive }.forEach { it.destroyForcibly() }
+        withTimeoutOrNull(5_000) { while (targets.any { it.isAlive }) delay(250) }
+        targets.none { it.isAlive }
     }
 
 /**
@@ -172,6 +192,12 @@ class RealGameLauncher(
             writeDoorstop(path, bytes)
         }
         restores.clear(game)
+    }
+
+    override suspend fun stop(): Boolean {
+        val stopped = stopGameProcesses(launched?.toHandle())
+        mutex.withLock { if (!pending) flow.value = detect() || launched?.isAlive == true }
+        return stopped
     }
 
     override suspend fun start(state: AppState, withoutMods: Boolean) =

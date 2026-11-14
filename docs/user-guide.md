@@ -225,7 +225,7 @@ The arrow beside Play opens a menu (you can also right-click Play):
 - **Open the game folder.**
 - **Open the mod log:** messages from mods, useful when a mod fails.
 
-**While the game runs**, NNOMM shows "Game is running". You can still change mods; NNOMM applies the changes when the game closes.
+**While the game runs**, NNOMM shows "Game is running". You can still change mods; NNOMM applies the changes when the game closes. To close the game from NNOMM, right-click "Game is running" and choose **Stop the game**, as with Stop in Steam.
 
 **Start options** for the game (for example `-screen-fullscreen 0`) and what NNOMM does when the game starts (stay open, minimise, close) are in **Settings > Game**.
 

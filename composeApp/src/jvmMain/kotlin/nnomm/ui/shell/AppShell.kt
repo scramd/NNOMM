@@ -496,7 +496,8 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                 )
             }
             if (s.gameRunning || s.gameStarting)
-                Tooltip(if (s.gameRunning) "Nuclear Option is running" else "Starting Nuclear Option…") {
+                RightClickMenu({ runningItems(model) }) {
+                Tooltip(if (s.gameRunning) "Nuclear Option is running. Right-click to stop it." else "Starting Nuclear Option…") {
                     Row(
                         Modifier.fillMaxWidth()
                             .height(34.dp)
@@ -513,6 +514,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                 weight = 600,
                             )
                     }
+                }
                 }
             else
                 RightClickMenu({ playItems(model) }) {
@@ -712,6 +714,18 @@ internal fun playItems(model: AppModel): List<MenuEntry> {
         ),
     )
 }
+
+/** Right-click on "Game is running". */
+internal fun runningItems(model: AppModel): List<MenuEntry> =
+    buildList {
+        if (model.store.state.value.gameRunning)
+            add(MenuEntry.Item("Stop the game", icon = NnIcons.square, action = { model.store.stopGame() }))
+        add(
+            MenuEntry.Item("Open the game folder", icon = NnIcons.folder, action = {
+                model.store.state.value.game.folder?.let { model.openPath(java.io.File(it)) }
+            })
+        )
+    }
 
 /** Right-click on the profile list, beside the profiles. */
 internal fun profileListItems(model: AppModel): List<MenuEntry> =

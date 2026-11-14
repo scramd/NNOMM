@@ -1056,6 +1056,16 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         saveSettings()
     }
 
+    /** Closes the running game, like Stop in Steam. */
+    fun stopGame() {
+        if (!state.value.gameRunning) return
+        toast("Closing Nuclear Option…")
+        background {
+            if (io.launcher.stop()) toast("Closed Nuclear Option.")
+            else toast("Could not close Nuclear Option. Close it in the game or in Task Manager.")
+        }
+    }
+
     fun play(withoutMods: Boolean = false) {
         val s = state.value
         if (s.gameRunning || s.gameStarting) return

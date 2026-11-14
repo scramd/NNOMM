@@ -153,6 +153,9 @@ interface GameLauncher {
     val running: StateFlow<Boolean>
 
     suspend fun start(state: AppState, withoutMods: Boolean)
+
+    /** Closes the running game, like Stop in Steam. Returns false when it is still running. */
+    suspend fun stop(): Boolean = true
 }
 
 /** NNOMM's private settings location only, never NOMM's. */
