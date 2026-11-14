@@ -486,7 +486,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                 transfers.getOrPut(transferKey) {
                                     worker
                                         .async(start = CoroutineStart.LAZY) {
-                                            slots.withPermit {
+                                            // Only the network transfer takes a download slot. Storing waits for the
+                                            // disk queue (shared with game-folder changes); holding a slot there made
+                                            // a pack's downloads wait for each other.
+                                            val file = slots.withPermit {
                                                 val artifact = x.versions.first { it.version == v }
                                                 var lastProgress = Long.MIN_VALUE
                                                 var lastPercent = -2
@@ -520,14 +523,15 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                                                             }
                                                         }
                                                     }
-                                                try {
-                                                    diskAwait {
-                                                        ensureActive()
-                                                        io.modStore.put(id, v, file)
-                                                    }
-                                                } finally {
-                                                    file.close()
+                                                file
+                                            }
+                                            try {
+                                                diskAwait {
+                                                    ensureActive()
+                                                    io.modStore.put(id, v, file)
                                                 }
+                                            } finally {
+                                                file.close()
                                             }
                                         }
                                         .also { transfer ->
@@ -1281,9 +1285,28 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 }
             }
         }
+        if (n == 0) {
+            toast("Imported ${pack.name}")
+            return
+        }
         toast(
-            "Importing ${pack.name}" + if (n == 0) "" else ": ${plural(n,"download","downloads")}"
+            "Importing ${pack.name}: ${plural(n, "download", "downloads")}. Mods appear in the Library as they finish.",
+            ms = 8000,
         )
+        // One message when every download of this import has ended and the game folder is updated.
+        val profile = state.value.profileId
+        val keys = rows.filter { it.packVersion != null && it.kind != PackKind.SAME }.map { "${it.id}/${it.packVersion}/$profile" }
+        val waiting = synchronized(lock) { keys.mapNotNull { jobs[it] } }
+        worker.launch {
+            waiting.joinAll()
+            runCatching { diskAwait {} }
+            val failed =
+                state.value.downloads.count { d -> d.error != null && d.profile == profile && "${d.id}/${d.version}/$profile" in keys }
+            toast(
+                if (failed == 0) "${pack.name} is ready: ${plural(n, "mod", "mods")} installed."
+                else "${pack.name} is ready, but ${plural(failed, "download", "downloads")} failed. Open Downloads in the sidebar to retry."
+            )
+        }
     }
 
     /** Keep the profile and its versions, but no longer fetch updates for this pack. */

@@ -82,6 +82,23 @@ class PageBRegressionTest {
     }
 
     @Test
+    fun importSaysWhenEveryDownloadHasEnded() = runBlocking {
+        val store = AppStore(Demo.state(), Demo.io().copy(persistence = null))
+        try {
+            store.importPack(Demo.PACK_IMPORT)
+            assertTrue(store.state.value.toasts.any { it.text.contains("Mods appear in the Library as they finish") })
+            withTimeout(20_000) {
+                while (store.state.value.toasts.none { it.text.contains("is ready") }) delay(50)
+            }
+            val ready = store.state.value.toasts.first { it.text.contains("is ready") }.text
+            assertEquals("Pacific Wing training pack is ready: 8 mods installed.", ready)
+            assertTrue(store.state.value.downloads.none { it.percent < 100 && it.error == null })
+        } finally {
+            store.shutdown()
+        }
+    }
+
+    @Test
     fun newestGamePathInspectionWins() = runTest {
         val io = Demo.io()
         val folder =
