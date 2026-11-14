@@ -64,7 +64,7 @@ class FinalAcceptanceTest {
     }
 
     @Test
-    fun removeEverythingKeepsPersonalCopiesVisibleOffAndCountsInstalledOnly() = runBlocking {
+    fun removeEverythingRemovesEveryModAndKeepsStoredCopiesForNow() = runBlocking {
         val root = Files.createTempDirectory("final-removal-")
         val storage = RealModStore(root.resolve("home"))
         val game = root.resolve("game").createDirectories()
@@ -106,23 +106,16 @@ class FinalAcceptanceTest {
             store.removeEverything()
             store.awaitDiskIdle()
             val state = store.state.value
-            assertEquals(setOf("local", "taken", "unknown"), state.installed.keys)
+            // Remove all mods empties the Library, also for mods that cannot be downloaded again.
+            assertTrue(state.installed.isEmpty())
             assertTrue(
                 Files.walk(game.resolve("BepInEx/plugins")).use { files ->
                     files.noneMatch { it.fileName.toString().endsWith(".dll") }
                 }
             )
-            assertTrue(state.installed.values.all { it.profiles.values.none { p -> p.on } })
-            for (id in state.installed.keys) assertTrue(
-                storage.version(id, "1").resolve("a.dll").exists()
-            )
-            assertEquals(15L, storage.installedBytes(state))
-            assertTrue(storage.usedBytes() >= 20L)
-            store.clearUnusedFiles()
-            store.awaitDiskIdle()
-            for (id in state.installed.keys) assertTrue(
-                storage.version(id, "1").resolve("a.dll").exists()
-            )
+            // As with Uninstall, the stored copies stay until the player clears unused files.
+            for (id in ids) assertTrue(storage.version(id, "1").resolve("a.dll").exists())
+            assertEquals(0L, storage.installedBytes(state))
         } finally {
             store.shutdown()
             deleteTree(root)

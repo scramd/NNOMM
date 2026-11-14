@@ -299,7 +299,7 @@ class Review6ProbeTest {
 
     // P6: normal Remove everything with a registry, a local and a taken-over mod.
     @Test
-    fun removeEverythingKeepsPersonalMods() = runBlocking {
+    fun removeEverythingRemovesPersonalModsToo() = runBlocking {
         val home = temp()
         val g = game()
         g.resolve("BepInEx/plugins/Hand").createDirectories().resolve("hand.dll").writeText("hand")
@@ -346,25 +346,7 @@ class Review6ProbeTest {
         println(
             "PROBE P6 installed=${a.state.value.installed.mapValues { it.value.profiles.mapValues { p -> p.value.on } }} toasts=${a.state.value.toasts.map { it.text }}"
         )
-        val hand = found.first().first.id
-        assertFalse("reg" in a.state.value.installed)
-        assertTrue(hand in a.state.value.installed)
-        assertTrue("local-x" in a.state.value.installed)
-        a.setOn(listOf(hand), true)
-        a.awaitDiskIdle()
-        Files.list(g.resolve("BepInEx/plugins")).use {
-            println("PROBE P6 hand back ${it.toList().map { p -> p.name }}")
-        }
-        println(
-            "PROBE P6 after on: installed=${a.state.value.installed.mapValues { it.value.profiles.mapValues { p -> p.value.on } }} problems=${f.applyProblems.value} ok=${f.applySucceeded} toasts=${a.state.value.toasts.map { it.text }} profile=${a.state.value.profileId} hand=$hand"
-        )
-        a.setOn(listOf("local-x"), true)
-        a.awaitDiskIdle()
-        Files.list(g.resolve("BepInEx/plugins")).use {
-            println(
-                "PROBE P6 local-x back ${it.toList().map { p -> p.name }} problems=${f.applyProblems.value} toasts=${a.state.value.toasts.map { it.text }}"
-            )
-        }
+        assertTrue(a.state.value.installed.isEmpty())
         assertTrue(f.applySucceeded, f.applyProblems.value.toString())
         a.shutdown()
     }
@@ -718,7 +700,7 @@ class Review6ProbeTest {
             assertTrue(a.state.value.installed.isEmpty())
             assertTrue(
                 a.state.value.toasts.any {
-                    it.text.contains("Removed 1 registry mod from every profile.")
+                    it.text.contains("Removed 1 mod from the Library and every profile.")
                 }
             )
             assertNotNull(saved)

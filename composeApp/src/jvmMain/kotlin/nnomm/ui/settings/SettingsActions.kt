@@ -140,9 +140,7 @@ private class SettingsConfirm(private val model: AppModel) : Overlay {
                 model.closeOverlay()
             }, kind = ButtonKind.Danger)
         }) {
-            Label(if (definition.key == "dzSettings") definition.help + " You cannot undo this." else if (model.store.state.value.installed.isNotEmpty() && model.store.state.value.installed.values.all { it.source == ModSource.LOCAL })
-                "Your mods stay in the Library, turned off, with their stored copies kept. You can turn them on again. Only loader files NNOMM installed are removed. Your own files, profiles and recovery copies stay."
-                else definition.help + " You can turn retained mods on again. Mods removed from profiles must be added again.")
+            Label(definition.help + " You cannot undo this.")
         }
     }
 }

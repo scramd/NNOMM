@@ -310,6 +310,6 @@ NNOMM never uses NOMM's settings folder.
 
 ## Stop using NNOMM
 
-- **To remove all mods from the game:** **Settings > Danger zone > Remove all mods**. Mods that can be downloaded again leave every profile. Other mods stay in the Library, turned off. NNOMM removes only the loader files that it installed itself. Game files, mod settings and logs stay.
+- **To remove all mods from the game:** **Settings > Danger zone > Remove all mods**. Every mod leaves the Library, every profile and the game folder, and NNOMM removes the loader files that it installed itself. Your settings and profiles stay, and so do game files, mod settings and logs. To remove only some mods, select them in the Library and click **Uninstall**.
 - **To play without mods once:** use **Play without mods** in the Play menu.
 - **To remove NNOMM:** first remove the mods as above if you want a clean game folder, then uninstall NNOMM. Your settings folder stays; delete it by hand if you do not need it.

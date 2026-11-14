@@ -327,7 +327,7 @@
       "cat": "danger",
       "key": "dzAll",
       "label": "Remove all mods",
-      "help": "Mods that can be downloaded again leave every profile. Other mods stay in the Library, turned off, with their stored copies kept. Only loader files NNOMM installed are removed. An adopted loader, your own files, profiles and recovery copies stay.",
+      "help": "Removes every mod from the Library, from every profile and from the game folder, and the mod loader files that NNOMM installed. Your settings and profiles stay.",
       "type": "actions",
       "actions": [
         "Remove all mods"

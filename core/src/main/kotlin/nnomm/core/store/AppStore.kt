@@ -1864,15 +1864,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 return@disk
             }
             val snapshot = state.value
-            val keep =
-                snapshot.installed
-                    .filter { (id, mod) ->
-                        mod.source == ModSource.LOCAL || io.modStore.keepInLibrary(id, mod.versions)
-                    }
-                    .mapValues { (_, mod) ->
-                        mod.copy(profiles = mod.profiles.mapValues { (_, p) -> p.copy(on = false) })
-                    }
-            val remove = snapshot.installed.keys - keep.keys
+            // Every mod leaves the Library, as with Uninstall. Stored copies stay on disk (logical removal).
+            val keep = emptyMap<String, InstalledMod>()
+            val remove = snapshot.installed.keys
             io.modStore.protect(snapshot.installed.keys)
             val proposed = snapshot.copy(installed = keep)
             try {
@@ -1948,13 +1942,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             val result =
                 buildList {
                         if (remove.isNotEmpty())
-                            add(
-                                "Removed ${plural(remove.size, "registry mod", "registry mods")} from every profile."
-                            )
-                        if (keep.isNotEmpty())
-                            add(
-                                "Kept ${plural(keep.size, "mod", "mods")} in the Library, turned off, because ${if (keep.size == 1) "its files may" else "their files may"} not be available to download again."
-                            )
+                            add("Removed ${plural(remove.size, "mod", "mods")} from the Library and every profile.")
                         if (snapshot.installed.isEmpty()) add("There are no mods to remove.")
                         if (snapshot.game.folder == null)
                             add(

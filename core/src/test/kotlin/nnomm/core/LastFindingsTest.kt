@@ -202,7 +202,7 @@ class LastFindingsTest {
             app.removeEverything()
             app.awaitDiskIdle()
             val text = app.state.value.toasts.joinToString { it.text }
-            assertTrue(text.contains("Kept 1 mod in the Library"), text)
+            assertTrue(text.contains("Removed 1 mod from the Library"), text)
             assertFalse(text.contains("1 registry mods"))
             assertFalse(text.contains("1 local"))
             assertFalse(text.contains("Updated the Library"))
