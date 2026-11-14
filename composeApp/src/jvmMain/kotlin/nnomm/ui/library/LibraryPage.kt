@@ -47,6 +47,17 @@ fun LibraryPage() {
             if (view.descending) -1 else 1,
         )
     val ids = remember(s, filter) { libList(s, filter) }
+    // Mods that still download show as placeholders, in their place in the list.
+    // An import into another profile also adds to the Library, so all profiles' downloads count.
+    val pending by
+        remember(model) {
+                model.store.state.map { pendingInstalls(it, null) to pendingInstalls(it).toSet() }.distinctUntilChanged()
+            }
+            .collectAsState(model.store.state.value.let { pendingInstalls(it, null) to pendingInstalls(it).toSet() })
+    val rows =
+        remember(s, filter, pending) {
+            if (pending.first.isEmpty()) ids else libList(s, filter, pending.first, pending.second)
+        }
     val counts = remember(s) { libCounts(s) }
     var previousInstalled by remember { mutableStateOf(s.installed.keys) }
     LaunchedEffect(s.installed) {
@@ -89,11 +100,17 @@ fun LibraryPage() {
             }
     }
     val currentIds by rememberUpdatedState(ids)
-    fun toggle(picked: Set<String>) {
+    // The table also shows placeholder rows, so scrolling works with the rows as drawn.
+    val shownRows by rememberUpdatedState(rows)
+    fun toggle(all: Set<String>) {
+        val picked = all.filter { it in model.store.state.value.installed }.toSet()
+        picked.forEach(view::seen)
         if (picked.isNotEmpty())
             model.store.setOn(picked.toList(), !picked.all { isOn(model.store.state.value, it) })
     }
-    fun remove(picked: Set<String>) {
+    fun remove(all: Set<String>) {
+        val picked = all.filter { it in model.store.state.value.installed }.toSet()
+        if (picked.isEmpty()) return
         val index = currentIds.indexOf(selection.focused)
         val next = currentIds.getOrNull((index + 1).coerceAtMost(currentIds.lastIndex))
         model.store.uninstall(picked.toList())
@@ -127,23 +144,26 @@ fun LibraryPage() {
                             )
                         selection.focus(rows[next])
                         model.ui.panel?.let { model.ui.openMod(rows[next], it.tab) }
+                        val drawn = shownRows.indexOf(rows[next]).coerceAtLeast(0)
                         scope.launch {
                             val row =
                                 listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                    it.index == next + 1
+                                    it.index == drawn + 1
                                 }
                             if (
                                 row == null ||
                                     row.offset < 30 ||
                                     row.offset + row.size > listState.layoutInfo.viewportEndOffset
                             ) {
-                                listState.scrollToItem(next + 1, -30)
+                                listState.scrollToItem(drawn + 1, -30)
                             }
                         }
                     }
                     event.key == Key.Spacebar && picked.isNotEmpty() -> toggle(picked)
-                    event.key == Key.Enter && selection.focused != null ->
+                    event.key == Key.Enter && selection.focused != null -> {
+                        view.seen(selection.focused!!)
                         model.ui.openMod(selection.focused!!)
+                    }
                     event.key == Key.Delete && picked.isNotEmpty() -> remove(picked)
                     else -> return@registerKeys false
                 }
@@ -218,7 +238,7 @@ fun LibraryPage() {
                 )
                 LibraryMenu({ moreItems(model) }) { IconButton(NnIcons.more, "More", it) }
             }
-            if (s.installed.isEmpty()) {
+            if (s.installed.isEmpty() && pending.first.isEmpty()) {
                 LibraryEmpty(
                     "No mods yet",
                     "Install a mod from Browse, or drop a mod file or a modpack on this window.",
@@ -325,12 +345,16 @@ fun LibraryPage() {
                 BoxWithConstraints(Modifier.weight(1f)) {
                     Column {
                         LibraryTable(
-                            ids,
+                            rows,
                             Modifier.fillMaxSize(),
                             selection = selection,
                             state = listState,
-                            onOpen = { model.ui.openMod(it) },
+                            onOpen = {
+                                model.ui.library.seen(it)
+                                model.ui.openMod(it)
+                            },
                             isOff = { !isOn(s, it) },
+                            isPlaceholder = { it !in s.installed },
                             header = { column ->
                                 if (column == "select")
                                     CheckBox(
@@ -372,17 +396,21 @@ fun LibraryPage() {
                                     }
                                 }
                             },
-                            cell = { id, column -> LibraryCell(s, id, column, selection, ids) },
+                            cell = { id, column ->
+                                if (id in s.installed) LibraryCell(s, id, column, selection, ids)
+                                else PlaceholderCell(s, id, column)
+                            },
                             rowMenu = { id ->
                                 val now = model.store.state.value
-                                if (id in selection.picked && selection.picked.size > 1)
+                                if (id !in now.installed) browseItems(model, now, id)
+                                else if (id in selection.picked && selection.picked.size > 1)
                                     selectionItems(model, now, selection.picked, ::remove) {
                                         selection.clear()
                                     }
                                 else modItems(model, now, id)
                             },
                             footer = {
-                                if (ids.isEmpty())
+                                if (rows.isEmpty())
                                     LibraryEmpty("No mod in this view", "") {
                                         Button(
                                             "Show all mods",
@@ -480,7 +508,10 @@ private fun LibraryCell(
         "select" ->
             CheckBox(
                 id in selection.picked,
-                { selection.select(ids, id, shift = shift, ctrl = true) },
+                {
+                    model.ui.library.seen(id)
+                    selection.select(ids, id, shift = shift, ctrl = true)
+                },
                 modifier =
                     Modifier.onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) {
                         shift = it.keyboardModifiers.isShiftPressed
@@ -490,7 +521,10 @@ private fun LibraryCell(
         "on" ->
             Switch(
                 isOn(s, id),
-                { model.store.toggle(id) },
+                {
+                    model.ui.library.seen(id)
+                    model.store.toggle(id)
+                },
                 modifier = Modifier.alpha(if (isOn(s, id)) 1f else .8f),
                 description = "${if (isOn(s, id)) "Turn off" else "Turn on"} ${mod.name}",
             )
@@ -506,6 +540,7 @@ private fun LibraryCell(
         "name" ->
             LibraryNameCell(
                 mod.name,
+                fresh = model.ui.library.isFresh(id),
                 badges = {
                     problems(s, id).forEach { problem ->
                         Tooltip(
@@ -520,7 +555,7 @@ private fun LibraryCell(
                                     listOf(MenuEntry.Heading(problem.text)) +
                                         problemFixes(model.store.state.value, id, problem).map { fix
                                             ->
-                                            MenuEntry.Item(fix.label, danger = fix.danger) {
+                                            MenuEntry.Item(fix.label, icon = fixIcon(fix), danger = fix.danger) {
                                                 model.perform(fix.action)
                                             }
                                         }
@@ -547,6 +582,19 @@ private fun LibraryCell(
             LibraryMenu({ modItems(model, model.store.state.value, id) }) {
                 IconButton(NnIcons.more, "More", it, small = true)
             }
+    }
+}
+
+/** A mod that is still downloading: its name and picture, grayed, and the download's progress. */
+@Composable
+private fun PlaceholderCell(s: AppState, id: String, column: String) {
+    val mod = s.mod(id)
+    val c = LocalNnTheme.current.colors
+    when (column) {
+        "icon" -> ModTile(id, mod.name, mod.demoPicture, TileSize.Normal, off = true, imageUrl = mod.imageUrl)
+        "name" -> Label(mod.name, color = c.text3, maxLines = 1)
+        "version" -> LibraryVersion(s, id)
+        "size" -> LibrarySize(mod.installable?.sizeKb?.let(::size) ?: "—", Modifier.fillMaxWidth())
     }
 }
 
@@ -580,7 +628,13 @@ private fun LibraryVersion(s: AppState, id: String) {
             Tooltip(
                 "Update to ${s.mod(id).newestRelease?.version}${if (s.settings.bool("showProfiles") && s.profiles.size > 1) " in ${s.profile().name}" else ""}"
             ) {
-                control(Modifier, onClick = { model.store.update(id) }) { modifier, _, _ ->
+                control(
+                    Modifier,
+                    onClick = {
+                        model.ui.library.seen(id)
+                        model.store.update(id)
+                    },
+                ) { modifier, _, _ ->
                     Row(
                         modifier,
                         verticalAlignment = Alignment.CenterVertically,
@@ -612,8 +666,23 @@ private fun LibraryVersion(s: AppState, id: String) {
     }
 }
 
+/**
+ * The word New, inverted in the theme's strong colour so it stands out without meaning anything
+ * else: orange means updates, olive means on, yellow means a warning.
+ */
 @Composable
-private fun LibraryNameCell(name: String, badges: @Composable RowScope.() -> Unit) {
+private fun NewTag() {
+    val c = LocalNnTheme.current.colors
+    Box(
+        Modifier.background(c.strong, androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp)
+    ) {
+        Label("New", color = c.strongInk, size = 11.5f, weight = 650, maxLines = 1)
+    }
+}
+
+@Composable
+private fun LibraryNameCell(name: String, fresh: Boolean = false, badges: @Composable RowScope.() -> Unit) {
     val c = LocalNnTheme.current.colors
     val off = LocalTableOff.current
     BoxWithConstraints {
@@ -629,6 +698,8 @@ private fun LibraryNameCell(name: String, badges: @Composable RowScope.() -> Uni
                 weight = if (off) 400 else 600,
                 maxLines = 1,
             )
+            // A mod added a moment ago has a New tag.
+            if (fresh) NewTag()
             Row(
                 Modifier.widthIn(max = badgeWidth),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),

@@ -100,6 +100,8 @@ Click a mod to open [the mod panel](#the-mod-panel) with its description, its re
 The Library lists every mod on your computer, with its switch for the profile you use.
 
 - **Switch:** turns the mod on or off in this profile. A mod that is off has a grey name.
+- **New mods:** a mod that you just added has a **New** tag beside its name for a minute, or until you click or use it, so you can find it. When mods come into an empty Library, or into a new profile from a modpack, they are all new, and none stand out.
+- **Mods that still download** are in the list already, grayed, in the place they will have. Each row fills in when its download finishes.
 - **Columns:** name, version, source (Registry, Modpack or Local file), size, release date. Click a column heading to sort.
 - **Quick filters** on top: All, On, Off, Updates, Local files, Problems. Each shows how many mods it has.
 - **Filter by name:** type to find a mod.
@@ -163,7 +165,9 @@ Examples: "Squad night" with the mods your squad uses on its server, "Single pla
 
 - **Make a profile:** click **+** beside Profiles in the sidebar. A new profile starts with all mods off, as a copy of the current profile, or from a modpack file.
 - **Use a profile:** click it in the sidebar. NNOMM puts that profile's mods into the game folder at once (while the game runs, when it closes). The Play box shows which profile is in use and how many mods are on. Click the profile name in the Play box or beside **Library** for the same menu: the profiles to switch to, **New profile**, and the actions for the profile in use (Rename, Make a copy, Share, Delete and so on).
-- **Right-click a profile**, or point at it and click **…** at the end of its row, for: Use this profile, Play with this profile (Play for the profile in use), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes in *version* (for a modpack with an update), Stop following this pack (for a profile made from a modpack), Delete this profile. The first profile cannot be deleted, but you can rename it. A double click on a profile's name also renames it.
+- **Right-click a profile**, or point at it and click **…** at the end of its row, for: Use this profile, Play with this profile (Play for the profile in use), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes in *version* (for a modpack with an update), Follow a modpack address or Change the update address, Stop following this pack (for a profile that follows a modpack), Move up, Move down, Delete this profile. The first profile cannot be deleted, but you can rename it.
+- **Rename:** double-click the profile's name, or choose **Rename**. The name becomes a text field in the sidebar. Press Enter or click elsewhere to keep the new name, Escape to keep the old one.
+- **Order:** drag a profile up or down in the sidebar, or use **Move up** and **Move down**.
 - **Names:** every profile has its own name. If you give a profile a name that another profile has, NNOMM adds a number, for example "Squad night (2)". This also happens for **Make a copy** and when you import the same modpack twice.
 - **Mod settings for each profile:** mod settings are the values you change in the game, for example with F1. A profile can keep its own mod settings, so the same mod can have different settings in each profile. Turn this on when you make the profile, or in **Settings > Profiles**.
 - **Do not need profiles?** Turn off **Show profiles in the sidebar** in **Settings > Profiles**. NNOMM then uses the Default profile, and you have one list of mods. A modpack that you import then adds its mods to Default.
@@ -199,13 +203,19 @@ Open the `.nommpack` file, drag it onto the NNOMM window, or choose **Import a m
 Then choose:
 
 - **Make a new profile** (the default): the new profile gets the pack's mods in the pack's versions. Type its name under **Profile name**; it starts as the pack's name. Your other profiles stay as they are.
-- **Add the mods to** your profile: the pack's mods are turned on in that profile. Your other mods stay as they are. If your profile has a newer version of a mod than the pack, choose **Keep** your version or **Use** the pack's version.
+- **Add the mods to a profile you have:** pick the profile in the list at the right of this option; it does not need to be the one you use. The pack's mods are turned on in that profile. Its other mods stay as they are. If the profile has a newer version of a mod than the pack, choose **Keep** your version or **Use** the pack's version.
+
+If none of the pack's mods can be installed, NNOMM does not import it, because the result would be an empty profile. The exception is a pack with an address for updates: as a new profile, it follows the pack and gets the mods with the pack's next version.
+
+While the mods download, a message says how many there are. They show in the Library at once, grayed, and fill in one by one. A second message says when the import is finished, or which downloads failed.
 
 ### Pack updates
 
 When a pack has a newer version at its address, the profile shows **update** in the sidebar. Right-click it and choose **See what changes in** *version*: NNOMM shows the mods that the update adds, removes and changes, before anything happens.
 
 A profile made from a pack follows the pack: the pack sets the versions of its mods (the mod panel shows "set by the modpack"), and these mods get their updates through pack updates. To manage the versions yourself, right-click the profile and choose **Stop following this pack** (it is also in the pack update window). The profile keeps its mods and their versions, and you can then update them and change their versions yourself. NNOMM no longer looks for updates of the pack.
+
+To change where a profile reads pack updates from, right-click it and choose **Change the update address**. Leave the address empty to stop reading updates. A profile that does not come from a modpack can also follow one: choose **Follow a modpack address** and paste the address that the pack's maker gave you. The pack at that address then shows as an update of the profile, and **See what changes** lets you add its mods.
 
 ## Add a mod from a file
 

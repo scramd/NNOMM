@@ -88,7 +88,7 @@ class PageBRegressionTest {
         val store = AppStore(Demo.state(), Demo.io().copy(persistence = null))
         try {
             store.importPack(Demo.PACK_IMPORT)
-            assertTrue(store.state.value.toasts.any { it.text.contains("Mods appear in the Library as they finish") })
+            assertTrue(store.state.value.toasts.any { it.text.contains("They fill in in the Library as they finish") })
             withTimeout(20_000) {
                 while (store.state.value.toasts.none { it.text.contains("is ready") }) delay(50)
             }

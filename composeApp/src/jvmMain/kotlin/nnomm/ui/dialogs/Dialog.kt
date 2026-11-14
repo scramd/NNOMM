@@ -161,6 +161,7 @@ internal fun OptionCard(
     description: String,
     selected: Boolean,
     onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val theme = LocalNnTheme.current
     val ink = if (theme.colors.bg == DarkColors.bg) DarkColors.text else LightColors.text
@@ -173,6 +174,7 @@ internal fun OptionCard(
             selected,
             onClick,
             Modifier.heightIn(min = 57.dp),
+            trailing,
         )
     }
 }

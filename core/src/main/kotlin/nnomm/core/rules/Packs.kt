@@ -13,9 +13,17 @@ data class ImportRow(
     val defaultOn: Boolean = true,
     /** The pack's version, when the registry no longer has it and no stored copy exists. */
     val goneVersion: String? = null,
+    /** With [goneVersion]: the registry has the version, but in an archive format NNOMM cannot install. */
+    val archive: Boolean = false,
 )
 
-fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List<ImportRow> =
+/** [target] is the profile that ADD puts the mods in; NEW compares with it too, for the versions you have. */
+fun importRows(
+    s: AppState,
+    pack: Pack,
+    mode: ImportMode = ImportMode.NEW,
+    target: String = s.profileId,
+): List<ImportRow> =
     pack.items.map { i ->
         if (
             i.kind == PackKind.LOCAL ||
@@ -31,7 +39,17 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
                 true,
                 false,
             )
-        val have = verOf(s, i.id)
+        val have = verOf(s, i.id, target)
+        // The pack's version comes in an archive NNOMM cannot install (and no stored copy exists).
+        val archive =
+            i.version != null &&
+                have != i.version &&
+                i.version !in s.installed[i.id]?.versions.orEmpty() &&
+                s.mod(i.id).versions.find { it.version == i.version }?.unavailableReason != null
+        if (archive)
+            return@map if (have != null)
+                ImportRow(PackKind.SAME, i.id, have, have, "pack uses ${i.version}, which NNOMM cannot install; you keep $have", goneVersion = i.version, archive = true)
+            else ImportRow(PackKind.UNAVAILABLE, i.id, i.version, null, "Version ${i.version} cannot be installed", goneVersion = i.version, archive = true)
         // The registry no longer lists the pack's version and no stored copy exists, so it cannot be installed.
         // A mod you have then keeps your version; one you do not have is skipped.
         if (
@@ -60,8 +78,8 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
                 PackKind.ADD -> s.mod(i.id).installable?.sizeKb?.let(::size).orEmpty()
                 PackKind.SAME -> "you have it"
                 PackKind.UP -> "$have to ${i.version}"
-                PackKind.OTHER -> "pack uses ${i.version}, ${s.profile().name} keeps $have"
-                else -> "${s.profile().name} has a newer version than the pack"
+                PackKind.OTHER -> "pack uses ${i.version}, ${s.profile(target).name} keeps $have"
+                else -> "${s.profile(target).name} has a newer version than the pack"
             }
         ImportRow(k, i.id, i.version, have, text)
     }

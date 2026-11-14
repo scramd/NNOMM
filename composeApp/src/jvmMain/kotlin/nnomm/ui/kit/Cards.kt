@@ -44,6 +44,8 @@ fun OptionCard(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** A control at the end of the card, such as a choice that belongs to this option. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = LocalNnTheme.current.colors
     control(
@@ -61,10 +63,11 @@ fun OptionCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(Modifier.padding(top = 2.dp)) { SelectionGlyph(selected, true) }
-            Column {
+            Column(if (trailing != null) Modifier.weight(1f) else Modifier) {
                 Label(title, weight = 600)
                 Label(description, color = c.text2)
             }
+            if (trailing != null) Box(Modifier.align(Alignment.CenterVertically)) { trailing() }
         }
     }
 }

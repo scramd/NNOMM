@@ -44,6 +44,51 @@ class AppModel(
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    init {
+        trackAddedMods()
+    }
+
+    /**
+     * Mods that come into the Library stand out there for a minute, counted from the last one that
+     * arrives and the end of the downloads, or until the player clicks them.
+     */
+    private fun trackAddedMods() {
+        var previous = store.state.value.installed.keys
+        var expiry: Job? = null
+        scope.launch {
+            store.state.map { it.installed.keys }.distinctUntilChanged().collect { keys ->
+                val added = keys - previous
+                val before = previous
+                previous = keys
+                if (added.isEmpty()) return@collect
+                val view = ui.library
+                val s = store.state.value
+                // Mods that come into an empty Library (or one with only quiet new mods) are all new.
+                val emptyBefore = (before - view.quiet).isEmpty()
+                val quiet =
+                    added.filter { id ->
+                        emptyBefore ||
+                            id in view.quietIds ||
+                            view.quietProfile?.let { p ->
+                                nnomm.core.rules.isOn(s, id, p) || s.downloads.any { it.id == id && it.profile == p }
+                            } == true
+                    }
+                view.quiet = view.quiet + quiet
+                view.fresh = view.fresh + (added - quiet.toSet())
+                expiry?.cancel()
+                expiry =
+                    scope.launch {
+                        store.state.first { nnomm.core.rules.pendingInstalls(it, null).isEmpty() }
+                        delay(60_000)
+                        view.fresh = emptySet()
+                        view.quiet = emptySet()
+                        view.quietProfile = null
+                        view.quietIds = emptySet()
+                    }
+            }
+        }
+    }
+
     override fun close() {
         scope.cancel()
         store.close()
@@ -118,7 +163,7 @@ class AppModel(
                 }
                 file.extension.lowercase() in listOf("dll", "zip", "7z") ->
                     store.addLocal(file.absolutePath)
-                else -> notify("NNOMM cannot use ${file.name}")
+                else -> notify("NNOMM cannot use ${nnomm.core.rules.shortName(file.name)}")
             }
         }
     }
@@ -217,6 +262,34 @@ class AppModel(
 
     fun notify(message: String) {
         ui.updateStatus = message
+    }
+
+    /** Rename in place in the sidebar where it shows the profile names, else in a dialog. */
+    fun startRename(id: String) {
+        ui.dismissMenu?.invoke()
+        if (ui.sidebarNames) ui.renamingProfile = id else openOverlay("rename", id)
+    }
+
+    private var quietEnd: Job? = null
+
+    /**
+     * A modpack import makes the new profile [profileId]: the mods it adds, and the pack's files
+     * [ids], do not stand out. This ends a minute after the import's downloads, also when none came.
+     */
+    fun quietImport(profileId: String, ids: Set<String>) {
+        ui.library.quietProfile = profileId
+        ui.library.quietIds = ids
+        quietEnd?.cancel()
+        quietEnd =
+            scope.launch {
+                delay(1_000)
+                store.state.first { s -> s.downloads.none { it.profile == profileId && it.percent < 100 && it.error == null } }
+                delay(60_000)
+                if (ui.library.quietProfile == profileId) {
+                    ui.library.quietProfile = null
+                    ui.library.quietIds = emptySet()
+                }
+            }
     }
 
     fun useProfile(id: String) {

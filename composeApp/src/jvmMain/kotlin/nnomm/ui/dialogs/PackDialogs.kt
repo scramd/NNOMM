@@ -80,8 +80,12 @@ class ImportDialog(private val model: AppModel) : Overlay {
         // With profiles hidden the player cannot see or leave a new profile, so the pack goes into Default.
         val profilesShown = state.settings.bool("showProfiles")
         val mode = if (!profilesShown || model.ui.importMode == "add") ImportMode.ADD else ImportMode.NEW
+        // The profile that "Add the mods" puts them in; any profile, not only the one in use.
+        var chosen by remember { mutableStateOf(state.profileId) }
+        val addTo = chosen.takeIf { id -> profilesShown && state.profiles.any { it.id == id } } ?: state.profileId
+        val addName = state.profile(addTo).name
         val rows =
-            importRows(state, pack, mode)
+            importRows(state, pack, mode, if (mode == ImportMode.ADD) addTo else state.profileId)
                 .filterNot { it.local }
                 .sortedBy { listOf(PackKind.CONFLICT, PackKind.ADD, PackKind.UP, PackKind.OTHER, PackKind.SAME, PackKind.UNAVAILABLE).indexOf(it.kind) }
         // Before the registry has loaded, every mod would look missing from it. Offline, the store refuses the import.
@@ -99,12 +103,22 @@ class ImportDialog(private val model: AppModel) : Overlay {
             }
         // A new profile needs a name; a pack can come without one.
         val named = mode == ImportMode.ADD || profileName.isNotBlank()
-        val canImport = !loading && !importing && error == null && registryReady && named
+        // A pack where nothing can be installed would make an empty profile, or change nothing. A new
+        // profile that follows the pack's address is still useful: it gets the mods with the next update.
+        val anything =
+            rows.any { it.kind in listOf(PackKind.ADD, PackKind.SAME, PackKind.UP, PackKind.OTHER, PackKind.CONFLICT) } ||
+                selectedLocalIds.isNotEmpty()
+        val follows = mode == ImportMode.NEW && !pack.followAddress.isNullOrBlank()
+        val empty = registryReady && !loading && error == null && !anything
+        val canImport = !loading && !importing && error == null && registryReady && named && (!empty || follows)
         fun import() {
-            if (loading || importing || error != null || !registryReady || !named) return
+            if (!canImport) return
             importing = true
             scope.launch {
                 try {
+                    // In a new profile every mod is new, so the mods it adds do not stand out.
+                    val target = java.util.UUID.randomUUID().toString()
+                    if (mode == ImportMode.NEW) model.quietImport(target, selectedLocalIds)
                     if (selectedLocalIds.isNotEmpty() && preview != null) {
                         val records =
                             withPackIo(state) {
@@ -112,7 +126,6 @@ class ImportDialog(private val model: AppModel) : Overlay {
                             }
                         model.store.addPreparedLocalMods(records)
                     }
-                    val target = java.util.UUID.randomUUID().toString()
                     val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
                     if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
                     model.store.importPack(
@@ -123,6 +136,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         settings,
                         // Pack previews name bundled mods by content hash, the same id selectedLocals gives them.
                         includedLocals = selectedLocalIds.toList(),
+                        addTo = addTo,
                     )
                     model.ui.go(Page.Library)
                     model.ui.library.filter = "all"
@@ -167,6 +181,20 @@ class ImportDialog(private val model: AppModel) : Overlay {
             if (!loading && error == null && (skipped.isNotEmpty() || goneKept.isNotEmpty())) {
                 Note(notInstallableText(state, skipped, missing, goneKept), warn = true)
             }
+            if (empty) {
+                Note(
+                    when {
+                        follows ->
+                            "None of the pack's mods can be installed now, so the new profile starts empty. It follows the pack, so it gets the mods when the pack is updated."
+                        bundled.isNotEmpty() ->
+                            "None of the pack's mods can be installed from the registry. To import the pack, turn on one of its files below."
+                        mode == ImportMode.NEW ->
+                            "None of the pack's mods can be installed, so the new profile would be empty. You cannot import this pack."
+                        else -> "None of the pack's mods can be installed, so nothing would change in $addName. You cannot import this pack."
+                    },
+                    warn = !follows,
+                )
+            }
             if (!loading && error == null) {
                 Summary(
                     buildList {
@@ -192,7 +220,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                             row.kind.key(),
                             state.catalog.find { it.id == row.id }?.name ?: row.id,
                             if (row.kind == PackKind.CONFLICT)
-                                "${state.profile().name} has a newer version than the pack"
+                                "$addName has a newer version than the pack"
                             else "",
                         ) {
                             if (row.kind == PackKind.CONFLICT)
@@ -218,7 +246,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         (if (one) "This pack also contains a mod as a file. It does not come from the registry, so NNOMM cannot check it."
                         else "This pack also contains ${bundled.size} mods as files. They do not come from the registry, so NNOMM cannot check them.") +
                             " A mod can run any code on your computer. Turn a file on only if you trust $who." +
-                            (if (mode == ImportMode.NEW) " Files you turn on are on in the new profile." else " Files you turn on are on in ${state.profile().name}."),
+                            (if (mode == ImportMode.NEW) " Files you turn on are on in the new profile." else " Files you turn on are on in $addName."),
                         warn = true,
                     )
                     Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -252,11 +280,28 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     if (profileName.isNotBlank() && unique != profileName.trim())
                         Label("A profile with this name exists. The new one is named \"$unique\".", Modifier.padding(start = 4.dp), color = LocalNnTheme.current.colors.text3)
                 }
+                val choose = profilesShown && state.profiles.size > 1
                 OptionCard(
-                    "Add the mods to ${state.profile().name}",
-                    "The pack's mods are turned on in ${state.profile().name}. Your other mods stay as they are.",
+                    if (choose) "Add the mods to a profile you have" else "Add the mods to $addName",
+                    "The pack's mods are turned on in $addName. Its other mods stay as they are.",
                     mode == ImportMode.ADD,
                     { model.ui.importMode = "add" },
+                    trailing =
+                        if (!choose) null
+                        else {
+                            {
+                                // Picking a profile also picks this option.
+                                Select(
+                                    state.profiles.map { it.name + if (it.id == state.profileId) " (in use)" else "" },
+                                    state.profiles.indexOfFirst { it.id == addTo },
+                                    {
+                                        chosen = state.profiles[it].id
+                                        model.ui.importMode = "add"
+                                    },
+                                    Modifier.width(220.dp),
+                                )
+                            }
+                        },
                 )
             }
         }
@@ -303,11 +348,12 @@ class PackUpdateDialog(private val model: AppModel) : Overlay {
         }
         Dialog(
             true,
-            "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
+            if (addressOnly(p)) "${pack.name} ${pack.version} for ${p.name}"
+            else "${p.name} ${p.pack?.version.orEmpty()} to ${p.pack?.nextVersion ?: pack.version}",
             model::closeOverlay,
             wide = true,
             onEnter = ::update,
-            subtitle = "Modpack" + (p.pack?.by ?: pack.by).takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty(),
+            subtitle = "Modpack" + (p.pack?.by?.takeIf { it.isNotBlank() } ?: pack.by).takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty(),
             leftFooter = { Button("Stop following this pack", {
                 model.store.stopFollowingPack(p.id)
                 model.closeOverlay()
@@ -448,14 +494,17 @@ internal fun notInstallableText(s: AppState, skipped: List<ImportRow>, missing: 
         missing.forEach { add("${it.id}: not in the registry. Left out.") }
         skipped.filter { it !in missing && it.goneVersion == null }
             .forEach { add("${s.mod(it.id).name}: the pack does not say which version. Left out.") }
+        fun why(row: ImportRow) =
+            if (row.archive) "version ${row.goneVersion} comes as an archive that NNOMM cannot install yet"
+            else "the registry no longer has version ${row.goneVersion}"
         skipped.filter { it.goneVersion != null }
-            .forEach { add("${s.mod(it.id).name}: the registry no longer has version ${it.goneVersion}. Left out.") }
-        kept.forEach { add("${s.mod(it.id).name}: the registry no longer has version ${it.goneVersion}. Uses your version ${it.have}.") }
+            .forEach { add("${s.mod(it.id).name}: ${why(it)}. Left out.") }
+        kept.forEach { add("${s.mod(it.id).name}: ${why(it)}. Uses your version ${it.have}.") }
     }
     val head =
         if (lines.size == 1) "1 mod in this pack cannot be installed the way the pack asks:"
         else "${lines.size} mods in this pack cannot be installed the way the pack asks:"
-    val registry = missing.isNotEmpty() || kept.isNotEmpty() || skipped.any { it.goneVersion != null }
+    val registry = missing.isNotEmpty() || kept.any { !it.archive } || skipped.any { it.goneVersion != null && !it.archive }
     val foot =
         (if (registry) "The registry is the online list of mods that NNOMM downloads from. " else "") +
             "The rest of the pack installs normally."

@@ -229,7 +229,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         target: UiAction? = null,
         ms: Long = 7000,
         undo: (() -> Unit)? = null,
-    ) {
+    ): Long {
         val id = synchronized(lock) { ++sequence }
         change {
             it.copy(toasts = (it.toasts + Toast(id, text, action, target, ms, undo)).takeLast(3))
@@ -238,6 +238,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             delay(ms)
             change { it.copy(toasts = it.toasts.filterNot { t -> t.id == id }) }
         }
+        return id
     }
 
     fun dismissToast(id: Long) {
@@ -928,7 +929,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     ),
             )
         }
-        toast("Made the profile ${p.name}")
+        toast("Made the profile ${shortName(p.name)}")
         applyAndSave()
         return id
     }
@@ -973,6 +974,52 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         else p
                     }
             )
+        }
+    }
+
+    /** Moves the profile [id] to [index] in the sidebar's order. */
+    fun moveProfile(id: String, index: Int) {
+        change { s ->
+            val p = s.profiles.find { it.id == id } ?: return@change s
+            val rest = s.profiles - p
+            s.copy(profiles = rest.toMutableList().apply { add(index.coerceIn(0, rest.size), p) })
+        }
+    }
+
+    /**
+     * Sets the address that [profileId] reads pack updates from. A profile that does not come from a
+     * pack starts to follow one: the pack's next update adds its mods. A blank address stops it.
+     */
+    fun setPackAddress(profileId: String, address: String) {
+        val url = address.trim().ifEmpty { null }
+        change { s ->
+            s.copy(
+                profiles =
+                    s.profiles.map { p ->
+                        if (p.id != profileId) p
+                        else
+                            p.copy(
+                                pack =
+                                    (p.pack ?: PackInfo(by = "", version = ADDRESS_ONLY_VERSION))
+                                        .copy(followAddress = url, nextVersion = null)
+                            )
+                    }
+            )
+        }
+        saveSettings()
+        if (url == null) toast("${shortName(state.value.profile(profileId).name)} no longer reads pack updates.")
+        else {
+            toast("${shortName(state.value.profile(profileId).name)} reads pack updates from the new address.")
+            worker.launch {
+                try {
+                    checkPackUpdate(state.value.profile(profileId))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    io.logger.error("pack address", e)
+                    toast("Could not read a modpack at this address. Check the address, or ask the person who shared the pack.")
+                }
+            }
         }
     }
 
@@ -1072,9 +1119,15 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     /** Closes the running game, like Stop in Steam. */
     fun stopGame() {
         if (!state.value.gameRunning) return
-        toast("Closing Nuclear Option…")
+        val closing = toast("Closing Nuclear Option…", ms = 15_000)
         background {
-            if (io.launcher.stop()) toast("Closed Nuclear Option.")
+            val stopped =
+                try {
+                    io.launcher.stop()
+                } finally {
+                    dismissToast(closing)
+                }
+            if (stopped) toast("Closed Nuclear Option.")
             else toast("Could not close Nuclear Option. Close it in the game or in Task Manager.")
         }
     }
@@ -1237,6 +1290,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         packSettings: SettingsValues? = null,
         /** Mods from the pack's own files that the player chose to include: on in the imported profile. */
         includedLocals: List<String> = emptyList(),
+        /** The profile that ADD puts the mods in. It does not need to be the profile in use. */
+        addTo: String = state.value.profileId,
     ) {
         if (state.value.connection.kind == ConnectionKind.OFFLINE) {
             toast("Needs a connection")
@@ -1244,7 +1299,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
         if (state.value.trouble != null) stopBrokenModTest()
         val rows =
-            importRows(state.value, pack, mode).filterNot {
+            importRows(state.value, pack, mode, if (mode == ImportMode.ADD) addTo else state.value.profileId).filterNot {
                 it.local ||
                     it.kind == PackKind.UNAVAILABLE ||
                     (it.packVersion == null && it.kind != PackKind.SAME)
@@ -1285,50 +1340,51 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 )
             }
         }
+        val target = if (mode == ImportMode.NEW) newProfileId else addTo
         val included = includedLocals.filter { it in state.value.installed }
         if (included.isNotEmpty()) {
-            val target = state.value.profileId
             change { s -> included.fold(s) { acc, id -> setProfileMod(acc, id, target, true) } }
             applyAndSave(allowLoader = true)
         }
         var n = 0
         // A new profile may have got " (2)": messages name the profile that was made.
-        val label = if (mode == ImportMode.NEW) state.value.profile(newProfileId).name else pack.name
+        // Pack names come from file names and can be very long; a message shows the start.
+        val label = shortName(if (mode == ImportMode.NEW) state.value.profile(newProfileId).name else pack.name)
+        val into = if (mode == ImportMode.ADD && addTo != state.value.profileId) " into ${shortName(state.value.profile(addTo).name)}" else ""
         val queued = mutableListOf<Pair<String, String>>()
         rows.forEach { r ->
             if (r.kind == PackKind.ADD) {
-                queue(r.id, DownloadKind.INSTALL, version = r.packVersion, quiet = true)
+                queue(r.id, DownloadKind.INSTALL, target, version = r.packVersion, quiet = true)
                 r.packVersion?.let { queued += r.id to it }
                 n++
             } else {
                 if (r.kind == PackKind.SAME && r.packVersion != null) {
                     // The profile gets the version the preview showed: the pack's, or yours when the
                     // registry no longer has the pack's. setOn would keep the profile's own version.
-                    val target = state.value.profileId
                     change { setProfileMod(it, r.id, target, true, r.packVersion) }
                     applyAndSave(allowLoader = true)
-                } else setOn(listOf(r.id), true)
+                } else setOn(listOf(r.id), true, target)
                 if (
                     r.kind == PackKind.UP ||
                         r.kind == PackKind.OTHER ||
                         (r.kind == PackKind.CONFLICT && keep[r.id] == "pack")
                 ) {
-                    queue(r.id, DownloadKind.UPDATE, version = r.packVersion, quiet = true)
+                    queue(r.id, DownloadKind.UPDATE, target, version = r.packVersion, quiet = true)
                     r.packVersion?.let { queued += r.id to it }
                     n++
                 }
             }
         }
         if (n == 0) {
-            toast("Imported ${label}")
+            toast("Imported ${label}${into}")
             return
         }
         toast(
-            "Importing ${label}: ${plural(n, "download", "downloads")}. Mods appear in the Library as they finish.",
+            "Importing ${label}${into}: ${plural(n, "download", "downloads")}. They fill in in the Library as they finish.",
             ms = 8000,
         )
         // One message when every download of this import has ended and the game folder is updated.
-        val profile = state.value.profileId
+        val profile = target
         val waiting = synchronized(lock) { queued.mapNotNull { (id, v) -> jobs["$id/$v/$profile"] } }
         worker.launch {
             waiting.joinAll()
@@ -1485,7 +1541,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     }
             )
         }
-        toast("${p.name} is now $v")
+        toast("${shortName(p.name)} is now $v")
     }
 
     /** The pack of the mods that are on in [profileId], which does not need to be the profile in use. */
@@ -1660,7 +1716,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                 )
             }
             toast(
-                "Added ${installed.fileName?:mod.name} to your Library and turned it on",
+                "Added ${shortName(installed.fileName ?: mod.name)} to your Library and turned it on",
                 "Undo",
                 undo = { uninstallSilently(listOf(mod.id)) },
             )

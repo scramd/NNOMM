@@ -87,6 +87,24 @@ internal class DialogScene(
         frame()
     }
 
+    /** Presses at ([x], [y0]), moves in steps to [y1] with the button down, and lets go. */
+    fun drag(x: Float, y0: Float, y1: Float) {
+        val down = PointerButtons(isPrimaryPressed = true)
+        swing {
+            scene.sendPointerEvent(PointerEventType.Move, Offset(x, y0))
+            scene.sendPointerEvent(PointerEventType.Press, Offset(x, y0), button = PointerButton.Primary, buttons = down)
+        }
+        frame()
+        for (i in 1..10) {
+            time += 16_000_000L
+            swing { scene.sendPointerEvent(PointerEventType.Move, Offset(x, y0 + (y1 - y0) * i / 10), buttons = down) }
+            frame()
+        }
+        swing { scene.sendPointerEvent(PointerEventType.Release, Offset(x, y1), button = PointerButton.Primary) }
+        frame()
+        frame()
+    }
+
     /** Writes the current frame to composeApp/build/test-shots, to look at. */
     fun save(name: String) = swing {
         time += 100_000_000L
@@ -181,9 +199,64 @@ class DialogKeysTest {
             assertNull(d.model.ui.dismissMenu)
             d.click(80f, 278f)
             d.click(80f, 278f)
-            assertEquals("rename", d.model.ui.overlayKind)
-            assertEquals("friday", d.model.ui.overlayProfileId)
+            // The name turns into a text field in the sidebar; no dialog opens.
+            assertEquals("friday", d.model.ui.renamingProfile)
+            assertNull(d.model.ui.overlay)
             d.save("sidebar-profile-rename")
+            val name = d.store.state.value.profile("friday").name
+            d.press(Key.Escape)
+            assertNull(d.model.ui.renamingProfile)
+            assertEquals(name, d.store.state.value.profile("friday").name)
+            // The Rename menu item renames in place too.
+            d.model.startRename("friday")
+            d.frame()
+            assertEquals("friday", d.model.ui.renamingProfile)
+            d.press(Key.Enter)
+            assertNull(d.model.ui.renamingProfile)
+            assertEquals(name, d.store.state.value.profile("friday").name)
+            // "/" is a character of the name, not the key that jumps to the search field.
+            d.model.startRename("friday")
+            d.frame()
+            d.press(Key.Slash)
+            assertEquals("friday", d.model.ui.renamingProfile)
+            d.press(Key.Escape)
+            // A click on empty sidebar space, which takes no focus, also ends the rename.
+            d.model.startRename("friday")
+            d.frame()
+            d.click(100f, 520f)
+            assertNull(d.model.ui.renamingProfile)
+            assertEquals(name, d.store.state.value.profile("friday").name)
+        }
+    }
+
+    @Test
+    fun renameFromTheProfileMenuStaysOpenForTyping() {
+        DialogScene("page=library").use { d ->
+            d.move(100f, 278f)
+            d.click(191f, 278f)
+            assertNotNull(d.model.ui.dismissMenu)
+            // "Rename" is the third item of the menu that opens under the button.
+            d.click(260f, 380f)
+            d.frame()
+            d.frame()
+            d.save("sidebar-profile-rename-from-menu")
+            assertNull(d.model.ui.overlay)
+            assertEquals("friday", d.model.ui.renamingProfile)
+        }
+    }
+
+    @Test
+    fun dragAProfileToReorderTheSidebar() {
+        DialogScene("page=library").use { d ->
+            val before = d.store.state.value.profiles.map { it.id }
+            assertEquals("friday", before[2])
+            // Friday squad is the third row; two rows up makes it the first.
+            d.drag(80f, 278f, 278f - 68f)
+            val after = d.store.state.value.profiles.map { it.id }
+            assertEquals(listOf("friday") + (before - "friday"), after)
+            // A drag does not switch the profile.
+            assertEquals("default", d.store.state.value.profileId)
+            assertNull(d.model.ui.renamingProfile)
         }
     }
 

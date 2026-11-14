@@ -25,7 +25,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -48,6 +56,7 @@ fun AppShell(model: AppModel) {
     val theme = LocalNnTheme.current
     val c = theme.colors
     val rootFocus = remember { FocusRequester() }
+    var shellCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     LaunchedEffect(model) { rootFocus.requestFocus() }
     CompositionLocalProvider(
         LocalApp provides model,
@@ -86,6 +95,16 @@ fun AppShell(model: AppModel) {
             Modifier.fillMaxSize()
                 .background(c.bg)
                 .focusRequester(rootFocus)
+                .onGloballyPositioned { shellCoords = it }
+                // A click outside the rename field ends the rename, also on a part that takes no focus.
+                .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { event ->
+                    val field = ui.renameField
+                    val shell = shellCoords
+                    if (ui.renamingProfile != null && field != null && field.isAttached && shell != null) {
+                        val at = event.changes.firstOrNull()?.position
+                        if (at != null && !shell.localBoundingBoxOf(field).contains(at)) rootFocus.requestFocus()
+                    }
+                }
                 .onFocusChanged { ui.pageKeysEnabled = it.isFocused }
                 .focusable()
                 .dragAndDropTarget({ it.dragData() is DragData.FilesList }, dropTarget)
@@ -314,6 +333,16 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
         menu = kind
         ui.dismissMenu = dismiss
     }
+    val profilesShown = s.settings.general["showProfiles"]?.content != "false"
+    SideEffect { ui.sidebarNames = !narrow && profilesShown }
+    // Dragging a profile: the order while the pointer is down, and how far the row is from its slot.
+    var dragId by remember { mutableStateOf<String?>(null) }
+    var dragDy by remember { mutableStateOf(0f) }
+    var order by remember { mutableStateOf<List<String>?>(null) }
+    val step = with(LocalDensity.current) { 34.dp.toPx() }
+    val shown =
+        order?.mapNotNull { id -> s.profiles.find { it.id == id } }?.takeIf { it.size == s.profiles.size }
+            ?: s.profiles
     Column(
         Modifier.width(if (narrow) 52.dp else width)
             .fillMaxHeight()
@@ -346,7 +375,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
         }
         if (model.showServers())
             Nav("Servers", NnIcons.server, narrow, ui.page == Page.Servers) { ui.go(Page.Servers) }
-        if (s.settings.general["showProfiles"]?.content != "false") {
+        if (profilesShown) {
             RightClickMenu({ profileListItems(model) }) {
             Row(
                 Modifier.padding(top = if (narrow) 8.dp else 14.dp)
@@ -364,24 +393,65 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                s.profiles.forEach { profile -> key(profile.id) {
+                shown.forEach { profile -> key(profile.id) {
                     // The row shows a "…" button for its menu while the pointer is over it or it
                     // has keyboard focus, so the profile's actions are not right-click only.
                     var focused by remember { mutableStateOf(false) }
                     val menuKey = "profile:${profile.id}"
-                    RightClickMenu({ profileItems(model, profile.id) }, Modifier.onFocusChanged { focused = it.hasFocus }) {
+                    val renaming = ui.renamingProfile == profile.id && !narrow
+                    val dragged = dragId == profile.id
+                    RightClickMenu(
+                        { profileItems(model, profile.id) },
+                        Modifier.onFocusChanged { focused = it.hasFocus }
+                            .zIndex(if (dragged) 1f else 0f)
+                            .graphicsLayer { translationY = if (dragged) dragDy else 0f }
+                            .pointerInput(profile.id, renaming) {
+                                if (renaming) return@pointerInput
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragId = profile.id
+                                        dragDy = 0f
+                                        order = model.store.state.value.profiles.map { it.id }
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragDy += amount.y
+                                        val list = order ?: return@detectDragGestures
+                                        val i = list.indexOf(profile.id)
+                                        if (dragDy > step / 2 && i < list.size - 1) {
+                                            order = list.toMutableList().apply { add(i + 1, removeAt(i)) }
+                                            dragDy -= step
+                                        } else if (dragDy < -step / 2 && i > 0) {
+                                            order = list.toMutableList().apply { add(i - 1, removeAt(i)) }
+                                            dragDy += step
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        order?.indexOf(profile.id)?.let { model.store.moveProfile(profile.id, it) }
+                                        dragId = null
+                                        dragDy = 0f
+                                        order = null
+                                    },
+                                    onDragCancel = {
+                                        dragId = null
+                                        dragDy = 0f
+                                        order = null
+                                    },
+                                )
+                            },
+                    ) {
                         Tooltip(
                             "${profile.name}${if (profile.id == s.profileId) " (in use)" else ""}. Right-click for more."
                         ) {
                             control(
                                 Modifier.fillMaxWidth(),
-                                onClick = { model.useProfile(profile.id) },
+                                onClick = { if (!renaming) model.useProfile(profile.id) },
                             ) { rowModifier, hover, _ ->
                                 Row(
                                     rowModifier
                                         .height(32.dp)
                                         .background(
-                                            if (hover) c.raise else Color.Transparent,
+                                            if (hover || dragged) c.raise else Color.Transparent,
                                             RoundedCornerShape(6.dp),
                                         )
                                         .padding(horizontal = if (narrow) 0.dp else 9.dp),
@@ -427,15 +497,24 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                                     )
                                             )
                                         }
-                                        Label(
-                                            profile.name,
-                                            Modifier.weight(1f).onDoubleClick {
-                                                model.openOverlay("rename", profile.id)
-                                            },
-                                            color =
-                                                if (profile.id == s.profileId) c.text else c.text2,
-                                        )
-                                        if (hover || focused || menu == menuKey)
+                                        if (renaming)
+                                            RenameField(
+                                                profile.name,
+                                                Modifier.weight(1f).onGloballyPositioned { ui.renameField = it },
+                                            ) { name ->
+                                                if (name != null && name.isNotBlank()) model.store.renameProfile(profile.id, name)
+                                                ui.renamingProfile = null
+                                            }
+                                        else
+                                            Label(
+                                                profile.name,
+                                                Modifier.weight(1f).onDoubleClick { model.startRename(profile.id) },
+                                                color =
+                                                    if (profile.id == s.profileId) c.text else c.text2,
+                                                maxLines = 1,
+                                            )
+                                        if (renaming) Unit
+                                        else if (hover || focused || menu == menuKey)
                                             Box {
                                                 IconButton(
                                                     NnIcons.more,
@@ -707,6 +786,71 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
 }
 
 /**
+ * The profile name as a text field, in place in the sidebar. A long name scrolls inside it. Enter
+ * or a click elsewhere keeps the name, Escape keeps the old one; [onDone] gets null then.
+ */
+@Composable
+private fun RenameField(name: String, modifier: Modifier, onDone: (String?) -> Unit) {
+    val t = LocalNnTheme.current
+    val c = t.colors
+    var value by remember {
+        mutableStateOf(
+            androidx.compose.ui.text.input.TextFieldValue(name, androidx.compose.ui.text.TextRange(0, name.length))
+        )
+    }
+    val focus = remember { FocusRequester() }
+    val ui = LocalApp.current.ui
+    // While it has focus, the window's typing keys (such as "/" for search) leave it alone.
+    val typing = remember { FocusedField({ value.text }, {}) }
+    DisposableEffect(typing) { onDispose { if (ui.focusedField === typing) ui.focusedField = null } }
+    var focusedOnce by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    fun finish(result: String?) {
+        if (done) return
+        done = true
+        onDone(result)
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    androidx.compose.foundation.text.BasicTextField(
+        value,
+        { value = it },
+        modifier
+            .focusRequester(focus)
+            .onFocusChanged {
+                if (it.isFocused) {
+                    focusedOnce = true
+                    ui.focusedField = typing
+                } else {
+                    if (ui.focusedField === typing) ui.focusedField = null
+                    if (focusedOnce) finish(value.text)
+                }
+            }
+            .onPreviewKeyEvent { e ->
+                if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false
+                else
+                    when (e.key) {
+                        androidx.compose.ui.input.key.Key.Enter,
+                        androidx.compose.ui.input.key.Key.NumPadEnter -> {
+                            finish(value.text)
+                            true
+                        }
+                        androidx.compose.ui.input.key.Key.Escape -> {
+                            finish(null)
+                            true
+                        }
+                        else -> false
+                    }
+            }
+            .background(c.bg, RoundedCornerShape(4.dp))
+            .border(1.dp, c.text3, RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 3.dp),
+        singleLine = true,
+        textStyle = t.text(13f).copy(color = c.text),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.text),
+    )
+}
+
+/**
  * Runs [action] on a double click without consuming the clicks, so that the first click still does
  * what a single click does.
  */
@@ -791,7 +935,7 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
         )
     if (isNotEmpty()) add(MenuEntry.Separator)
     fun layer(kind: String) = model.openOverlay(kind, id)
-    add(MenuEntry.Item("Rename", action = { layer("rename") }))
+    add(MenuEntry.Item("Rename", icon = NnIcons.pencil, action = { model.startRename(id) }))
     add(
         MenuEntry.Item(
             "Make a copy",
@@ -830,13 +974,19 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
             )
         )
     }
+    add(nnomm.ui.library.packAddressItem(model, s.profile(id)))
     if (followsPack(s.profile(id)))
         add(
             MenuEntry.Item(
                 "Stop following this pack",
+                icon = NnIcons.unlink,
                 action = { model.store.stopFollowingPack(id) },
             )
         )
+    nnomm.ui.library.moveItems(model, id).takeIf { it.isNotEmpty() }?.let {
+        add(MenuEntry.Separator)
+        addAll(it)
+    }
     if (id != "default") {
         add(MenuEntry.Separator)
         add(

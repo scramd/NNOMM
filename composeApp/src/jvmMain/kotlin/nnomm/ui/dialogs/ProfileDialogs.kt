@@ -138,6 +138,56 @@ class RenameDialog(private val model: AppModel) : Overlay {
     }
 }
 
+/** The address that a profile reads pack updates from. */
+class PackAddressDialog(private val model: AppModel) : Overlay {
+    private val profile = model.dialogProfile()
+
+    @Composable
+    override fun Content() {
+        val before = profile.pack?.followAddress.orEmpty()
+        // A profile that never had a pack: it starts to follow one.
+        val noPack = profile.pack == null || (addressOnly(profile) && before.isEmpty())
+        var address by remember { mutableStateOf(before) }
+        val focus = remember { FocusRequester() }
+        val trimmed = address.trim()
+        val valid = trimmed.isEmpty() || trimmed.startsWith("https://", ignoreCase = true)
+        val canSave = valid && trimmed != before && !(trimmed.isEmpty() && before.isEmpty())
+        fun confirm() {
+            if (!canSave) return
+            model.store.setPackAddress(profile.id, trimmed)
+            model.closeOverlay()
+        }
+        Dialog(
+            true,
+            if (noPack) "Follow a modpack" else "Pack update address",
+            model::closeOverlay,
+            initialFocus = focus,
+            onEnter = if (canSave) ::confirm else null,
+            footer = {
+                Cancel(model)
+                Button("Save", ::confirm, kind = ButtonKind.Strong, enabled = canSave)
+            },
+        ) {
+            Label(
+                if (noPack)
+                    "Paste the address of a modpack that its maker gave you. ${profile.name} then follows the pack: the pack shows as an update, and you see what it changes before anything happens."
+                else
+                    "NNOMM reads new versions of the modpack from this address. The person who shares the pack gives it to you." +
+                        if (before.isNotEmpty()) " Leave it empty to stop reading updates." else ""
+            )
+            DialogTextField(
+                address,
+                { address = it },
+                Modifier.fillMaxWidth(),
+                placeholder = "https://",
+                focusRequester = focus,
+                autofocus = true,
+            )
+            if (!valid) Label("The address must start with https://", color = LocalNnTheme.current.colors.danger)
+        }
+    }
+}
+
 class ShareDialog(private val model: AppModel) : Overlay {
     /** The profile the menu was opened for. It does not need to be the profile in use. */
     private val profile = model.dialogProfile()

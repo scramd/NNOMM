@@ -293,9 +293,43 @@ fun libCounts(s: AppState) =
         "prob" to s.installed.keys.count { hasProblem(s, it) },
     )
 
-fun libList(s: AppState, l: LibraryFilter = LibraryFilter()): List<String> {
+/**
+ * Mods that download for profile [p] (null: any profile) and are not in the Library yet. The Library
+ * shows them as placeholders in the place they get, so the list does not jump when they arrive.
+ */
+fun pendingInstalls(s: AppState, p: String? = s.profileId): List<String> =
+    s.downloads
+        .filter {
+            (p == null || it.profile == p) &&
+                it.kind == DownloadKind.INSTALL &&
+                it.error == null &&
+                it.percent < 100 &&
+                it.id !in s.installed
+        }
+        .map { it.id }
+        .distinct()
+
+/**
+ * [pending] are mods from [pendingInstalls] for any profile, [pendingHere] those for the profile in
+ * use, which are on there once installed. Both are listed where they will be once installed.
+ */
+fun libList(
+    s: AppState,
+    l: LibraryFilter = LibraryFilter(),
+    pending: List<String> = emptyList(),
+    pendingHere: Set<String> = emptySet(),
+): List<String> {
+    fun on(id: String) = isOn(s, id) || id in pendingHere
+    val waiting =
+        when (l.filter) {
+                "all" -> pending
+                "on" -> pending.filter { it in pendingHere }
+                "off" -> pending.filter { it !in pendingHere }
+                else -> emptyList()
+            }
+            .filter { it !in s.installed && (l.query.isBlank() || fuzzy(l.query.trim(), s.mod(it).name) != null) }
     val ids =
-        s.installed.keys.filter { id ->
+        waiting + s.installed.keys.filter { id ->
             when (l.filter) {
                 "on" -> isOn(s, id)
                 "off" -> !isOn(s, id)
@@ -311,7 +345,7 @@ fun libList(s: AppState, l: LibraryFilter = LibraryFilter()): List<String> {
                 (s.mod(a).newestRelease?.sizeKb ?: 0).compareTo(s.mod(b).newestRelease?.sizeKb ?: 0)
             LibrarySort.UPD -> updOf(s, a).compareTo(updOf(s, b))
             LibrarySort.SOURCE -> sourceOf(s, a).compareTo(sourceOf(s, b))
-            LibrarySort.ON -> (!isOn(s, a)).compareTo(!isOn(s, b))
+            LibrarySort.ON -> (!on(a)).compareTo(!on(b))
             LibrarySort.VER -> (!hasUpdate(s, a)).compareTo(!hasUpdate(s, b))
             else -> compareNames(s.mod(a).name, s.mod(b).name)
         }
@@ -438,3 +472,13 @@ fun libraryView(s: AppState, filter: LibraryFilter = LibraryFilter()) =
             updOf(s, id),
         )
     }
+
+/** [name] cut to [max] characters with "…", for names inside a message. */
+fun shortName(name: String, max: Int = 40): String =
+    if (name.length <= max) name else name.take(max - 1).trimEnd() + "…"
+
+/** The pack version of a profile that follows an address but has not had the pack yet. */
+const val ADDRESS_ONLY_VERSION = "0"
+
+/** The profile follows an address, but no version of the pack has come into it yet. */
+fun addressOnly(p: Profile) = p.pack?.let { it.version == ADDRESS_ONLY_VERSION && it.mods.isEmpty() } == true

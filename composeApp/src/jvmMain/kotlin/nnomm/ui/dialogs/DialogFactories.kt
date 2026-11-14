@@ -11,6 +11,7 @@ fun AppModel.registerDialogFactories() {
     overlayFactories["newprofile"] = ::NewProfileDialog
     overlayFactories["rename"] = ::RenameDialog
     overlayFactories["share"] = ::ShareDialog
+    overlayFactories["packaddress"] = ::PackAddressDialog
     overlayFactories["trouble"] = ::TroubleDialog
     overlayFactories["first"] = ::FirstStart
 }

@@ -51,7 +51,7 @@ internal fun profileMenuItems(model: AppModel): List<MenuEntry> {
 internal fun profileItems(model: AppModel, s: AppState): List<MenuEntry> = buildList {
     val p = s.profile()
     fun overlay(kind: String) = model.openOverlay(kind, p.id)
-    add(MenuEntry.Item("Rename") { overlay("rename") })
+    add(MenuEntry.Item("Rename", icon = NnIcons.pencil) { model.startRename(p.id) })
     add(MenuEntry.Item("Make a copy", icon = NnIcons.copy) { model.store.copyProfile(p.id) })
     add(MenuEntry.Item("Share as a modpack", icon = NnIcons.share) { overlay("share") })
     add(
@@ -69,8 +69,9 @@ internal fun profileItems(model: AppModel, s: AppState): List<MenuEntry> = build
             }
         )
     }
+    add(packAddressItem(model, p))
     if (followsPack(p))
-        add(MenuEntry.Item("Stop following this pack") { model.store.stopFollowingPack(p.id) })
+        add(MenuEntry.Item("Stop following this pack", icon = NnIcons.unlink) { model.store.stopFollowingPack(p.id) })
     if (p.id != "default") {
         add(MenuEntry.Separator)
         add(
@@ -89,9 +90,13 @@ internal fun modItems(
     keys: Boolean = true,
 ): List<MenuEntry> = buildList {
     fun key(name: String) = name.takeIf { keys }
-    add(MenuEntry.Item("Open details", hint = key("Enter")) { model.ui.openMod(id) })
+    add(MenuEntry.Item("Open details", hint = key("Enter"), icon = NnIcons.info) { model.ui.openMod(id) })
     add(
-        MenuEntry.Item(if (isOn(s, id)) "Turn off" else "Turn on", hint = key("Space")) {
+        MenuEntry.Item(
+            if (isOn(s, id)) "Turn off" else "Turn on",
+            hint = key("Space"),
+            icon = if (isOn(s, id)) NnIcons.toggleOff else NnIcons.toggleOn,
+        ) {
             model.store.toggle(id)
         }
     )
@@ -101,7 +106,7 @@ internal fun modItems(
                 model.store.update(id)
             }
         )
-        add(MenuEntry.Item("See what's new") { model.ui.openMod(id, PanelTab.WhatsNew) })
+        add(MenuEntry.Item("See what's new", icon = NnIcons.list) { model.ui.openMod(id, PanelTab.WhatsNew) })
     }
     add(MenuEntry.Separator)
     add(MenuEntry.Item("Open the mod folder", icon = NnIcons.folder) { model.openModFolder(id) })
@@ -151,8 +156,8 @@ internal fun selectionItems(
 ): List<MenuEntry> = buildList {
     val ids = picked.toList()
     add(MenuEntry.Heading("${ids.size} selected"))
-    add(MenuEntry.Item("Turn on") { model.store.setOn(ids, true) })
-    add(MenuEntry.Item("Turn off") { model.store.setOn(ids, false) })
+    add(MenuEntry.Item("Turn on", icon = NnIcons.toggleOn) { model.store.setOn(ids, true) })
+    add(MenuEntry.Item("Turn off", icon = NnIcons.toggleOff) { model.store.setOn(ids, false) })
     val updates = ids.filter { hasUpdate(s, it) }
     if (updates.isNotEmpty())
         add(
@@ -181,7 +186,7 @@ internal fun browseItems(model: AppModel, s: AppState, id: String): List<MenuEnt
     if (id in s.installed) return modItems(model, s, id, keys = false)
     val next = modAction(s, id)
     return buildList {
-        add(MenuEntry.Item("Open details") { model.ui.openMod(id) })
+        add(MenuEntry.Item("Open details", icon = NnIcons.info) { model.ui.openMod(id) })
         next.action?.let { action ->
             add(
                 MenuEntry.Item(next.label, icon = NnIcons.download, enabled = !next.disabled) {
@@ -189,5 +194,37 @@ internal fun browseItems(model: AppModel, s: AppState, id: String): List<MenuEnt
                 }
             )
         }
+    }
+}
+
+/** The icon for a problem's fix in its menu. */
+internal fun fixIcon(fix: FixItem): androidx.compose.ui.graphics.vector.ImageVector =
+    when (fix.action.kind) {
+        nnomm.core.model.ActionKind.RETRYAPPLY -> NnIcons.refresh
+        nnomm.core.model.ActionKind.TURNOFF -> NnIcons.toggleOff
+        nnomm.core.model.ActionKind.TURNON -> NnIcons.toggleOn
+        nnomm.core.model.ActionKind.INSTALL,
+        nnomm.core.model.ActionKind.REPAIRPROBLEM -> NnIcons.download
+        nnomm.core.model.ActionKind.UNINSTALL -> NnIcons.trash
+        else -> NnIcons.info
+    }
+
+/** Set or change where the profile reads pack updates from. */
+internal fun packAddressItem(model: AppModel, p: nnomm.core.model.Profile): MenuEntry =
+    MenuEntry.Item(
+        if (p.pack?.followAddress != null) "Change the update address" else "Follow a modpack address",
+        icon = NnIcons.link,
+    ) {
+        model.openOverlay("packaddress", p.id)
+    }
+
+/** Move up and Move down, beside dragging the profile in the sidebar. */
+internal fun moveItems(model: AppModel, id: String): List<MenuEntry> {
+    val profiles = model.store.state.value.profiles
+    val i = profiles.indexOfFirst { it.id == id }
+    return buildList {
+        if (i > 0) add(MenuEntry.Item("Move up", icon = NnIcons.up) { model.store.moveProfile(id, i - 1) })
+        if (i in 0 until profiles.size - 1)
+            add(MenuEntry.Item("Move down", icon = NnIcons.down) { model.store.moveProfile(id, i + 1) })
     }
 }

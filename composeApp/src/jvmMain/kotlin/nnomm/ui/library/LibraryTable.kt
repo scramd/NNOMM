@@ -26,6 +26,8 @@ internal fun LibraryTable(
     state: LazyListState,
     onOpen: (String) -> Unit,
     isOff: (String) -> Boolean,
+    /** A mod that is not installed yet: it cannot be selected and opens only its details. */
+    isPlaceholder: (String) -> Boolean = { false },
     header: @Composable (String) -> Unit,
     cell: @Composable (String, String) -> Unit,
     rowMenu: (String) -> List<MenuEntry>,
@@ -65,8 +67,9 @@ internal fun LibraryTable(
                     { rowMenu(key) },
                     onOpen = {
                         focus.requestFocus()
-                        // The menu and the keys it names must mean this row.
-                        selection.contextTarget(key)
+                        model.ui.library.seen(key)
+                        // The menu and the keys it names must mean this row. A placeholder has no keys.
+                        if (!isPlaceholder(key)) selection.contextTarget(key)
                     },
                 ) {
                     TableRow(
@@ -76,7 +79,8 @@ internal fun LibraryTable(
                         isOff(key),
                         onSelect = { shift, ctrl ->
                             focus.requestFocus()
-                            if (shift || ctrl) selection.select(keys, key, shift, ctrl = true)
+                            if (isPlaceholder(key)) onOpen(key)
+                            else if (shift || ctrl) selection.select(keys.filterNot(isPlaceholder), key, shift, ctrl = true)
                             else {
                                 selection.activate(key)
                                 onOpen(key)

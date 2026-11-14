@@ -154,7 +154,7 @@ fun ModPanel(ref: PanelRef) {
                             entries =
                                 buildList {
                                     add(
-                                        MenuEntry.Item("Open details", hint = "Enter") {
+                                        MenuEntry.Item("Open details", hint = "Enter", icon = NnIcons.info) {
                                             openPanel(mod.id)
                                         }
                                     )
@@ -162,6 +162,7 @@ fun ModPanel(ref: PanelRef) {
                                         MenuEntry.Item(
                                             if (isOn(state, mod.id)) "Turn off" else "Turn on",
                                             hint = "Space",
+                                            icon = if (isOn(state, mod.id)) NnIcons.toggleOff else NnIcons.toggleOn,
                                         ) {
                                             model.store.toggle(mod.id)
                                         }
@@ -176,7 +177,7 @@ fun ModPanel(ref: PanelRef) {
                                             }
                                         )
                                         add(
-                                            MenuEntry.Item("See what's new") {
+                                            MenuEntry.Item("See what's new", icon = NnIcons.list) {
                                                 openPanel(mod.id, PanelTab.WhatsNew)
                                             }
                                         )
@@ -221,7 +222,7 @@ fun ModPanel(ref: PanelRef) {
                 .forEach { problem ->
                     PanelMenu(
                         problemFixes(state, mod.id, problem).map { fix ->
-                            MenuEntry.Item(fix.label, danger = fix.danger) {
+                            MenuEntry.Item(fix.label, icon = nnomm.ui.library.fixIcon(fix), danger = fix.danger) {
                                 model.perform(fix.action)
                             }
                         }

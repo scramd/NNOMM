@@ -32,6 +32,7 @@ object Shots {
             addAll(featureShots.map { it.spec() })
 
             addAll(readmeShots.map { it.spec() })
+            addAll(editShots.map { it.spec() })
             add(MockShot("browse-loading", "page=browse&mock=loading").spec())
             addAll(nnomm.ui.dialogs.dialogMockShots.map { it.spec() })
             for (dark in listOf(true, false)) {
@@ -53,7 +54,9 @@ object Shots {
 fun main(args: Array<String>) {
     try {
         val output = File(args.firstOrNull() ?: "composeApp/build/shots").apply { mkdirs() }
-        Shots.registry.forEach { spec ->
+        // NNOMM_SHOTS=name1,name2 renders only the shots whose names start with one of them.
+        val only = System.getenv("NNOMM_SHOTS")?.split(',')?.filter { it.isNotBlank() }.orEmpty()
+        Shots.registry.filter { spec -> only.isEmpty() || only.any { spec.name.startsWith(it) } }.forEach { spec ->
             // Compose observes semantics on Swing's thread. Render there too, and let queued
             // disposal work drain between scenes instead of blocking Swing for the whole batch.
             javax.swing.SwingUtilities.invokeAndWait {

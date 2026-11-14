@@ -61,6 +61,12 @@ class UiState {
     var focusedField: FocusedField? by mutableStateOf(null)
     var pageKeysEnabled by mutableStateOf(true)
     var downloadsOpen by mutableStateOf(false)
+    /** The profile whose name the sidebar shows as a text field. */
+    var renamingProfile by mutableStateOf<String?>(null)
+    /** False when the sidebar is the narrow rail or hides the profiles, so it cannot rename in place. */
+    var sidebarNames by mutableStateOf(true)
+    /** Where the rename field is, so that a click anywhere else ends the rename. */
+    var renameField: androidx.compose.ui.layout.LayoutCoordinates? = null
 
     val browse = BrowseView()
     val library = LibraryView()

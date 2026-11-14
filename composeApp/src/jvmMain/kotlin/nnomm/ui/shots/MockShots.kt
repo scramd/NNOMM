@@ -156,6 +156,59 @@ val featureShots =
         ),
     )
 
+/** Rename in place, profile order, import into any profile, the update address, new and downloading mods. */
+val editShots =
+    listOf("dark", "light").flatMap { theme ->
+        listOf(
+            MockShot(
+                "edit-$theme-rename",
+                "page=library&theme=$theme",
+                initialState = { s ->
+                    s.copy(profiles = s.profiles.map { if (it.id == s.profiles.last().id) it.copy(name = "Weekend squad with the long campaign mods") else it })
+                },
+                seed = { it.ui.renamingProfile = it.store.state.value.profiles.last().id },
+            ),
+            MockShot("edit-$theme-import-add", "page=library&overlay=import&mode=add&theme=$theme"),
+            MockShot("edit-$theme-narrow-import-add", "page=library&overlay=import&mode=add&theme=$theme", 728, 720),
+            MockShot("edit-$theme-pack-address", "page=library&overlay=packaddress&theme=$theme"),
+            MockShot("edit-$theme-pack-address-change", "page=library&prof=friday&overlay=packaddress&theme=$theme"),
+            MockShot(
+                "edit-$theme-library-new",
+                "page=library&theme=$theme",
+                initialState = { s ->
+                    val waiting = s.catalog.filter { it.id !in s.installed && it.installable != null }.take(2)
+                    s.copy(
+                        downloads =
+                            waiting.mapIndexed { i, m ->
+                                nnomm.core.model.Download(m.id, nnomm.core.model.DownloadKind.INSTALL, s.profileId, m.installable!!.version, percent = if (i == 0) 40 else 0)
+                            }
+                    )
+                },
+                seed = {
+                    it.ui.library.fresh = setOf(it.store.state.value.installed.keys.sorted().first())
+                },
+            ),
+            MockShot(
+                "edit-$theme-narrow-library-new",
+                "page=library&theme=$theme",
+                728,
+                720,
+                initialState = { s ->
+                    val waiting = s.catalog.filter { it.id !in s.installed && it.installable != null }.take(2)
+                    s.copy(
+                        downloads =
+                            waiting.mapIndexed { i, m ->
+                                nnomm.core.model.Download(m.id, nnomm.core.model.DownloadKind.INSTALL, s.profileId, m.installable!!.version, percent = if (i == 0) 40 else 0)
+                            }
+                    )
+                },
+                seed = {
+                    it.ui.library.fresh = setOf(it.store.state.value.installed.keys.sorted().first())
+                },
+            ),
+        )
+    }
+
 /** The Readme tab is not in the mock; these pictures show it with the demo readme. */
 val readmeShots =
     listOf("dark", "light").flatMap { theme ->
