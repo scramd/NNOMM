@@ -43,13 +43,6 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     preview = withPackIo(state) { it.read(file.toPath()) }
                     localNames = withContext(Dispatchers.IO) { preview!!.pack.items.associate { it.id to bundledFileName(it, preview) } }
                     val loaded = preview!!.pack
-                    val unknown =
-                        loaded.items.filter {
-                            it.kind != PackKind.LOCAL && state.catalog.none { mod -> mod.id == it.id }
-                        }
-                    require(unknown.isEmpty()) {
-                        "Mods are missing from the registry: ${unknown.joinToString { it.id }}"
-                    }
                     // TODO(core): classify serialized pack references in importRows itself.
                     pack =
                         loaded.copy(
@@ -83,7 +76,12 @@ class ImportDialog(private val model: AppModel) : Overlay {
         val rows =
             importRows(state, pack, mode)
                 .filterNot { it.local }
-                .sortedBy { listOf(PackKind.CONFLICT, PackKind.ADD, PackKind.UP, PackKind.OTHER, PackKind.SAME).indexOf(it.kind) }
+                .sortedBy { listOf(PackKind.CONFLICT, PackKind.ADD, PackKind.UP, PackKind.OTHER, PackKind.SAME, PackKind.UNAVAILABLE).indexOf(it.kind) }
+        // Before the registry has loaded, every mod would look missing from it. Offline, the store refuses the import.
+        val registryReady = state.connection.kind == ConnectionKind.READY
+        val skipped = if (registryReady) rows.filter { it.kind == PackKind.UNAVAILABLE } else emptyList()
+        val missing = skipped.filter { row -> state.catalog.none { it.id == row.id } }
+        val noVersion = skipped - missing.toSet()
         fun n(kind: PackKind) = rows.count { it.kind == kind }
         val downloads =
             rows.count {
@@ -129,12 +127,39 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         }
                     },
                     kind = ButtonKind.Strong,
-                    enabled = !loading && !importing && error == null,
+                    enabled = !loading && !importing && error == null && registryReady,
                 )
             },
         ) {
             if (loading) Label("Reading the modpack…")
             error?.let { Note(it, warn = true) }
+            if (!loading && error == null && state.connection.kind == ConnectionKind.LOADING) Label("Reading the registry…")
+            if (!loading && error == null && state.connection.kind == ConnectionKind.OFFLINE) {
+                Note(
+                    "No connection to the registry. Importing a modpack needs a connection.",
+                    warn = true,
+                    action = { Button("Try again", model.store::refreshRegistry, size = ControlSize.Small, icon = NnIcons.refresh) },
+                )
+            }
+            if (!loading && error == null && missing.isNotEmpty()) {
+                val one = missing.size == 1
+                Note(
+                    (if (one) "1 mod in this pack is not in the registry: " else "${missing.size} mods in this pack are not in the registry: ") +
+                        missing.joinToString { it.id } +
+                        (if (one) ". The import skips it. Install it from Browse when it is in the registry."
+                        else ". The import skips them. Install them from Browse when they are in the registry."),
+                    warn = true,
+                )
+            }
+            if (!loading && error == null && noVersion.isNotEmpty()) {
+                val one = noVersion.size == 1
+                Note(
+                    (if (one) "1 mod in this pack has no version: " else "${noVersion.size} mods in this pack have no version: ") +
+                        noVersion.joinToString { it.id } +
+                        (if (one) ". The import skips it." else ". The import skips them."),
+                    warn = true,
+                )
+            }
             if (!loading && error == null) {
                 Summary(
                     buildList {
@@ -347,6 +372,7 @@ internal fun DiffLine(
                 "conflict" -> "⚠"
                 "on" -> "on"
                 "off" -> "off"
+                "missing" -> "×"
                 else -> "="
             },
             Modifier.width(if (kind in listOf("on", "off")) 22.dp else 18.dp),
@@ -382,6 +408,7 @@ internal fun PackKind.key(): String =
         PackKind.UP -> "up"
         PackKind.CHG -> "chg"
         PackKind.CONFLICT -> "conflict"
+        PackKind.UNAVAILABLE -> "missing"
         else -> ""
     }
 

@@ -42,6 +42,7 @@ class PageBRegressionTest {
         val rows = importRows(initial, pack)
         assertEquals(PackKind.SAME, rows[0].kind)
         assertEquals(PackKind.UNAVAILABLE, rows[1].kind)
+        assertEquals("No version in the pack", rows[1].text)
         val store = AppStore(initial, Demo.io(), backgroundScope)
         store.importPack(pack)
         assertTrue(store.state.value.downloads.isEmpty())

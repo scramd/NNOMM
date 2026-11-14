@@ -42,7 +42,7 @@ fun importRows(s: AppState, pack: Pack, mode: ImportMode = ImportMode.NEW): List
             }
         val text =
             when (k) {
-                PackKind.UNAVAILABLE -> "Not in the registry"
+                PackKind.UNAVAILABLE -> if (i.id in s.catalog.map { it.id }) "No version in the pack" else "Not in the registry"
                 PackKind.ADD -> s.mod(i.id).installable?.sizeKb?.let(::size).orEmpty()
                 PackKind.SAME -> "you have it"
                 PackKind.UP -> "$have to ${i.version}"
