@@ -236,7 +236,7 @@ function vSettings() {
     h += rows.length ? `<p class="muted" style="margin-bottom:2px">${plural(rows.length, 'setting', 'settings')} for "${esc(st.q.trim())}"</p>` + group(rows) : `<div class="empty"><h2>No setting matches</h2><button class="btn" data-act="setclear">Clear the search</button></div>`;
   } else {
     const rows = SETTINGS.filter(s => s.cat === st.cat && !s.profileOnly);
-    const lead = { servers: 'NNOMM lists dedicated servers only and never signs in to Steam. Steam shows you as playing Nuclear Option only while the game runs.', danger: 'NNOMM asks again before each of these.', profiles: 'A profile is a list of mods that are on, with the version of each. You can ignore profiles and use only Default.', keys: 'Click a shortcut to change it.' }[st.cat];
+    const lead = { servers: 'NNOMM lists dedicated servers only and never signs in to Steam. Steam shows you as playing Nuclear Option only while the game runs.', danger: 'NNOMM asks again before each of these.', profiles: 'A profile is a list of mods that are on, with the version of each. You can ignore profiles and use only Default.' }[st.cat];
     h += group(rows).replace('</h2>', '</h2>' + (lead ? `<p class="lead">${lead}</p>` : ''));
   }
   return h + '</div></div>';
