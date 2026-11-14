@@ -24,6 +24,30 @@ internal fun LibraryMenu(entries: () -> List<MenuEntry>, anchor: @Composable (()
     }
 }
 
+/**
+ * The menu of the profile name in the Play box and in the Library header: the profiles to switch
+ * to, New profile, and the actions for the profile in use. Both places show the same menu.
+ */
+internal fun profileMenuItems(model: AppModel): List<MenuEntry> {
+    val s = model.store.state.value
+    return listOf(MenuEntry.Heading("Use profile")) +
+        s.profiles.map { p ->
+            MenuEntry.Item(
+                p.name,
+                hint = "${onCount(s, p.id)} mods",
+                icon = if (p.id == s.profileId) NnIcons.check else NnIcons.minus,
+                action = { model.useProfile(p.id) },
+            )
+        } +
+        listOf(
+            MenuEntry.Separator,
+            MenuEntry.Item("New profile", icon = NnIcons.plus, action = { model.openOverlay("newprofile") }),
+            MenuEntry.Separator,
+        ) +
+        profileItems(model, s)
+}
+
+/** The actions for the profile in use. */
 internal fun profileItems(model: AppModel, s: AppState): List<MenuEntry> = buildList {
     val p = s.profile()
     fun overlay(kind: String) = model.openOverlay(kind, p.id)

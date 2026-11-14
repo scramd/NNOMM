@@ -37,6 +37,7 @@ import nnomm.ui.*
 import nnomm.ui.browse.BrowsePage
 import nnomm.ui.kit.*
 import nnomm.ui.library.LibraryPage
+import nnomm.ui.library.profileMenuItems
 import nnomm.ui.panel.ModPanel
 import nnomm.ui.settings.SettingsPage
 import nnomm.ui.theme.*
@@ -480,7 +481,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
             if (!narrow) {
                 if (s.settings.bool("showProfiles"))
                     Box {
-                        Tooltip("Change profile") {
+                        Tooltip("Use another profile, or change this one") {
                             Row(
                                 Modifier.fillMaxWidth().clickable { open("playwith") },
                                 verticalAlignment = Alignment.CenterVertically,
@@ -492,25 +493,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                         Menu(
                             menu == "playwith",
                             dismiss,
-                            listOf(MenuEntry.Heading("Use profile")) +
-                                s.profiles.map { p ->
-                                    MenuEntry.Item(
-                                        p.name,
-                                        hint = "${onCount(s, p.id)} mods",
-                                        icon =
-                                            if (p.id == s.profileId) NnIcons.check
-                                            else NnIcons.minus,
-                                        action = { model.useProfile(p.id) },
-                                    )
-                                } +
-                                listOf(
-                                    MenuEntry.Separator,
-                                    MenuEntry.Item(
-                                        "New profile",
-                                        icon = NnIcons.plus,
-                                        action = { model.openOverlay("newprofile") },
-                                    ),
-                                ),
+                            if (menu == "playwith") profileMenuItems(model) else emptyList(),
                         )
                     }
                 Label(

@@ -173,7 +173,7 @@ fun LibraryPage() {
                     width = 112f,
                 )
                 if (s.settings.bool("showProfiles"))
-                    LibraryMenu({ profileItems(model, model.store.state.value) }) { open ->
+                    LibraryMenu({ profileMenuItems(model) }) { open ->
                         LibraryProfileButton(s.profile().name, open)
                     }
                 Spacer(Modifier.weight(1f))
@@ -630,7 +630,7 @@ private fun LibraryNameCell(name: String, badges: @Composable RowScope.() -> Uni
 @Composable
 private fun LibraryProfileButton(name: String, onClick: () -> Unit) {
     val c = LocalNnTheme.current.colors
-    Tooltip("Actions for this profile") {
+    Tooltip("Use another profile, or change this one") {
         control(Modifier, onClick = onClick) { modifier, _, _ ->
             Row(
                 modifier.height(28.dp).padding(horizontal = 11.dp),

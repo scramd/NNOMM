@@ -186,4 +186,27 @@ class DialogKeysTest {
             d.save("sidebar-profile-rename")
         }
     }
+
+    @Test
+    fun bothProfileMenusSwitchAndActOnTheProfileInUse() {
+        DialogScene("page=library&prof=friday").use { d ->
+            val labels =
+                nnomm.ui.library.profileMenuItems(d.model).mapNotNull {
+                    (it as? nnomm.ui.kit.MenuEntry.Item)?.text ?: (it as? nnomm.ui.kit.MenuEntry.Heading)?.text
+                }
+            assertEquals("Use profile", labels.first())
+            for (name in d.store.state.value.profiles.map { it.name }) assertTrue(name in labels, name)
+            for (action in listOf("New profile", "Rename", "Make a copy", "Share as a modpack", "Delete this profile"))
+                assertTrue(action in labels, action)
+            // The Library header menu.
+            d.click(360f, 66f)
+            assertNotNull(d.model.ui.dismissMenu)
+            d.save("library-profile-menu")
+            d.press(Key.Escape)
+            // The Play box menu.
+            d.click(45f, 664f)
+            assertNotNull(d.model.ui.dismissMenu)
+            d.save("playbox-profile-menu")
+        }
+    }
 }
