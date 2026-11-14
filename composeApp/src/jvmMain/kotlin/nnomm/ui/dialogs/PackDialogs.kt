@@ -198,7 +198,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
             if (!loading && error == null) {
                 Summary(
                     buildList {
-                        add(pack.items.size.toString() to "mods in the pack")
+                        add(pack.items.size.toString() to if (pack.items.size == 1) "mod in the pack" else "mods in the pack")
                         add(n(PackKind.SAME).toString() to "you have")
                         add(
                             n(PackKind.ADD).toString() to
@@ -265,17 +265,26 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 if (mode == ImportMode.NEW && (preview?.settings != null || preview?.modSettingsFolder != null)) {
                     ToggleLine(includeSettings, { includeSettings = it }, "Include the pack's mod settings", "These settings change how mods behave.")
                 }
+                // The name field and the profile list sit inside their options, so the dialog keeps
+                // its height when the option changes and nothing moves under the pointer.
                 if (profilesShown) OptionCard(
                     "Make a new profile",
                     "It gets the pack's mods in the pack's versions, where the registry has them. ${state.profile().name} stays as it is.",
                     mode == ImportMode.NEW,
                     { model.ui.importMode = "new" },
+                    trailing = {
+                        DialogTextField(
+                            profileName,
+                            {
+                                profileName = it
+                                model.ui.importMode = "new"
+                            },
+                            Modifier.width(220.dp),
+                            placeholder = "Name of the new profile",
+                        )
+                    },
                 )
                 if (mode == ImportMode.NEW) {
-                    Row(Modifier.padding(start = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Label("Profile name")
-                        DialogTextField(profileName, { profileName = it }, Modifier.weight(1f), placeholder = "Type a name")
-                    }
                     val unique = uniqueProfileName(state, profileName)
                     if (profileName.isNotBlank() && unique != profileName.trim())
                         Label("A profile with this name exists. The new one is named \"$unique\".", Modifier.padding(start = 4.dp), color = LocalNnTheme.current.colors.text3)

@@ -56,12 +56,19 @@ private fun Modifier.closeOnMarginPress(margin: Dp, onDismiss: () -> Unit) =
         }
     }
 
+/**
+ * False while a dialog covers the window or a row is dragged. The pointer then never leaves the
+ * row, so a tooltip that is open would stay; it shows nothing instead.
+ */
+val LocalTooltipsOn = androidx.compose.runtime.compositionLocalOf { true }
+
 @Composable
 fun Tooltip(text: String, content: @Composable () -> Unit) {
     val c = LocalNnTheme.current.colors
+    val on = LocalTooltipsOn.current
     TooltipArea(
         tooltip = {
-            Box(
+            if (on && text.isNotEmpty()) Box(
                 Modifier.background(c.strong, RoundedCornerShape(4.dp))
                     .padding(horizontal = 8.dp, vertical = 5.dp)
             ) {

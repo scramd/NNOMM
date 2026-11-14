@@ -102,6 +102,11 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         if (!diskQueue.trySend(block).isSuccess) return
     }
 
+    // The Library's footer shows the size of the mods from the start, not only after the first change.
+    init {
+        if (io.persistence != null) disk {}
+    }
+
     private suspend fun <T> diskAwait(block: suspend () -> T): T {
         if (closing.get()) throw CancellationException("Store is closing")
         val caller = currentCoroutineContext()

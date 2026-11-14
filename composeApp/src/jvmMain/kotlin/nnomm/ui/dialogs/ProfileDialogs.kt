@@ -284,7 +284,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
             },
         ) {
             Label(
-                "The file lists the ${on.size} mods that are on in this profile, with their versions. Other players import it and get the same set."
+                "The file lists the ${if (on.size == 1) "1 mod that is" else "${on.size} mods that are"} on in this profile, with their versions. Other players import it and get the same set."
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f)) { Field("Pack name", name, { name = it }) }

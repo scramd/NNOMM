@@ -62,6 +62,7 @@ fun AppShell(model: AppModel) {
         LocalApp provides model,
         LocalOptionalApp provides model,
         LocalShortcutHandler provides model::shortcut,
+        LocalTooltipsOn provides (ui.overlay == null && !ui.dragging),
     ) {
         val dropTarget =
             remember(model) {
@@ -393,6 +394,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                CompositionLocalProvider(LocalTooltipsOn provides (LocalTooltipsOn.current && dragId == null)) {
                 shown.forEach { profile -> key(profile.id) {
                     // The row shows a "…" button for its menu while the pointer is over it or it
                     // has keyboard focus, so the profile's actions are not right-click only.
@@ -546,6 +548,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                         }
                     }
                 } }
+                }
             }
             }
         }

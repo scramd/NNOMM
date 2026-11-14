@@ -202,7 +202,7 @@ Open the `.nommpack` file, drag it onto the NNOMM window, or choose **Import a m
 
 Then choose:
 
-- **Make a new profile** (the default): the new profile gets the pack's mods in the pack's versions. Type its name under **Profile name**; it starts as the pack's name. Your other profiles stay as they are.
+- **Make a new profile** (the default): the new profile gets the pack's mods in the pack's versions. Type its name in the field at the right of this option; it starts as the pack's name. Your other profiles stay as they are.
 - **Add the mods to a profile you have:** pick the profile in the list at the right of this option; it does not need to be the one you use. The pack's mods are turned on in that profile. Its other mods stay as they are. If the profile has a newer version of a mod than the pack, choose **Keep** your version or **Use** the pack's version.
 
 If none of the pack's mods can be installed, NNOMM does not import it, because the result would be an empty profile. The exception is a pack with an address for updates: as a new profile, it follows the pack and gets the mods with the pack's next version.
