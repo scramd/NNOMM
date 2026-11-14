@@ -726,6 +726,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         updates(state.value).forEach(::update)
     }
 
+    /** Reads the registry and every followed modpack, then says what has an update. */
     fun lookForUpdates() {
         refreshRegistry(announce = true)
     }
@@ -1358,27 +1359,42 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     }
 
     fun checkPackUpdates() {
+        state.value.profiles.forEach { profile -> background { checkPackUpdate(profile) } }
+    }
+
+    /** Reads the newer version of the pack that [profile] follows, if there is one. */
+    private suspend fun checkPackUpdate(profile: Profile) {
         val source = io.packSource ?: return
-        state.value.profiles.forEach { profile ->
-            val info = profile.pack
-            if (info?.followAddress != null)
-                background {
-                    val next = source.following(info)
-                    change { s ->
-                        s.copy(
-                            profiles =
-                                s.profiles.map { p ->
-                                    if (
-                                        p.id == profile.id &&
-                                            p.pack?.followAddress == info.followAddress
-                                    )
-                                        p.copy(pack = p.pack.copy(nextVersion = next?.version))
-                                    else p
-                                }
-                        )
+        val info = profile.pack
+        if (info?.followAddress == null) return
+        val next = source.following(info)
+        change { s ->
+            s.copy(
+                profiles =
+                    s.profiles.map { p ->
+                        if (p.id == profile.id && p.pack?.followAddress == info.followAddress)
+                            p.copy(pack = p.pack.copy(nextVersion = next?.version))
+                        else p
+                    }
+            )
+        }
+    }
+
+    /** Checks every followed pack and waits for all of them. A pack that cannot be read is logged. */
+    private suspend fun checkAllPackUpdates() = coroutineScope {
+        state.value.profiles
+            .map { profile ->
+                async {
+                    try {
+                        checkPackUpdate(profile)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        io.logger.error("pack update", e)
                     }
                 }
-        }
+            }
+            .awaitAll()
     }
 
     /** Updates the profile [profileId] to [pack]. It does not need to be the profile in use. */
@@ -2190,14 +2206,25 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     nowMillis = now,
                 )
             }
-            checkPackUpdates()
-            if (announce)
+            if (announce) {
+                // Look for updates also reads the followed modpacks, and waits for them to say
+                // what has an update.
+                checkAllPackUpdates()
+                val s = state.value
+                val mods = updates(s).size
+                val packs = s.profiles.filter { it.pack?.nextVersion != null }
                 toast(
-                    updates(state.value).size.let {
-                        if (it == 0) "All mods are up to date"
-                        else plural(it, "mod has an update", "mods have an update")
-                    }
+                    (if (mods == 0) "All mods are up to date"
+                    else plural(mods, "mod has an update", "mods have an update")) +
+                        when (packs.size) {
+                            0 -> ""
+                            1 -> ". ${packs[0].name} has a modpack update"
+                            else -> ". ${packs.size} profiles have a modpack update"
+                        },
+                    if (mods > 0) "Show" else null,
+                    if (mods > 0) UiAction(ActionKind.LIBRARYFILTER, "upd") else null,
                 )
+            } else checkPackUpdates()
             if (state.value.setting("onUpdate")?.content == "Update by itself") updateAll()
             try {
                 io.registry.save(mods, now)

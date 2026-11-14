@@ -116,7 +116,7 @@ function vLibrary() {
   const c = libCounts(), ids = libList(), l = S.lib, p = profile(), ups = updates();
   const chip = (k, t, n) => `<button class="chip ${l.filter === k ? 'cur' : ''}" data-act="libfilter" data-v="${k}">${t}<span class="n">${n}</span></button>`;
   let h = `<div class="ph"><h1>Library</h1>${VAL.showProfiles ? `<button class="btn ghost" data-act="profmenu2" title="Use another profile, or change this one">${esc(p.name)}${I('chevd')}</button>` : ''}<span class="grow"></span>
-    ${ups.length ? `<button class="btn upd" data-act="updateall" title="${multi() ? 'Updates the versions that ' + esc(p.name) + ' uses' : ''}">${I('up')}Update all (${ups.length})</button>` : ''}
+    ${ups.length ? `<button class="btn upd" data-act="updateall" title="${multi() ? 'Updates the versions that ' + esc(p.name) + ' uses' : ''}">${I('up')}Update all (${ups.length})</button>` : installedIds().length ? `<button class="btn ghost" data-act="lookforupdates">${I('refresh')}Look for updates</button>` : ''}
     <button class="btn" data-act="addfile">${I('plus')}Add from a file</button>
     <button class="iconbtn" data-act="libmore" title="More">${I('more')}</button></div>`;
   if (!installedIds().length) return h + `<div class="empty">${I('library')}<h2>No mods yet</h2><p>Install a mod from Browse, or drop a mod file or a modpack on this window.</p><div class="row"><button class="btn strong" data-act="gobrowse">Browse the most downloaded mods</button><button class="btn" data-act="import">Import a modpack</button></div></div>`;

@@ -340,13 +340,7 @@ class AppModel(
             ActionKind.PALETTETOGGLE -> action.id?.let(store::paletteToggle)
             ActionKind.UNINSTALL -> action.id?.let { store.uninstall(listOf(it)) }
             ActionKind.PLAY -> store.play()
-            ActionKind.LOOKFORUPDATES -> {
-                store.refreshRegistry()
-                scope.launch {
-                    store.state.first { it.connection.kind != nnomm.core.model.ConnectionKind.LOADING }
-                    store.toast("${nnomm.core.rules.updates(store.state.value).size} mods have an update", "Show", UiAction("libraryFilter", "upd"))
-                }
-            }
+            ActionKind.LOOKFORUPDATES -> store.lookForUpdates()
             ActionKind.LIBRARYFILTER -> {
                 ui.go(Page.Library)
                 ui.library.selection = emptySet()

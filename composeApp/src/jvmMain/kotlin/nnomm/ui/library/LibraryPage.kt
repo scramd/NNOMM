@@ -177,6 +177,17 @@ fun LibraryPage() {
                         LibraryProfileButton(s.profile().name, open)
                     }
                 Spacer(Modifier.weight(1f))
+                // Where Update all appears when there are updates, a quiet button looks for them.
+                if (counts.getValue("upd") == 0 && s.installed.isNotEmpty()) {
+                    val looking = s.connection.kind == nnomm.core.model.ConnectionKind.LOADING
+                    Button(
+                        if (looking) "Looking for updates…" else "Look for updates",
+                        { model.store.lookForUpdates() },
+                        kind = ButtonKind.Ghost,
+                        icon = NnIcons.refresh,
+                        enabled = !looking,
+                    )
+                }
                 if (counts.getValue("upd") > 0)
                     Tooltip(
                         if (s.profiles.size > 1 && s.settings.bool("showProfiles"))

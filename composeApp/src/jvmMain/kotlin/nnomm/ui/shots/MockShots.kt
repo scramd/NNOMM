@@ -101,6 +101,23 @@ val featureShots =
             initialState = { it.profilesHidden() },
         ),
         MockShot(
+            "feature-library-no-updates",
+            "page=library",
+            initialState = { s ->
+                s.copy(
+                    installed =
+                        s.installed.mapValues { (id, m) ->
+                            val v = s.mod(id).installable?.version ?: return@mapValues m
+                            m.copy(
+                                versions = m.versions + v,
+                                defaultVersion = v,
+                                profiles = m.profiles.mapValues { it.value.copy(version = v) },
+                            )
+                        }
+                )
+            },
+        ),
+        MockShot(
             "feature-registry-off",
             "page=settings&cat=browse",
             initialState = {

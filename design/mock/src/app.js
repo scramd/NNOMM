@@ -120,7 +120,7 @@ function palItems() {
   const open = id => () => { S.panel = { kind: 'mod', id, tab: 'about' }; if (S.page !== 'browse' && S.page !== 'library') S.page = isInst(id) ? 'library' : 'browse'; if (S.page === 'library' && !isInst(id)) S.page = 'browse'; };
   const go = (p, t, ic) => () => { S.page = p; S.panel = null; };
   const actions = [
-    ['Start the game', 'Ctrl Enter', () => ACT.play(), 'play'], ['Look for mod updates', '', () => toast(`${updates().length} mods have an update`, 'Show', () => { S.page = 'library'; S.lib.filter = 'upd'; }), 'refresh'],
+    ['Start the game', 'Ctrl Enter', () => ACT.play(), 'play'], ['Look for mod updates', '', () => ACT.lookforupdates(), 'refresh'],
     ['Add a mod from a file', '', () => ACT.addfile(), 'plus'], ['Import a modpack', '', () => ACT.import(), 'box'], ['Share this profile as a modpack', '', () => ACT.share(), 'share'],
     ['Find the mod that breaks the game', '', () => ACT.trouble(), 'split'], ['New profile', '', () => ACT.newprofile(), 'plus'], ['Open the game folder', '', () => ACT.noop(), 'folder'],
   ];
@@ -216,6 +216,7 @@ const ACT = {
   // The Play box and the Library header show the same profile menu: switch, New profile, and the actions for the profile in use.
   profmenu(el) { openMenu(el, [{ head: 'Use profile' }, ...PROFILES.map(p => ({ label: p.name, ic: p.id === S.profile ? 'check' : 'minus', hint: onCount(p.id) + ' mods', fn: () => ACT.profile({ dataset: { id: p.id } }) })), '-', { label: 'New profile', ic: 'plus', fn: ACT.newprofile }, '-', ...profileItems(S.profile)]); },
   profmenu2(el) { ACT.profmenu(el); },
+  lookforupdates() { const n = updates().length, packs = PROFILES.filter(q => q.pack && q.pack.next); toast((n ? plural(n, 'mod has an update', 'mods have an update') : 'All mods are up to date') + (packs.length === 1 ? `. ${packs[0].name} has a modpack update` : packs.length ? `. ${packs.length} profiles have a modpack update` : ''), n ? 'Show' : null, n ? () => { S.page = 'library'; S.lib.filter = 'upd'; } : null); },
   profmore(el) { openMenu(el, profileItems(el.dataset.id)); },
   play() { if (S.running) return; S.running = true; toast(`Starting Nuclear Option with ${onCount()} mods`, null, null, 4000); },
   playmenu(el) { openMenu(el, [{ label: 'Play without mods', ic: 'play', fn: () => { S.running = true; toast('Starting Nuclear Option without mods. Your profile stays as it is.', null, null, 4000); } }, '-', { label: 'Open the game folder', ic: 'folder', fn: ACT.noop }, { label: 'Open the mod log', ic: 'file', fn: ACT.noop }]); },
@@ -274,7 +275,7 @@ const ACT = {
     openMenu(el, it);
   },
   addfile() { toast('A file window opens here. You can also drop a file on NNOMM.', 'Show the drop', () => { S.overlay = { kind: 'drop' }; }); },
-  libmore(el) { openMenu(el, [{ label: 'Import a modpack', ic: 'box', fn: ACT.import }, { label: 'Share this profile as a modpack', ic: 'share', fn: ACT.share }, '-', { label: 'Look for updates', ic: 'refresh', fn: () => toast(`${updates().length} mods have an update`) }, { label: 'Find the mod that breaks the game', ic: 'split', fn: ACT.trouble }, '-', { label: 'Open the mods folder', ic: 'folder', fn: ACT.noop }]); },
+  libmore(el) { openMenu(el, [{ label: 'Import a modpack', ic: 'box', fn: ACT.import }, { label: 'Share this profile as a modpack', ic: 'share', fn: ACT.share }, '-', { label: 'Look for updates', ic: 'refresh', fn: ACT.lookforupdates }, { label: 'Find the mod that breaks the game', ic: 'split', fn: ACT.trouble }, '-', { label: 'Open the mods folder', ic: 'folder', fn: ACT.noop }]); },
   import() { S.overlay = { kind: 'import', mode: VAL.showProfiles ? 'new' : 'add', keep: {}, local: false }; },
   share(pid) { pid = typeof pid === 'string' ? pid : S.profile; S.overlay = { kind: 'share', pid, name: profile(pid).name, v: '1.0', cfg: false, local: false, url: '' }; },
   packupdate(pid) { S.overlay = { kind: 'packupdate', pid: typeof pid === 'string' ? pid : S.profile }; },

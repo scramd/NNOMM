@@ -147,6 +147,7 @@ Click a mod in Browse or in the Library to open its panel. Press Esc to close it
 ![The Library's Updates filter, with an update downloading and the release notes of the mod](images/updates.png)
 
 - NNOMM reads the registry when it starts (you can change this in **Settings > Mods and updates**).
+- **Look for updates** reads the registry and the addresses of the modpacks that your profiles follow, then tells you what has an update. It is in the Library header when no mod has an update (in place of **Update all**), in the three dots menu of the Library, and in the search field.
 - The Library shows the number of updates in the sidebar. A mod with an update shows its old and new version in orange.
 - **Update all** updates every installed mod that has an update, also mods that are off in this profile. Local files and mods that a modpack controls are not included. You can also update one mod from its row, from Browse or from its panel.
 - **What's new** in the mod panel shows what changed.
