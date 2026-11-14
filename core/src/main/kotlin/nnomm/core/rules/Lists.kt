@@ -16,6 +16,10 @@ fun verOf(s: AppState, id: String, p: String = s.profileId) =
 fun packManaged(s: AppState, id: String, p: String = s.profileId) =
     s.profile(p).pack?.mods?.contains(id) == true
 
+/** The profile was made from a pack and the pack still controls it (updates or mod versions). */
+fun followsPack(p: Profile) =
+    p.pack?.let { it.followAddress != null || it.mods.isNotEmpty() } == true
+
 fun availableVersion(s: AppState, id: String) =
     s.mod(id).let {
         if (s.setting("prerelease")?.content == "true") it.newerPreRelease ?: it.installable

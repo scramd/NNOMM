@@ -161,7 +161,7 @@ Examples: "Squad night" with the mods your squad uses on its server, "Single pla
 
 - **Make a profile:** click **+** beside Profiles in the sidebar. A new profile starts with all mods off, as a copy of the current profile, or from a modpack file.
 - **Use a profile:** click it in the sidebar. NNOMM puts that profile's mods into the game folder at once (while the game runs, when it closes). The Play box shows which profile is in use and how many mods are on.
-- **Right-click a profile** for: Use this profile, Play with this profile (Play for the profile in use), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes in *version* (for a modpack with an update), Delete this profile. The first profile cannot be deleted, but you can rename it.
+- **Right-click a profile** for: Use this profile, Play with this profile (Play for the profile in use), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes in *version* (for a modpack with an update), Stop following this pack (for a profile made from a modpack), Delete this profile. The first profile cannot be deleted, but you can rename it.
 - **Mod settings for each profile:** mod settings are the values you change in the game, for example with F1. A profile can keep its own mod settings, so the same mod can have different settings in each profile. Turn this on when you make the profile, or in **Settings > Profiles**.
 - **Do not need profiles?** Turn off **Show profiles in the sidebar** in **Settings > Profiles**. NNOMM then uses the Default profile, and you have one list of mods.
 
@@ -199,7 +199,7 @@ Then choose:
 
 When a pack has a newer version at its address, the profile shows **update** in the sidebar. Right-click it and choose **See what changes in** *version*: NNOMM shows the mods that the update adds, removes and changes, before anything happens.
 
-A profile made from a pack follows the pack: the pack sets the versions of its mods (the mod panel shows "set by the modpack"), and these mods get their updates through pack updates. To manage the versions yourself, choose **Stop following this pack** in the pack update window.
+A profile made from a pack follows the pack: the pack sets the versions of its mods (the mod panel shows "set by the modpack"), and these mods get their updates through pack updates. To manage the versions yourself, right-click the profile and choose **Stop following this pack** (it is also in the pack update window). The profile keeps its mods and their versions, and you can then update them and change their versions yourself. NNOMM no longer looks for updates of the pack.
 
 ## Add a mod from a file
 

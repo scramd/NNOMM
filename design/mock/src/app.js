@@ -44,7 +44,7 @@ function vPackUpdate() {
   return dlgWrap(`<div class="dlg-h"><h2>${esc(p.name)} ${p.pack.v} to ${p.pack.next}</h2><p class="muted">Modpack by ${esc(p.pack.by)}</p></div><div class="dlg-b">
     <div class="sum"><div><b>${n('add')}</b>added</div><div><b>${n('rem')}</b>removed</div><div><b>${n('chg')}</b>updated</div><div><b>${n('same')}</b>not changed</div></div>
     <div class="diff">${it.map(diffRow).join('')}</div><p>Only this profile changes. Mods that you added to it yourself stay on.</p>
-    </div><div class="dlg-f"><button class="btn ghost left" data-act="noop">Stop following this pack</button><button class="btn ghost" data-act="closeoverlay">Not now</button><button class="btn strong" data-act="dopackupdate">Update the profile</button></div>`, 'wide');
+    </div><div class="dlg-f"><button class="btn ghost left" data-act="stopfollow">Stop following this pack</button><button class="btn ghost" data-act="closeoverlay">Not now</button><button class="btn strong" data-act="dopackupdate">Update the profile</button></div>`, 'wide');
 }
 function vNewProfile() {
   const o = S.overlay, op = (v, t, d) => `<button class="opt ${o.from === v ? 'cur' : ''}" data-act="oset" data-k="from" data-v="${v}"><span class="radio"></span><span><b>${t}</b>${d}</span></button>`;
@@ -188,6 +188,7 @@ function profileItems(id) {
   it.push({ label: 'Rename', fn: () => { S.overlay = { kind: 'rename', id, name: p.name }; } }, { label: 'Make a copy', ic: 'copy', fn: () => { const c = { id: 'p' + Date.now(), name: p.name + ' copy' }; PROFILES.push(c); installedIds().forEach(m => { INST[m].on[c.id] = isOn(m, id); if (INST[m].ver && INST[m].ver[id]) setVer(m, INST[m].ver[id], c.id); }); S.set.ov[c.id] = Object.assign({}, S.set.ov[id]); S.profile = c.id; S.page = 'library'; toast(`Made ${c.name}`); } },
     { label: 'Share as a modpack', ic: 'share', fn: () => { S.profile = id; ACT.share(); } }, { label: 'Settings for this profile', ic: 'gear', fn: () => { S.page = 'settings'; S.panel = null; S.set.scope = 'profile'; S.set.pid = id; S.set.q = ''; } });
   if (p.pack && p.pack.next) it.push({ label: `See what changes in ${p.pack.next}`, ic: 'box', fn: () => { S.profile = id; S.overlay = { kind: 'packupdate' }; } });
+  if (p.pack && p.pack.followed) it.push({ label: 'Stop following this pack', fn: () => ACT.stopfollow({ dataset: { id } }) });
   if (id !== 'default') it.push('-', { label: 'Delete this profile', ic: 'trash', dz: true, fn: () => { const i = PROFILES.indexOf(p); PROFILES.splice(i, 1); if (S.profile === id) S.profile = 'default'; toast(`Deleted the profile ${p.name}. Its mods stay installed.`, 'Undo', () => { PROFILES.splice(i, 0, p); }); } });
   return it;
 }
@@ -339,6 +340,7 @@ const ACT = {
     S.overlay = null; S.page = 'library'; S.panel = null; S.toasts = []; S.lib.filter = 'all';
     toast(`Importing ${P.name}: ${plural(n, 'download', 'downloads')}`);
   },
+  stopfollow(el) { const p = profile(el.dataset.id || S.profile); Object.assign(p.pack, { next: null, mods: [], followed: false }); S.overlay = null; toast('Stopped following this pack. You can now update and change its mods yourself.'); },
   dopackupdate() {
     const p = profile();
     PACK_UPDATE.items.forEach(([k, id, a, b]) => {

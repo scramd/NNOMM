@@ -809,6 +809,13 @@ internal fun profileItems(model: AppModel, id: String): List<MenuEntry> = buildL
             )
         )
     }
+    if (followsPack(s.profile(id)))
+        add(
+            MenuEntry.Item(
+                "Stop following this pack",
+                action = { model.store.stopFollowingPack(id) },
+            )
+        )
     if (id != "default") {
         add(MenuEntry.Separator)
         add(

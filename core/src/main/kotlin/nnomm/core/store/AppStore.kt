@@ -1319,7 +1319,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         }
     }
 
-    /** Keep the profile and its versions, but no longer fetch updates for this pack. */
+    /**
+     * Keep the profile, its mods and their versions, but the pack no longer controls them: no pack
+     * updates, and the player can update and change the versions of its mods.
+     */
     fun stopFollowingPack(profileId: String = state.value.profileId) {
         change { s ->
             s.copy(
@@ -1327,14 +1330,20 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     s.profiles.map { profile ->
                         if (profile.id == profileId)
                             profile.copy(
-                                pack = profile.pack?.copy(followAddress = null, nextVersion = null)
+                                pack =
+                                    profile.pack?.copy(
+                                        followAddress = null,
+                                        nextVersion = null,
+                                        mods = emptyList(),
+                                        memberVersions = emptyMap(),
+                                    )
                             )
                         else profile
                     }
             )
         }
         saveSettings()
-        toast("Stopped following this pack. Its mods and versions stay in this profile.")
+        toast("Stopped following this pack. You can now update and change its mods yourself.")
     }
 
     fun checkPackUpdates() {
