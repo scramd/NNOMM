@@ -1,6 +1,6 @@
 # Problems and questions
 
-Find your problem below. If it is not here, make a problem report: **Settings > About and updates > Problem report > Copy report**. The report has your mod list, the versions and the last game log. Check it before you send it to someone: it includes your game folder and messages from mods.
+Find your problem below. If it is not here, make a problem report: **Settings > About and updates > Problem report > Copy report**. The report has your mod list, the versions, NNOMM's own errors (from `nnomm.log` in its settings folder, `%APPDATA%\NNOMM` on Windows) and the last game log. Check it before you send it to someone: it includes your game folder and messages from mods.
 
 **Contents**
 

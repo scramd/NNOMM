@@ -58,6 +58,7 @@ private constructor(
                         throw e
                     }
                 HomeLocks.runtimeHomes.add(home.toRealPath())
+                NnommLog.file = home.resolve("nnomm.log")
                 try {
                     cleanHomePreparation(home)
                     recoverTransactions(
@@ -208,6 +209,7 @@ private constructor(
                                 Clock { System.currentTimeMillis() },
                                 persistence,
                                 packs,
+                                logger = NnommLog.logger,
                             ),
                         )
                     app.checkPackUpdates()

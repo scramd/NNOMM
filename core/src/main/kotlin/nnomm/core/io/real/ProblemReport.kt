@@ -25,6 +25,9 @@ fun problemReport(state: AppState): String = buildString {
             problems(state, id).forEach { appendLine("  ${it.text}") }
         }
     appendLine()
+    appendLine("NNOMM errors (end of nnomm.log):")
+    appendLine(NnommLog.tail()?.ifBlank { null } ?: "No errors logged.")
+    appendLine()
     appendLine("Last BepInEx log (last 64 KiB):")
     val log = state.game.folder?.let { Path.of(it).resolve("BepInEx/LogOutput.log") }
     if (log?.isRegularFile() != true) appendLine("No game log found.")

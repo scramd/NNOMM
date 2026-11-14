@@ -82,7 +82,7 @@ Use one mod manager at a time for a game folder. Two managers that move the same
 
 - [User guide](docs/user-guide.md): every page and feature.
 - [Problems and questions](docs/troubleshooting.md): a mod does not load, the game is not found, a download fails, and more.
-- Asking someone for help? In NNOMM, **Settings > About and updates > Problem report > Copy report** makes a report with your mod list, the versions and the last game log. You see the report before you copy it. It includes your game folder and messages from mods.
+- Asking someone for help? In NNOMM, **Settings > About and updates > Problem report > Copy report** makes a report with your mod list, the versions, NNOMM's errors and the last game log. You see the report before you copy it. It includes your game folder and messages from mods.
 
 ## For developers
 
