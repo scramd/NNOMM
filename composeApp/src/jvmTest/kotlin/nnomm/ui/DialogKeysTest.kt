@@ -209,4 +209,18 @@ class DialogKeysTest {
             d.save("playbox-profile-menu")
         }
     }
+
+    @Test
+    fun aToastCanBeClosed() {
+        DialogScene("page=library").use { d ->
+            d.store.toast("Uninstalled Nuclear Minimap", "Undo", undo = {})
+            d.frame()
+            d.frame()
+            d.save("toast")
+            assertEquals(1, d.store.state.value.toasts.size)
+            // The close button is the last control of the toast at the bottom of the window.
+            d.click(787f, 757f)
+            assertTrue(d.store.state.value.toasts.isEmpty())
+        }
+    }
 }

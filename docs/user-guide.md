@@ -256,7 +256,7 @@ Downloads appear in the sidebar above the Play box. They never block the window:
 
 ## Undo
 
-Actions that you can reverse show a message with **Undo** for a few seconds, for example an uninstall. Ctrl Z undoes the newest one. That is why NNOMM does not ask "Are you sure?" for them. It asks only for the danger zone of Settings and before it saves a modpack over an existing file.
+Actions that you can reverse show a message with **Undo** for a few seconds, for example an uninstall. Ctrl Z undoes the newest one. That is why NNOMM does not ask "Are you sure?" for them. It asks only for the danger zone of Settings and before it saves a modpack over an existing file. **×** at the end of a message closes it before its time is up.
 
 ## Settings
 

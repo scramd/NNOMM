@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import nnomm.ui.theme.*
@@ -472,12 +474,14 @@ fun Dialog(
     LaunchedEffect(Unit) { (initialFocus ?: focus).requestFocus() }
 }
 
+/** [onClose] adds a small close button at the end, so a toast can go before its time is up. */
 @Composable
 fun Toast(
     text: String,
     action: String? = null,
     onAction: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
 ) {
     val c = LocalNnTheme.current.colors
     Row(
@@ -507,6 +511,21 @@ fun Toast(
                                     androidx.compose.ui.text.style.TextDecoration.Underline,
                             ),
                 )
+            }
+        if (onClose != null)
+            Tooltip("Close") {
+                control(Modifier.semantics { contentDescription = "Close" }, onClick = onClose) { m, hover, _ ->
+                    Box(
+                        m.size(22.dp)
+                            .background(
+                                if (hover) c.strongInk.copy(alpha = .12f) else Color.Transparent,
+                                RoundedCornerShape(5.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(NnIcons.x, color = c.strongInk)
+                    }
+                }
             }
     }
 }

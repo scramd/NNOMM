@@ -169,7 +169,7 @@ function vLayer() {
   if (o) h += { palette: vPalette, import: vImport, packupdate: vPackUpdate, newprofile: vNewProfile, share: vShare, trouble: vTrouble, confirm: vConfirm, drop: vDrop, rename: vRename }[o.kind]();
   if (S.dlpop) h += vDlPop();
   if (S.menu) h += vMenu();
-  if (S.toasts.length) h += `<div class="toasts">${S.toasts.map(t => `<div class="toast"><span>${esc(t.text)}</span>${t.action ? `<button data-act="toast" data-id="${t.id}">${esc(t.action)}</button>` : ''}</div>`).join('')}</div>`;
+  if (S.toasts.length) h += `<div class="toasts">${S.toasts.map(t => `<div class="toast"><span>${esc(t.text)}</span>${t.action ? `<button data-act="toast" data-id="${t.id}">${esc(t.action)}</button>` : ''}<button class="x" data-act="toastclose" data-id="${t.id}" title="Close">${I('x')}</button></div>`).join('')}</div>`;
   return h;
 }
 function vMock() {
@@ -395,6 +395,7 @@ const ACT = {
   palrun(el) { const it = S.pal.items[+el.dataset.i]; S.overlay = null; if (it) it.fn(); },
   menuitem(el, e, menu) { const it = menu && menu.items[+el.dataset.i]; if (it && it.fn) it.fn(); },
   closemenu() { },
+  toastclose(el) { const i = S.toasts.findIndex(t => t.id === +el.dataset.id); if (i >= 0) S.toasts.splice(i, 1); },
   toast(el) { const i = S.toasts.findIndex(t => t.id === +el.dataset.id); if (i >= 0) { const t = S.toasts[i]; S.toasts.splice(i, 1); if (t.fn) t.fn(); } },
   dlpop() { S.dlpop = !S._dlpopWas; },
   dlclear() { S.downloads = S.downloads.filter(d => d.pct < 100); S.dlpop = true; },

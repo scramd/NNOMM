@@ -258,7 +258,7 @@ fun KitGallery() {
                                         width = width,
                                     )
                                 }
-                                Toast("Mod uninstalled", "Undo", {})
+                                Toast("Mod uninstalled", "Undo", {}, onClose = {})
                                 Label(
                                     "NNOMM is based on NOMM by Combat787. Registry: NOMNOM by KopterBuzz.",
                                     size = 11.5f,

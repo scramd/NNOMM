@@ -146,6 +146,7 @@ fun AppLayers(model: AppModel) {
                         if (message.startsWith("An NNOMM update")) "Get update"
                         else if (message.startsWith("Automatic updates are unavailable")) "Releases page" else null,
                         model.openAppReleases,
+                        onClose = { ui.updateStatus = null },
                     )
                 }
                 toasts.takeLast(if (ui.updateStatus == null) 3 else 2).forEach { toast ->
@@ -162,7 +163,12 @@ fun AppLayers(model: AppModel) {
                                         6
                                     },
                         ) {
-                            Toast(toast.text, toast.action, { model.runToast(toast.id) })
+                            Toast(
+                                toast.text,
+                                toast.action,
+                                { model.runToast(toast.id) },
+                                onClose = { model.store.dismissToast(toast.id) },
+                            )
                         }
                     }
                 }
