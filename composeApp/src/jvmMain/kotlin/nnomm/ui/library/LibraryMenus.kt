@@ -34,7 +34,7 @@ internal fun profileMenuItems(model: AppModel): List<MenuEntry> {
         s.profiles.map { p ->
             MenuEntry.Item(
                 p.name,
-                hint = "${onCount(s, p.id)} mods",
+                hint = mods(onCount(s, p.id)),
                 icon = if (p.id == s.profileId) NnIcons.check else NnIcons.minus,
                 action = { model.useProfile(p.id) },
             )

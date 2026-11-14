@@ -161,6 +161,9 @@ fun num(n: Long): String =
 
 fun plural(n: Int, one: String, many: String) = "$n ${if(n==1)one else many}"
 
+/** "1 mod", "3 mods". */
+fun mods(n: Int) = plural(n, "mod", "mods")
+
 fun hash(s: String): Long {
     var h = 0L
     s.forEach { h = (h * 31 + it.code) and 0xffffffffL }

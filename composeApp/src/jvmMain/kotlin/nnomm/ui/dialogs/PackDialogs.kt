@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package nnomm.ui.dialogs
 
 import androidx.compose.foundation.*
@@ -5,7 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawBehind
 import io.ktor.client.HttpClient
@@ -247,7 +252,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         (if (one) "This pack also contains a mod as a file. It does not come from the registry, so NNOMM cannot check it."
                         else "This pack also contains ${bundled.size} mods as files. They do not come from the registry, so NNOMM cannot check them.") +
                             " A mod can run any code on your computer. Turn a file on only if you trust $who." +
-                            (if (mode == ImportMode.NEW) " Files you turn on are on in the new profile." else " Files you turn on are on in $addName."),
+                            " Files you turn on are on in the profile the pack goes into.",
                         warn = true,
                     )
                     Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -289,8 +294,20 @@ class ImportDialog(private val model: AppModel) : Overlay {
                                 profileName = it
                                 model.ui.importMode = "new"
                             },
-                            // Typing a name, or Tab into the field, picks this option.
-                            Modifier.width(220.dp).onFocusChanged { if (it.hasFocus) model.ui.importMode = "new" },
+                            // A click in the field or typing a name picks this option. Enter there with
+                            // the other option picked switches to this one first and does not import.
+                            Modifier.width(220.dp)
+                                .onPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Press) { model.ui.importMode = "new" }
+                                .onPreviewKeyEvent {
+                                    if (
+                                        it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                                            it.key == androidx.compose.ui.input.key.Key.Enter &&
+                                            model.ui.importMode != "new"
+                                    ) {
+                                        model.ui.importMode = "new"
+                                        true
+                                    } else false
+                                },
                             placeholder = "Name of the new profile",
                         )
                     },

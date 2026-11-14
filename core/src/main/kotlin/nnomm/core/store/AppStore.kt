@@ -103,6 +103,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
     }
 
     // The Library's footer shows the size of the mods from the start, not only after the first change.
+    // Only the real app has persistence and a mod store on disk; demo and test stores skip this.
     init {
         if (io.persistence != null) disk {}
     }

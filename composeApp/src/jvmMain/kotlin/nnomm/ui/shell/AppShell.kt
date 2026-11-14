@@ -585,7 +585,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                         )
                     }
                 Label(
-                    "${onCount(s)} of ${s.installed.size} mods on",
+                    "${onCount(s)} of ${mods(s.installed.size)} on",
                     Modifier.offset(y = (-5).dp).padding(bottom = 0.dp),
                     size = 12f,
                     color = c.text2,

@@ -126,7 +126,7 @@ class FirstStart(private val model: AppModel) : Overlay {
                     if (game.folder != null && !game.folderMissing) {
                         CheckRow(
                             NnIcons.library,
-                            "${on + off} mods are already in the game folder",
+                            "${if (on + off == 1) "1 mod is" else "${on + off} mods are"} already in the game folder",
                             "They go into your Library as they are: ${on} on, ${off} off.",
                         )
                         CheckRow(

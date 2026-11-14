@@ -119,7 +119,7 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                 }
                 TroublePhase.BASE -> {
                     Label(
-                        "First check: all ${t!!.saved.size} mods are off now. Start the game and do what causes the problem."
+                        "First check: ${if (t!!.saved.size == 1) "the 1 mod is" else "all ${t.saved.size} mods are"} off now. Start the game and do what causes the problem."
                     )
                     Label(
                         "If the problem is still there, a mod is not the cause, and the test stops."
@@ -129,8 +129,8 @@ class TroubleDialog(private val model: AppModel) : Overlay {
                     Summary(
                         listOf(
                             "${t!!.round} of ${t.rounds}" to "round",
-                            "${t.on.size}" to "mods on",
-                            "${t.off.size}" to "mods off",
+                            "${t.on.size}" to if (t.on.size == 1) "mod on" else "mods on",
+                            "${t.off.size}" to if (t.off.size == 1) "mod off" else "mods off",
                             "${t.suspects.size}" to "still possible",
                         )
                     )

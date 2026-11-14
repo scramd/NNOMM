@@ -306,7 +306,7 @@ fun LibraryPage() {
                     }
                     ?.let {
                         Note(
-                            "You are looking for a broken mod. ${it.off.size} mods are off for the test. NNOMM turns them on again at the end.",
+                            "You are looking for a broken mod. ${if (it.off.size == 1) "1 mod is" else "${it.off.size} mods are"} off for the test. NNOMM turns them on again at the end.",
                             Modifier.padding(horizontal = 18.dp).padding(bottom = 10.dp),
                             warn = true,
                             icon = NnIcons.split,
