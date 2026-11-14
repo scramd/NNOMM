@@ -981,6 +981,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         val s = state.value
         val p = s.profile(id)
         val index = s.profiles.indexOf(p)
+        val wasInUse = s.profileId == id
         change {
             it.copy(
                 profiles = it.profiles - p,
@@ -992,10 +993,17 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             "Undo",
             undo = {
                 change { st ->
-                    st.copy(
-                        profiles =
-                            st.profiles.toMutableList().apply { add(index.coerceAtMost(size), p) }
-                    )
+                    if (st.profiles.any { it.id == id }) st
+                    else
+                        st.copy(
+                            profiles =
+                                st.profiles.toMutableList().apply {
+                                    add(index.coerceAtMost(size), p)
+                                },
+                            // A profile that was in use is in use again, and its mods go back
+                            // into the game folder. Not during a broken-mod test.
+                            profileId = if (wasInUse && st.trouble == null) id else st.profileId,
+                        )
                 }
                 applyAndSave()
             },

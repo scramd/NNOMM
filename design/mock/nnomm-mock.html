@@ -1436,7 +1436,7 @@ function profileItems(id) {
     { label: 'Share as a modpack', ic: 'share', fn: () => ACT.share(id) }, { label: 'Settings for this profile', ic: 'gear', fn: () => { S.page = 'settings'; S.panel = null; S.set.scope = 'profile'; S.set.pid = id; S.set.q = ''; } });
   if (p.pack && p.pack.next) it.push({ label: `See what changes in ${p.pack.next}`, ic: 'box', fn: () => ACT.packupdate(id) });
   if (p.pack && p.pack.followed) it.push({ label: 'Stop following this pack', fn: () => ACT.stopfollow({ dataset: { id } }) });
-  if (id !== 'default') it.push('-', { label: 'Delete this profile', ic: 'trash', dz: true, fn: () => { const i = PROFILES.indexOf(p); PROFILES.splice(i, 1); if (S.profile === id) S.profile = 'default'; toast(`Deleted the profile ${p.name}. Its mods stay installed.`, 'Undo', () => { PROFILES.splice(i, 0, p); }); } });
+  if (id !== 'default') it.push('-', { label: 'Delete this profile', ic: 'trash', dz: true, fn: () => { const i = PROFILES.indexOf(p), inUse = S.profile === id; PROFILES.splice(i, 1); if (inUse) S.profile = 'default'; toast(`Deleted the profile ${p.name}. Its mods stay installed.`, 'Undo', () => { PROFILES.splice(i, 0, p); if (inUse && !S.trouble) S.profile = id; }); } });
   return it;
 }
 function modItems(id) {
