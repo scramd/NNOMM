@@ -100,6 +100,21 @@ val featureShots =
             "page=library&overlay=import",
             initialState = { it.profilesHidden() },
         ),
+        MockShot(
+            "feature-registry-off",
+            "page=settings&cat=browse",
+            initialState = {
+                it.copy(
+                    settings =
+                        it.settings.copy(
+                            general =
+                                it.settings.general +
+                                    ("sources" to kotlinx.serialization.json.JsonPrimitive(nnomm.core.io.real.DEFAULT_REGISTRY)) +
+                                    ("sourcesOff" to kotlinx.serialization.json.JsonPrimitive("https://example.com/squad-mods.json"))
+                        )
+                )
+            },
+        ),
     )
 
 fun MockShot.spec() =

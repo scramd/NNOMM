@@ -160,6 +160,11 @@
     },
     {
       "cat": "browse",
+      "key": "sourcesOff",
+      "type": "hidden"
+    },
+    {
+      "cat": "browse",
       "key": "hideServer",
       "label": "Hide mods that are only for servers",
       "type": "toggle",

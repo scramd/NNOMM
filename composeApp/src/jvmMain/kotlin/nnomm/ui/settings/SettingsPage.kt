@@ -57,6 +57,7 @@ fun SettingsPage() {
         playerSettings.any { it.key == key && !it.profileOnly }
     }
     val rows = playerSettings.filter {
+        it.type != "hidden" &&
         (if (personal) it.ov else !it.profileOnly) &&
             (it.cat != "servers" || it.key == "showServers") &&
             (query.isEmpty() || "${it.label} ${displaySettingHelp(it, state, model)} ${it.options.joinToString(" ")}".lowercase().contains(query)) &&

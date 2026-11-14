@@ -268,7 +268,7 @@ Click **Settings** at the bottom of the sidebar (or press Ctrl ,). Use the searc
 | **Game** | Game folder (Find again, Choose folder). Start options. When the game starts: keep NNOMM open, minimise it or close it. Mod loader (Repair). Show the mod log window while the game runs. |
 | **Mods and updates** | When NNOMM reads the registry for new mods and updates. Tell me about updates, or update by itself. Offer test versions of mods. How many old versions to keep after an update. Install mods that a mod needs. Mark mods made for an older game version. |
 | **Profiles** | Show profiles in the sidebar. New profiles keep their own mod settings. A new profile starts with all mods off or as a copy. |
-| **Registry** | The addresses NNOMM reads mods from. Hide mods that are only for servers. |
+| **Registry** | The addresses NNOMM reads mods from. Add another address; its switch turns it off and on again, and **×** removes it. Hide mods that are only for servers. |
 | **Servers** | Show Servers in the sidebar. |
 | **Storage** | Where NNOMM keeps mod files (Move, Open). Downloaded files that are no longer in use (Clear). |
 | **Appearance** | Theme (same as Windows, dark, light). Row height in lists. Text size. Animations. **Leave out "Nuclear" in mod letters**: mods without a picture show two letters from their name, and this leaves out a first word "Nuclear". The page NNOMM opens on. |

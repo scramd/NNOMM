@@ -81,23 +81,24 @@ internal fun GameFolderChooser(model: AppModel) {
 internal fun RegistrySources(model: AppModel, state: AppState) {
     val c = LocalNnTheme.current.colors
     var address by remember { mutableStateOf("") }
-    val nomnom = "https://kopterbuzz.github.io/NOMNOM/manifest/manifest.json"
-    // RealRuntime reads newline-separated source addresses from this setting.
-    val sources = state.settings.general["sources"]?.content?.lineSequence()?.filter { it.isNotBlank() }?.toList()
-        ?: listOf(nomnom)
+    val nomnom = nnomm.core.io.real.DEFAULT_REGISTRY
+    // An added registry that is turned off stays in the list, so that it can be turned on again.
+    val listed = registrySources(state.settings)
+    fun change(source: String, on: Boolean?) {
+        if (model.isDemo) {
+            model.store.toast("This does nothing in demo mode.")
+            return
+        }
+        val (sources, off) = changeRegistry(model.store.state.value.settings, source, on)
+        model.store.setSetting("sourcesOff", JsonPrimitive(off))
+        model.store.setSetting("sources", JsonPrimitive(sources))
+    }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        (listOf(nomnom) + sources.filter { it != nomnom }).forEach { source ->
+        listed.forEach { (source, enabled) ->
             Row(Modifier.fillMaxWidth().border(1.dp, c.line, RoundedCornerShape(6.dp))
                 .padding(horizontal = 10.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Switch(source in sources, { on ->
-                    if (model.isDemo) {
-                        model.store.toast("This does nothing in demo mode.")
-                    } else {
-                        val next = if (on) sources + source else sources - source
-                        model.store.setSetting("sources", JsonPrimitive(next.joinToString("\n")))
-                    }
-                }, description = if (source == nomnom) "NOMNOM" else source)
+                Switch(enabled, { on -> change(source, on) }, description = if (source == nomnom) "NOMNOM" else source)
                 Column(Modifier.weight(1f)) {
                     Label(if (source == nomnom) "NOMNOM" else source, weight = 600, maxLines = 1)
                     Label(source.removePrefix("https://"), color = c.text3, size = 12f, maxLines = 1)
@@ -106,7 +107,10 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                     val minutes = state.connection.readAtMillis?.let { ((state.nowMillis - it) / 60000).coerceAtLeast(0) }
                     Label("${state.catalog.count { it.localFile == null }} mods, " + if (minutes == null) "not read yet" else "read " + when { minutes == 0L -> "just now"; minutes < 60 -> "$minutes ${if (minutes == 1L) "minute" else "minutes"} ago"; minutes < 1440 -> (minutes / 60).let { "$it ${if (it == 1L) "hour" else "hours"} ago" }; else -> nnomm.core.rules.ago((minutes / 1440).toInt()) }, color = c.text2)
                     Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in demo mode.") else model.store.refreshRegistry() }, size = ControlSize.Small)
-                } else Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in demo mode.") else model.store.refreshRegistry() }, size = ControlSize.Small)
+                } else {
+                    Button("Read now", { if (model.isDemo) model.store.toast("This does nothing in demo mode.") else model.store.refreshRegistry() }, size = ControlSize.Small, enabled = enabled)
+                    IconButton(NnIcons.x, "Remove this registry", { change(source, null) }, small = true)
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -116,8 +120,8 @@ internal fun RegistrySources(model: AppModel, state: AppState) {
                     model.store.toast("This does nothing in demo mode.")
                 } else {
                     val entered = address.trim()
-                    if (entered.isNotEmpty() && entered !in sources) {
-                        model.store.setSetting("sources", JsonPrimitive((sources + entered).joinToString("\n")))
+                    if (entered.isNotEmpty()) {
+                        change(entered, true)
                         address = ""
                     }
                 }
