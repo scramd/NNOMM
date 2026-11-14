@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawBehind
 import io.ktor.client.HttpClient
@@ -262,8 +263,17 @@ class ImportDialog(private val model: AppModel) : Overlay {
                         }
                     }
                 }
-                if (mode == ImportMode.NEW && (preview?.settings != null || preview?.modSettingsFolder != null)) {
-                    ToggleLine(includeSettings, { includeSettings = it }, "Include the pack's mod settings", "These settings change how mods behave.")
+                // Shown for both options, so the dialog keeps its height. Settings go only into a new profile.
+                if (profilesShown && (preview?.settings != null || preview?.modSettingsFolder != null)) {
+                    ToggleLine(
+                        includeSettings && mode == ImportMode.NEW,
+                        {
+                            includeSettings = it
+                            if (it) model.ui.importMode = "new"
+                        },
+                        "Include the pack's mod settings in the new profile",
+                        "These settings change how mods behave.",
+                    )
                 }
                 // The name field and the profile list sit inside their options, so the dialog keeps
                 // its height when the option changes and nothing moves under the pointer.
@@ -279,12 +289,13 @@ class ImportDialog(private val model: AppModel) : Overlay {
                                 profileName = it
                                 model.ui.importMode = "new"
                             },
-                            Modifier.width(220.dp),
+                            // Typing a name, or Tab into the field, picks this option.
+                            Modifier.width(220.dp).onFocusChanged { if (it.hasFocus) model.ui.importMode = "new" },
                             placeholder = "Name of the new profile",
                         )
                     },
                 )
-                if (mode == ImportMode.NEW) {
+                if (profilesShown) {
                     val unique = uniqueProfileName(state, profileName)
                     if (profileName.isNotBlank() && unique != profileName.trim())
                         Label("A profile with this name exists. The new one is named \"$unique\".", Modifier.padding(start = 4.dp), color = LocalNnTheme.current.colors.text3)
