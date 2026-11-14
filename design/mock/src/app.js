@@ -213,7 +213,7 @@ const ACT = {
   okeep(el) { S.overlay.keep[el.dataset.id] = el.dataset.v; },
   shareprob() { S.overlay = null; S.page = 'library'; S.lib.filter = 'prob'; },
   newprofile() { S.overlay = { kind: 'newprofile', name: '', from: { 'With all mods off': 'off' }[VAL.newFrom] || 'copy', own: VAL.ownSettings }; },
-  profmenu(el) { openMenu(el, [{ head: 'Play with' }, ...PROFILES.map(p => ({ label: p.name, ic: p.id === S.profile ? 'check' : 'minus', hint: onCount(p.id) + ' mods', fn: () => ACT.profile({ dataset: { id: p.id } }) })), '-', { label: 'New profile', ic: 'plus', fn: ACT.newprofile }]); },
+  profmenu(el) { openMenu(el, [{ head: 'Use profile' }, ...PROFILES.map(p => ({ label: p.name, ic: p.id === S.profile ? 'check' : 'minus', hint: onCount(p.id) + ' mods', fn: () => ACT.profile({ dataset: { id: p.id } }) })), '-', { label: 'New profile', ic: 'plus', fn: ACT.newprofile }]); },
   profmenu2(el) { openMenu(el, profileItems(S.profile)); },
   play() { if (S.running) return; S.running = true; toast(`Starting Nuclear Option with ${onCount()} mods`, null, null, 4000); },
   playmenu(el) { openMenu(el, [{ label: 'Play without mods', ic: 'play', fn: () => { S.running = true; toast('Starting Nuclear Option without mods. Your profile stays as it is.', null, null, 4000); } }, '-', { label: 'Open the game folder', ic: 'folder', fn: ACT.noop }, { label: 'Open the mod log', ic: 'file', fn: ACT.noop }]); },

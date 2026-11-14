@@ -467,7 +467,7 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                         Menu(
                             menu == "playwith",
                             dismiss,
-                            listOf(MenuEntry.Heading("Play with")) +
+                            listOf(MenuEntry.Heading("Use profile")) +
                                 s.profiles.map { p ->
                                     MenuEntry.Item(
                                         p.name,
