@@ -337,7 +337,7 @@
       "cat": "danger",
       "key": "dzAll",
       "label": "Remove all mods",
-      "help": "Removes every mod from the Library, from every profile and from the game folder, and the mod loader files that NNOMM installed. Your settings and profiles stay.",
+      "help": "Removes every mod from the Library, from every profile and from the game folder, and the mod loader files that NNOMM installed. Your settings and profiles stay. Mods that are not in the registry, such as your own files and mods taken over from the game folder, cannot be downloaded again.",
       "type": "actions",
       "actions": [
         "Remove all mods"

@@ -289,9 +289,11 @@ class RealPacks(
                             nnomm.core.io.PayloadOrigin.PACK,
                         ),
                     )
+                // The same name the import dialog showed, not the pack's folder name ("local-…").
+                val name = bundledModName(source)
                 CatalogMod(
                     localId,
-                    source.name,
+                    name,
                     versions = listOf(ModVersion(v)),
                     localFile = source.name,
                 ) to InstalledMod(localId, ModSource.LOCAL, source.name, setOf(v), v)

@@ -27,10 +27,24 @@ internal fun gameProcessRunning(): Boolean =
  * Closes Nuclear Option like Stop in Steam: first ask its windows to close (taskkill without /F on
  * Windows, SIGTERM elsewhere), then end it after [graceMs].
  */
+/**
+ * Only the game itself may be stopped: its own executable, or Wine/Proton running it. Detection
+ * above also accepts any process that names NuclearOption.exe as an argument (an editor, a tool),
+ * which must never be killed.
+ */
+private fun isGameToStop(p: ProcessHandle): Boolean {
+    val exe = p.info().command().orElse("").substringAfterLast('/').substringAfterLast('\\')
+    if (exe.equals("NuclearOption.exe", true) || exe == "NuclearOption") return true
+    return exe.startsWith("wine", true) &&
+        p.info().arguments().orElse(emptyArray()).firstOrNull()
+            ?.substringAfterLast('/')?.substringAfterLast('\\')
+            ?.equals("NuclearOption.exe", true) == true
+}
+
 internal suspend fun stopGameProcesses(extra: ProcessHandle? = null, graceMs: Long = 10_000): Boolean =
     withContext(Dispatchers.IO) {
         val targets =
-            (ProcessHandle.allProcesses().use { all -> all.filter(::isGameProcess).toList() } + listOfNotNull(extra))
+            (ProcessHandle.allProcesses().use { all -> all.filter(::isGameToStop).toList() } + listOfNotNull(extra))
                 .distinctBy { it.pid() }
                 .filter { it.isAlive }
         val windows = System.getProperty("os.name").startsWith("Windows")

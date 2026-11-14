@@ -239,15 +239,18 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 }
                 if (profilesShown) OptionCard(
                     "Make a new profile",
-                    "It gets the pack's mods in the pack's versions. ${state.profile().name} stays as it is.",
+                    "It gets the pack's mods in the pack's versions, where the registry has them. ${state.profile().name} stays as it is.",
                     mode == ImportMode.NEW,
                     { model.ui.importMode = "new" },
                 )
                 if (mode == ImportMode.NEW) {
                     Row(Modifier.padding(start = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Label("Profile name")
-                        DialogTextField(profileName, { profileName = it }, Modifier.weight(1f), placeholder = pack.name)
+                        DialogTextField(profileName, { profileName = it }, Modifier.weight(1f), placeholder = "Type a name")
                     }
+                    val unique = uniqueProfileName(state, profileName)
+                    if (profileName.isNotBlank() && unique != profileName.trim())
+                        Label("A profile with this name exists. The new one is named \"$unique\".", Modifier.padding(start = 4.dp), color = LocalNnTheme.current.colors.text3)
                 }
                 OptionCard(
                     "Add the mods to ${state.profile().name}",

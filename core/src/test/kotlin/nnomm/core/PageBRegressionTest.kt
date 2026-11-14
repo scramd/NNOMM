@@ -78,6 +78,8 @@ class PageBRegressionTest {
         assertTrue(s.downloads.isEmpty())
         assertEquals(listOf(owned), s.profiles.last().pack?.mods)
         assertTrue(isOn(s, owned))
+        // The new profile uses the version the warning named, not the mod's default version.
+        assertEquals(verOf(initial, owned), verOf(s, owned))
         store.close()
     }
 
@@ -93,6 +95,38 @@ class PageBRegressionTest {
             val ready = store.state.value.toasts.first { it.text.contains("is ready") }.text
             assertEquals("Pacific Wing training pack is ready: 8 mods installed.", ready)
             assertTrue(store.state.value.downloads.none { it.percent < 100 && it.error == null })
+        } finally {
+            store.shutdown()
+        }
+    }
+
+    @Test
+    fun cancelledImportIsNotReportedAsInstalled() = runBlocking {
+        val store = AppStore(Demo.state(), Demo.io().copy(persistence = null))
+        try {
+            store.importPack(Demo.PACK_IMPORT)
+            store.state.value.downloads.map { it.id }.distinct().forEach(store::cancelDownload)
+            withTimeout(20_000) {
+                while (store.state.value.toasts.none { it.text.startsWith("Pacific Wing training pack:") || it.text.contains("is ready") }) delay(50)
+            }
+            val text = store.state.value.toasts.last { it.text.startsWith("Pacific Wing") }.text
+            assertFalse(text.contains("is ready"), text)
+            assertTrue(text.contains("cancelled"), text)
+        } finally {
+            store.shutdown()
+        }
+    }
+
+    @Test
+    fun undoOfADeletedProfileDoesNotDuplicateAName() = runBlocking {
+        val store = AppStore(Demo.state(), Demo.io().copy(persistence = null))
+        try {
+            store.deleteProfile("friday")
+            val undo = store.state.value.toasts.last { it.action == "Undo" }
+            store.newProfile("Friday squad")
+            store.runToast(undo.id)
+            val names = store.state.value.profiles.map { it.name }
+            assertEquals(names.size, names.toSet().size, names.toString())
         } finally {
             store.shutdown()
         }

@@ -999,7 +999,8 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         st.copy(
                             profiles =
                                 st.profiles.toMutableList().apply {
-                                    add(index.coerceAtMost(size), p)
+                                    // The name may have been used again since the delete.
+                                    add(index.coerceAtMost(size), p.copy(name = uniqueProfileName(st, p.name)))
                                 },
                             // A profile that was in use is in use again, and its mods go back
                             // into the game folder. Not during a broken-mod test.
@@ -1291,42 +1292,58 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             applyAndSave(allowLoader = true)
         }
         var n = 0
+        // A new profile may have got " (2)": messages name the profile that was made.
+        val label = if (mode == ImportMode.NEW) state.value.profile(newProfileId).name else pack.name
+        val queued = mutableListOf<Pair<String, String>>()
         rows.forEach { r ->
             if (r.kind == PackKind.ADD) {
                 queue(r.id, DownloadKind.INSTALL, version = r.packVersion, quiet = true)
+                r.packVersion?.let { queued += r.id to it }
                 n++
             } else {
-                setOn(listOf(r.id), true)
+                if (r.kind == PackKind.SAME && r.packVersion != null) {
+                    // The profile gets the version the preview showed: the pack's, or yours when the
+                    // registry no longer has the pack's. setOn would keep the profile's own version.
+                    val target = state.value.profileId
+                    change { setProfileMod(it, r.id, target, true, r.packVersion) }
+                    applyAndSave(allowLoader = true)
+                } else setOn(listOf(r.id), true)
                 if (
                     r.kind == PackKind.UP ||
                         r.kind == PackKind.OTHER ||
                         (r.kind == PackKind.CONFLICT && keep[r.id] == "pack")
                 ) {
                     queue(r.id, DownloadKind.UPDATE, version = r.packVersion, quiet = true)
+                    r.packVersion?.let { queued += r.id to it }
                     n++
                 }
             }
         }
         if (n == 0) {
-            toast("Imported ${pack.name}")
+            toast("Imported ${label}")
             return
         }
         toast(
-            "Importing ${pack.name}: ${plural(n, "download", "downloads")}. Mods appear in the Library as they finish.",
+            "Importing ${label}: ${plural(n, "download", "downloads")}. Mods appear in the Library as they finish.",
             ms = 8000,
         )
         // One message when every download of this import has ended and the game folder is updated.
         val profile = state.value.profileId
-        val keys = rows.filter { it.packVersion != null && it.kind != PackKind.SAME }.map { "${it.id}/${it.packVersion}/$profile" }
-        val waiting = synchronized(lock) { keys.mapNotNull { jobs[it] } }
+        val waiting = synchronized(lock) { queued.mapNotNull { (id, v) -> jobs["$id/$v/$profile"] } }
         worker.launch {
             waiting.joinAll()
             runCatching { diskAwait {} }
+            val s = state.value
+            val done = queued.count { (id, v) -> s.installed[id]?.versions?.contains(v) == true }
             val failed =
-                state.value.downloads.count { d -> d.error != null && d.profile == profile && "${d.id}/${d.version}/$profile" in keys }
+                queued.count { (id, v) -> s.downloads.any { d -> d.id == id && d.version == v && d.profile == profile && d.error != null } }
+            val cancelled = queued.size - done - failed
             toast(
-                if (failed == 0) "${pack.name} is ready: ${plural(n, "mod", "mods")} installed."
-                else "${pack.name} is ready, but ${plural(failed, "download", "downloads")} failed. Open Downloads in the sidebar to retry."
+                if (done == queued.size) "${label} is ready: ${plural(done, "mod", "mods")} installed."
+                else
+                    "${label}: ${done} of ${plural(queued.size, "mod", "mods")} installed." +
+                        (if (failed > 0) " ${plural(failed, "download", "downloads")} failed. Open Downloads in the sidebar to retry." else "") +
+                        (if (cancelled > 0) " ${plural(cancelled, "download was", "downloads were")} cancelled." else ""),
             )
         }
     }
