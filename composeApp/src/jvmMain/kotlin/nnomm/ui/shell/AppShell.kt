@@ -9,6 +9,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
@@ -354,8 +357,12 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                s.profiles.forEach { profile ->
-                    RightClickMenu({ profileItems(model, profile.id) }) {
+                s.profiles.forEach { profile -> key(profile.id) {
+                    // The row shows a "…" button for its menu while the pointer is over it or it
+                    // has keyboard focus, so the profile's actions are not right-click only.
+                    var focused by remember { mutableStateOf(false) }
+                    val menuKey = "profile:${profile.id}"
+                    RightClickMenu({ profileItems(model, profile.id) }, Modifier.onFocusChanged { focused = it.hasFocus }) {
                         Tooltip(
                             "${profile.name}${if (profile.id == s.profileId) " (in use)" else ""}. Right-click for more."
                         ) {
@@ -415,26 +422,44 @@ private fun Sidebar(model: AppModel, narrow: Boolean, width: Dp) {
                                         }
                                         Label(
                                             profile.name,
-                                            Modifier.weight(1f),
+                                            Modifier.weight(1f).onDoubleClick {
+                                                model.openOverlay("rename", profile.id)
+                                            },
                                             color =
                                                 if (profile.id == s.profileId) c.text else c.text2,
                                         )
-                                        Label(
-                                            if (profile.pack?.nextVersion != null) "update"
-                                            else onCount(s, profile.id).toString(),
-                                            size = 11.5f,
-                                            weight =
-                                                if (profile.pack?.nextVersion != null) 600 else 400,
-                                            color =
-                                                if (profile.pack?.nextVersion != null) c.accentText
-                                                else c.text3,
-                                        )
+                                        if (hover || focused || menu == menuKey)
+                                            Box {
+                                                IconButton(
+                                                    NnIcons.more,
+                                                    "Actions for ${profile.name}",
+                                                    { if (menu == menuKey) dismiss() else open(menuKey) },
+                                                    small = true,
+                                                )
+                                                Menu(
+                                                    menu == menuKey,
+                                                    dismiss,
+                                                    if (menu == menuKey) profileItems(model, profile.id)
+                                                    else emptyList(),
+                                                )
+                                            }
+                                        else
+                                            Label(
+                                                if (profile.pack?.nextVersion != null) "update"
+                                                else onCount(s, profile.id).toString(),
+                                                size = 11.5f,
+                                                weight =
+                                                    if (profile.pack?.nextVersion != null) 600 else 400,
+                                                color =
+                                                    if (profile.pack?.nextVersion != null) c.accentText
+                                                    else c.text3,
+                                            )
                                     }
                                 }
                             }
                         }
                     }
-                }
+                } }
             }
             }
         }
@@ -691,6 +716,22 @@ private fun DownloadQueue(model: AppModel, narrow: Boolean) {
             }
         }
 }
+
+/**
+ * Runs [action] on a double click without consuming the clicks, so that the first click still does
+ * what a single click does.
+ */
+private fun Modifier.onDoubleClick(action: () -> Unit) =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            if (waitForUpOrCancellation() == null) return@awaitEachGesture
+            withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                awaitFirstDown(requireUnconsumed = false)
+            } ?: return@awaitEachGesture
+            if (waitForUpOrCancellation() != null) action()
+        }
+    }
 
 /** The Play button's menu, also on a right-click on Play (the only way in the narrow rail). */
 internal fun playItems(model: AppModel): List<MenuEntry> {

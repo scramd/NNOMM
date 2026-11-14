@@ -5,7 +5,9 @@ package nnomm.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.unit.Density
 import kotlin.test.*
 import nnomm.core.store.AppStore
@@ -15,7 +17,12 @@ import nnomm.ui.shots.*
 import nnomm.ui.theme.NnommTheme
 
 /** Renders the real shell with a dialog open, and sends keys to it. */
-internal class DialogScene(address: String, initialState: (nnomm.core.model.AppState) -> nnomm.core.model.AppState = { it }) : AutoCloseable {
+internal class DialogScene(
+    address: String,
+    initialState: (nnomm.core.model.AppState) -> nnomm.core.model.AppState = { it },
+    val width: Int = 1328,
+    val height: Int = 792,
+) : AutoCloseable {
     val store: AppStore = mockStore(address, initialState)
     val model =
         AppModel(store, ShotPlatform).also {
@@ -28,7 +35,7 @@ internal class DialogScene(address: String, initialState: (nnomm.core.model.AppS
     init {
         swing {
             scene =
-                ImageComposeScene(1328, 792, Density(1f)) {
+                ImageComposeScene(width, height, Density(1f)) {
                     NnommTheme(dark = true, reduceMotion = true) {
                         Box(Modifier.fillMaxSize()) {
                             WindowShell { AppShell(model) }
@@ -62,6 +69,32 @@ internal class DialogScene(address: String, initialState: (nnomm.core.model.AppS
         frame()
         frame()
         return handled
+    }
+
+    fun move(x: Float, y: Float) {
+        swing { scene.sendPointerEvent(PointerEventType.Move, Offset(x, y)) }
+        frame()
+    }
+
+    fun click(x: Float, y: Float) {
+        swing {
+            scene.sendPointerEvent(PointerEventType.Move, Offset(x, y))
+            scene.sendPointerEvent(PointerEventType.Press, Offset(x, y), button = PointerButton.Primary, buttons = PointerButtons(isPrimaryPressed = true))
+        }
+        time += 50_000_000L
+        swing { scene.sendPointerEvent(PointerEventType.Release, Offset(x, y), button = PointerButton.Primary) }
+        frame()
+        frame()
+    }
+
+    /** Writes the current frame to composeApp/build/test-shots, to look at. */
+    fun save(name: String) = swing {
+        time += 100_000_000L
+        scene.render(time).use { image ->
+            image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.use {
+                java.io.File("build/test-shots").apply { mkdirs() }.resolve("$name.png").writeBytes(it.bytes)
+            }
+        }
     }
 
     override fun close() {
@@ -131,6 +164,26 @@ class DialogKeysTest {
             assertNotNull(d.model.ui.overlay)
             assertEquals(toasts, d.store.state.value.toasts)
             assertFalse(d.store.state.value.gameStarting)
+        }
+    }
+
+    @Test
+    fun profileRowShowsAMenuButtonOnHoverAndDoubleClickRenames() {
+        DialogScene("page=library").use { d ->
+            // Friday squad is the third profile row in the sidebar.
+            d.move(100f, 278f)
+            d.save("sidebar-profile-hover")
+            d.click(191f, 278f)
+            d.save("sidebar-profile-menu")
+            assertNotNull(d.model.ui.dismissMenu)
+            assertEquals("default", d.store.state.value.profileId)
+            d.press(Key.Escape)
+            assertNull(d.model.ui.dismissMenu)
+            d.click(80f, 278f)
+            d.click(80f, 278f)
+            assertEquals("rename", d.model.ui.overlayKind)
+            assertEquals("friday", d.model.ui.overlayProfileId)
+            d.save("sidebar-profile-rename")
         }
     }
 }

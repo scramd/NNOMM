@@ -70,6 +70,10 @@
 .prof.act { color: var(--text); }
 .prof .tail { margin-left: auto; display: flex; align-items: center; gap: 4px; color: var(--text-3); font-size: 11.5px; }
 .prof .tail .upd { color: var(--accent-text); font-weight: 600; }
+/* The "…" button of a profile row replaces its count while the pointer is over the row or it has focus. */
+.prof .tail .more { display: none; }
+.prof:hover .tail .more, .prof:focus-within .tail .more, .prof .tail .more.open { display: grid; }
+.prof:hover .tail .cnt, .prof:focus-within .tail .cnt { display: none; }
 .side .spacer { flex: 1; min-height: 8px; }
 .dlrow { display: flex; flex-direction: column; gap: 5px; padding: 7px 9px; border-radius: var(--r); color: var(--text-2); font-size: 12px; width: 100%; }
 .dlrow:hover { background: var(--raise); }

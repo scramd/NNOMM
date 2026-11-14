@@ -13,7 +13,7 @@ function vSide() {
     h += `<h3><span>Profiles</span><button class="iconbtn sm" data-act="newprofile" title="New profile">${I('plus')}</button></h3><div class="prof-list">`;
     PROFILES.forEach(q => {
       const tail = q.temp ? I('clock') : q.pack && q.pack.next ? '<span class="upd">update</span>' : onCount(q.id);
-      h += `<button class="nav prof ${q.id === S.profile ? 'act' : ''}" data-act="profile" data-id="${q.id}" data-ctx="profile" title="${esc(q.name)}${q.id === S.profile ? ' (in use)' : ''}. Right-click for more."><span class="dot"></span><span class="ini">${esc(q.name.slice(0, 1).toUpperCase())}</span><span class="lbl-t ell">${esc(q.name)}</span><span class="tail">${tail}</span></button>`;
+      h += `<button class="nav prof ${q.id === S.profile ? 'act' : ''}" data-act="profile" data-id="${q.id}" data-ctx="profile" title="${esc(q.name)}${q.id === S.profile ? ' (in use)' : ''}. Right-click for more."><span class="dot"></span><span class="ini">${esc(q.name.slice(0, 1).toUpperCase())}</span><span class="lbl-t ell">${esc(q.name)}</span><span class="tail"><span class="cnt">${tail}</span><span class="iconbtn sm more" role="button" tabindex="0" data-act="profmore" data-id="${q.id}" title="Actions for ${esc(q.name)}">${I('more')}</span></span></button>`;
     });
     h += '</div>';
   }

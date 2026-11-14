@@ -215,6 +215,7 @@ const ACT = {
   newprofile() { S.overlay = { kind: 'newprofile', name: '', from: { 'With all mods off': 'off' }[VAL.newFrom] || 'copy', own: VAL.ownSettings }; },
   profmenu(el) { openMenu(el, [{ head: 'Use profile' }, ...PROFILES.map(p => ({ label: p.name, ic: p.id === S.profile ? 'check' : 'minus', hint: onCount(p.id) + ' mods', fn: () => ACT.profile({ dataset: { id: p.id } }) })), '-', { label: 'New profile', ic: 'plus', fn: ACT.newprofile }]); },
   profmenu2(el) { openMenu(el, profileItems(S.profile)); },
+  profmore(el) { openMenu(el, profileItems(el.dataset.id)); },
   play() { if (S.running) return; S.running = true; toast(`Starting Nuclear Option with ${onCount()} mods`, null, null, 4000); },
   playmenu(el) { openMenu(el, [{ label: 'Play without mods', ic: 'play', fn: () => { S.running = true; toast('Starting Nuclear Option without mods. Your profile stays as it is.', null, null, 4000); } }, '-', { label: 'Open the game folder', ic: 'folder', fn: ACT.noop }, { label: 'Open the mod log', ic: 'file', fn: ACT.noop }]); },
   openmod(el) { S.panel = { kind: 'mod', id: el.dataset.id, tab: 'about' }; if (S.overlay && S.overlay.kind === 'trouble') S.overlay = null; },
@@ -484,6 +485,8 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => { const el = e.target.closest('[data-in]'); if (!el) return; setPath(el.dataset.in, el.value); render(); });
 document.addEventListener('change', e => { const el = e.target.closest('[data-ch]'); if (!el || el.dataset.ch === 'noop') return; setPath(el.dataset.ch, el.value); render(); });
+// A double click on a profile's name in the sidebar renames it.
+document.addEventListener('dblclick', e => { const el = e.target.closest('.prof .lbl-t'); if (!el) return; const id = el.closest('[data-id]').dataset.id; S.overlay = { kind: 'rename', id, name: profile(id).name }; render(); });
 document.addEventListener('contextmenu', e => { const el = e.target.closest('[data-ctx="profile"]'); if (!el) return; e.preventDefault(); openMenu(el, profileItems(el.dataset.id)); render(); });
 document.addEventListener('keydown', e => {
   const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName), ctrl = e.ctrlKey || e.metaKey, k = e.key;
