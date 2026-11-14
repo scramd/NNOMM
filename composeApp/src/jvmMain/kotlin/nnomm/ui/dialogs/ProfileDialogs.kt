@@ -42,7 +42,10 @@ class NewProfileDialog(private val model: AppModel) : Overlay {
         var own by remember { mutableStateOf(model.store.state.value.settings.bool("ownSettings")) }
         val scope = rememberCoroutineScope()
         val focus = remember { FocusRequester() }
+        // A new profile needs a name; a profile from a pack takes the pack's name.
+        val canCreate = from == "pack" || name.isNotBlank()
         fun confirm() {
+            if (!canCreate) return
             if (from == "pack") scope.launch { model.choosePack() }
             else {
                 model.store.newProfile(name, from == "copy", own)
@@ -56,13 +59,14 @@ class NewProfileDialog(private val model: AppModel) : Overlay {
             "New profile",
             model::closeOverlay,
             initialFocus = focus,
-            onEnter = ::confirm,
+            onEnter = if (canCreate) ::confirm else null,
             footer = {
                 Cancel(model)
                 Button(
                     if (from == "pack") "Choose the modpack file" else "Create profile",
                     ::confirm,
                     kind = ButtonKind.Strong,
+                    enabled = canCreate,
                 )
             },
         ) {
@@ -106,7 +110,9 @@ class RenameDialog(private val model: AppModel) : Overlay {
     override fun Content() {
         var name by remember { mutableStateOf(profile.name) }
         val focus = remember { FocusRequester() }
+        val canRename = name.isNotBlank()
         fun confirm() {
+            if (!canRename) return
             model.store.renameProfile(profile.id, name)
             model.closeOverlay()
         }
@@ -115,10 +121,10 @@ class RenameDialog(private val model: AppModel) : Overlay {
             "Rename profile",
             model::closeOverlay,
             initialFocus = focus,
-            onEnter = ::confirm,
+            onEnter = if (canRename) ::confirm else null,
             footer = {
                 Cancel(model)
-                Button("Rename", ::confirm, kind = ButtonKind.Strong)
+                Button("Rename", ::confirm, kind = ButtonKind.Strong, enabled = canRename)
             },
         ) {
             DialogTextField(
@@ -151,8 +157,10 @@ class ShareDialog(private val model: AppModel) : Overlay {
         val locals = on.filter { state.installed[it]?.source == ModSource.LOCAL }
         val problems = on.count { hasProblem(state.copy(profileId = profile.id,
                                                 game = if (profile.id != state.profileId && state.settings.bool("ownSettingsP", profile.id)) state.game.copy(folder = null) else state.game), it) }
+        // The pack name and version make the file name, so neither may be blank.
+        val canSave = name.isNotBlank() && version.isNotBlank()
         fun save() {
-            if (saving) return
+            if (saving || !canSave) return
             if (model.isDemo) {
                 model.store.toast("This does nothing in demo mode.")
                 return
@@ -163,14 +171,14 @@ class ShareDialog(private val model: AppModel) : Overlay {
                     val file =
                         model.platform.chooseSaveFile(
                             "Save the modpack file",
-                            "${name.replace(Regex("\\s+"), "-")}-$version.nommpack",
+                            "${name.trim().replace(Regex("\\s+"), "-")}-${version.trim()}.nommpack",
                             "nommpack",
                         )
                     if (file != null) {
                         val pack =
                             model.store.shareProfile(
-                                name,
-                                version,
+                                name.trim(),
+                                version.trim(),
                                 includeLocal = local,
                                 includeSettings = settings,
                                 followAddress = address.takeIf { it.isNotBlank() },
@@ -200,7 +208,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
             true,
             "Share ${profile.name} as a modpack",
             model::closeOverlay,
-            onEnter = ::save,
+            onEnter = if (canSave) ::save else null,
             leftFooter = {
                 Button(
                     "Copy the mod list as text",
@@ -217,7 +225,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
             },
             footer = {
                 Cancel(model)
-                Button("Save the modpack file", ::save, kind = ButtonKind.Strong, enabled = !saving)
+                Button("Save the modpack file", ::save, kind = ButtonKind.Strong, enabled = canSave && !saving)
             },
         ) {
             Label(

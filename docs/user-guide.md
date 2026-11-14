@@ -162,6 +162,7 @@ Examples: "Squad night" with the mods your squad uses on its server, "Single pla
 - **Make a profile:** click **+** beside Profiles in the sidebar. A new profile starts with all mods off, as a copy of the current profile, or from a modpack file.
 - **Use a profile:** click it in the sidebar. NNOMM puts that profile's mods into the game folder at once (while the game runs, when it closes). The Play box shows which profile is in use and how many mods are on.
 - **Right-click a profile** for: Use this profile, Play with this profile (Play for the profile in use), Rename, Make a copy, Share as a modpack, Settings for this profile, See what changes in *version* (for a modpack with an update), Stop following this pack (for a profile made from a modpack), Delete this profile. The first profile cannot be deleted, but you can rename it.
+- **Names:** every profile has its own name. If you give a profile a name that another profile has, NNOMM adds a number, for example "Squad night (2)". This also happens for **Make a copy** and when you import the same modpack twice.
 - **Mod settings for each profile:** mod settings are the values you change in the game, for example with F1. A profile can keep its own mod settings, so the same mod can have different settings in each profile. Turn this on when you make the profile, or in **Settings > Profiles**.
 - **Do not need profiles?** Turn off **Show profiles in the sidebar** in **Settings > Profiles**. NNOMM then uses the Default profile, and you have one list of mods. A modpack that you import then adds its mods to Default.
 
@@ -174,7 +175,7 @@ A modpack is a profile saved as a `.nommpack` file. Use it to give your squad th
 
 Right-click the profile and choose **Share as a modpack** (or use the three dots in the Library). Then:
 
-- give the pack a **name** and a **version**,
+- give the pack a **name** and a **version** (both are needed: they make the file name),
 - choose if the pack includes your **mod settings** (so the pack arrives configured) and your **local files**,
 - optional: an **address for updates**. If you put a newer pack file at that address later, players who imported the pack see that an update is available.
 

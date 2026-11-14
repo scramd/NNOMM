@@ -97,9 +97,11 @@ class ImportDialog(private val model: AppModel) : Overlay {
                 it.kind in listOf(PackKind.ADD, PackKind.UP, PackKind.OTHER) ||
                     it.kind == PackKind.CONFLICT && keep[it.id] == "pack"
             }
-        val canImport = !loading && !importing && error == null && registryReady
+        // A new profile needs a name; a pack can come without one.
+        val named = mode == ImportMode.ADD || profileName.isNotBlank()
+        val canImport = !loading && !importing && error == null && registryReady && named
         fun import() {
-            if (loading || importing || error != null || !registryReady) return
+            if (loading || importing || error != null || !registryReady || !named) return
             importing = true
             scope.launch {
                 try {
@@ -114,7 +116,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
                     val settings = if (includeSettings && mode == ImportMode.NEW) preview?.settings ?: SettingsValues() else null
                     if (settings != null) withPackIo(state) { it.importSettings(preview!!, target) }
                     model.store.importPack(
-                        if (mode == ImportMode.NEW) pack.copy(name = profileName.trim().ifEmpty { pack.name }) else pack,
+                        if (mode == ImportMode.NEW) pack.copy(name = profileName.trim()) else pack,
                         mode,
                         keep,
                         target,
@@ -140,7 +142,7 @@ class ImportDialog(private val model: AppModel) : Overlay {
             else "Import ${pack.name} ${pack.version}",
             model::closeOverlay,
             wide = true,
-            onEnter = ::import,
+            onEnter = if (canImport) ::import else null,
             subtitle = if (!loading && error == null) "Modpack" + pack.by.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty() + ", from ${file?.name ?: pack.fileName.orEmpty()}" else null,
             footer = {
                 Cancel(model)

@@ -897,7 +897,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         val id = java.util.UUID.randomUUID().toString()
         val from = state.value.profileId
         if (state.value.trouble != null) stopBrokenModTest()
-        val p = Profile(id, name.trim().ifEmpty { "New profile" })
+        val p = Profile(id, uniqueProfileName(state.value, name.trim().ifEmpty { "New profile" }))
         change { s ->
             s.copy(
                 profiles = s.profiles + p,
@@ -937,9 +937,10 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         val s = state.value
         val p = s.profile(id)
         val new = java.util.UUID.randomUUID().toString()
+        val name = uniqueProfileName(s, p.name + " copy")
         change {
             it.copy(
-                profiles = it.profiles + Profile(new, p.name + " copy"),
+                profiles = it.profiles + Profile(new, name),
                 profileId = new,
                 installed =
                     it.installed.mapValues { (_, m) ->
@@ -956,7 +957,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                     ),
             )
         }
-        toast("Made ${p.name} copy")
+        toast("Made $name")
         applyAndSave()
         return new
     }
@@ -966,7 +967,9 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
             it.copy(
                 profiles =
                     it.profiles.map { p ->
-                        if (p.id == id) p.copy(name = name.trim().ifEmpty { p.name }) else p
+                        if (p.id == id && name.isNotBlank())
+                            p.copy(name = uniqueProfileName(it, name, except = id))
+                        else p
                     }
             )
         }
@@ -1244,7 +1247,7 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
                         it.profiles +
                             Profile(
                                 id,
-                                pack.name,
+                                uniqueProfileName(it, pack.name.trim().ifEmpty { "Modpack" }),
                                 PackInfo(
                                     pack.by,
                                     pack.version,

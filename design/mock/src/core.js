@@ -52,6 +52,8 @@ const VAL = Object.fromEntries(SETTINGS.filter(s => 'val' in s).map(s => [s.key,
 const setting = k => { const o = S.set.ov[S.profile]; return o && k in o ? o[k] : VAL[k]; };
 
 const profile = (id = S.profile) => PROFILES.find(p => p.id === id);
+// A profile name made unique: Squad, Squad (2), Squad (3). The profile `except` (being renamed) does not count.
+const uniqueName = (name, except) => { const taken = new Set(PROFILES.filter(p => p.id !== except).map(p => p.name.trim().toLowerCase())), base = name.trim(); if (!taken.has(base.toLowerCase())) return base; let n = 2; while (taken.has(`${base} (${n})`.toLowerCase())) n++; return `${base} (${n})`; };
 // The profile whose own settings are shown, and the way to join a server that is selected now.
 const setPid = () => S.set.scope === 'profile' && PROFILES.some(p => p.id === S.set.pid) ? S.set.pid : S.profile;
 const joinMode = () => S.srv.mode || (JOIN_MODES.find(m => m[1] === VAL.joinMods) || JOIN_MODES[0])[0];

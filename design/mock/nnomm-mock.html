@@ -679,6 +679,8 @@ const VAL = Object.fromEntries(SETTINGS.filter(s => 'val' in s).map(s => [s.key,
 const setting = k => { const o = S.set.ov[S.profile]; return o && k in o ? o[k] : VAL[k]; };
 
 const profile = (id = S.profile) => PROFILES.find(p => p.id === id);
+// A profile name made unique: Squad, Squad (2), Squad (3). The profile `except` (being renamed) does not count.
+const uniqueName = (name, except) => { const taken = new Set(PROFILES.filter(p => p.id !== except).map(p => p.name.trim().toLowerCase())), base = name.trim(); if (!taken.has(base.toLowerCase())) return base; let n = 2; while (taken.has(`${base} (${n})`.toLowerCase())) n++; return `${base} (${n})`; };
 // The profile whose own settings are shown, and the way to join a server that is selected now.
 const setPid = () => S.set.scope === 'profile' && PROFILES.some(p => p.id === S.set.pid) ? S.set.pid : S.profile;
 const joinMode = () => S.srv.mode || (JOIN_MODES.find(m => m[1] === VAL.joinMods) || JOIN_MODES[0])[0];
@@ -1296,7 +1298,7 @@ function vNewProfile() {
     ${o.from === 'pack' ? '' : `<label class="lbl">Name<div class="field"><input id="np-name" data-in="overlay.name" data-autofocus placeholder="For example: Squad night" value="${esc(o.name)}"></div></label>`}
     ${op('off', 'Start with all mods off', 'Your installed mods are in the list. You turn on the ones you want.')}${op('copy', `Copy ${esc(profile().name)}`, 'The same mods are on. After that the two profiles change separately.')}${op('pack', 'Start from a modpack file', 'NNOMM shows what the pack contains before it installs anything.')}
     ${o.from === 'pack' ? '<p>The profile gets the name of the pack. You can rename it later.</p>' : `<div class="row">${tog(o.own, 'oset', 'data-k="own" data-v="toggle"', 'Own mod settings')}<span>This profile keeps its own mod settings (the values you change with F1 in the game)</span></div>`}
-    </div><div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="docreate">${o.from === 'pack' ? 'Choose the modpack file' : 'Create profile'}</button></div>`);
+    </div><div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="docreate"${o.from !== 'pack' && !o.name.trim() ? ' disabled' : ''}>${o.from === 'pack' ? 'Choose the modpack file' : 'Create profile'}</button></div>`);
 }
 function vShare() {
   const o = S.overlay, p = profile(o.pid), on = installedIds().filter(id => isOn(id, o.pid)), local = on.filter(id => INST[id].source === 'local');
@@ -1307,12 +1309,12 @@ function vShare() {
     ${on.some(hasProblem) ? `<div class="note warn" style="margin:0">${I('alert')}<span>${plural(on.filter(hasProblem).length, 'mod has', 'mods have')} a problem in this profile. Players who import the pack get the same problem.</span><button class="btn sm" data-act="shareprob">Show</button></div>` : ''}
     <div class="row">${tog(o.cfg, 'oset', 'data-k="cfg" data-v="toggle"', 'Include mod settings')}<span>Include my mod settings, so the pack arrives configured</span></div>
     <label class="lbl">Address for updates (optional)<div class="field"><input id="sh-url" data-in="overlay.url" placeholder="https://..." value="${esc(o.url || '')}"></div><span class="faint" style="font-size:12px">If you put the pack file online, enter its address. Players then get a notice when you save a newer version there. Without an address, players import each new file by hand.</span></label>
-    </div><div class="dlg-f"><button class="btn ghost left" data-act="copied">Copy the mod list as text</button><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="doshare">Save the modpack file</button></div>`);
+    </div><div class="dlg-f"><button class="btn ghost left" data-act="copied">Copy the mod list as text</button><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="doshare"${o.name.trim() && o.v.trim() ? '' : ' disabled'}>Save the modpack file</button></div>`);
 }
 function vRename() {
   const o = S.overlay;
   return dlgWrap(`<div class="dlg-h"><h2>Rename profile</h2></div><div class="dlg-b"><div class="field"><input id="rn-name" data-in="overlay.name" data-autofocus value="${esc(o.name)}"></div></div>
-    <div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="dorename">Rename</button></div>`);
+    <div class="dlg-f"><button class="btn ghost" data-act="closeoverlay">Cancel</button><button class="btn strong" data-act="dorename"${o.name.trim() ? '' : ' disabled'}>Rename</button></div>`);
 }
 function vConfirm() {
   const o = S.overlay;
@@ -1430,7 +1432,7 @@ function openMenu(el, items) {
 function profileItems(id) {
   const p = profile(id), it = [];
   if (id !== S.profile) it.push({ label: 'Use this profile', ic: 'check', fn: () => ACT.profile({ dataset: { id } }) });
-  it.push({ label: 'Rename', fn: () => { S.overlay = { kind: 'rename', id, name: p.name }; } }, { label: 'Make a copy', ic: 'copy', fn: () => { const c = { id: 'p' + Date.now(), name: p.name + ' copy' }; PROFILES.push(c); installedIds().forEach(m => { INST[m].on[c.id] = isOn(m, id); if (INST[m].ver && INST[m].ver[id]) setVer(m, INST[m].ver[id], c.id); }); S.set.ov[c.id] = Object.assign({}, S.set.ov[id]); S.profile = c.id; S.page = 'library'; toast(`Made ${c.name}`); } },
+  it.push({ label: 'Rename', fn: () => { S.overlay = { kind: 'rename', id, name: p.name }; } }, { label: 'Make a copy', ic: 'copy', fn: () => { const c = { id: 'p' + Date.now(), name: uniqueName(p.name + ' copy') }; PROFILES.push(c); installedIds().forEach(m => { INST[m].on[c.id] = isOn(m, id); if (INST[m].ver && INST[m].ver[id]) setVer(m, INST[m].ver[id], c.id); }); S.set.ov[c.id] = Object.assign({}, S.set.ov[id]); S.profile = c.id; S.page = 'library'; toast(`Made ${c.name}`); } },
     { label: 'Share as a modpack', ic: 'share', fn: () => ACT.share(id) }, { label: 'Settings for this profile', ic: 'gear', fn: () => { S.page = 'settings'; S.panel = null; S.set.scope = 'profile'; S.set.pid = id; S.set.q = ''; } });
   if (p.pack && p.pack.next) it.push({ label: `See what changes in ${p.pack.next}`, ic: 'box', fn: () => ACT.packupdate(id) });
   if (p.pack && p.pack.followed) it.push({ label: 'Stop following this pack', fn: () => ACT.stopfollow({ dataset: { id } }) });
@@ -1575,7 +1577,7 @@ const ACT = {
   oset(el) { const { k, v } = el.dataset; S.overlay[k] = v === 'toggle' ? !S.overlay[k] : v; },
   doimport() {
     const P = PACK_IMPORT, o = S.overlay, rows = importRows(o), last = () => S.downloads[S.downloads.length - 1];
-    if (o.mode === 'new') { const p = { id: 'p' + Date.now(), name: P.name, pack: { by: P.by, v: P.v, mods: rows.map(r => r.id) } }; PROFILES.push(p); S.profile = p.id; }
+    if (o.mode === 'new') { const p = { id: 'p' + Date.now(), name: uniqueName(P.name), pack: { by: P.by, v: P.v, mods: rows.map(r => r.id) } }; PROFILES.push(p); S.profile = p.id; }
     let n = 0;
     rows.forEach(r => {
       if (r.kind === 'add') { install(r.id, true); n++; return; }
@@ -1598,14 +1600,15 @@ const ACT = {
   docreate() {
     const o = S.overlay;
     if (o.from === 'pack') { ACT.import(); return; }
-    const from = S.profile, p = { id: 'p' + Date.now(), name: o.name.trim() || 'New profile' }; PROFILES.push(p);
+    if (!o.name.trim()) return;
+    const from = S.profile, p = { id: 'p' + Date.now(), name: uniqueName(o.name) }; PROFILES.push(p);
     installedIds().forEach(id => { INST[id].on[p.id] = o.from === 'copy' ? isOn(id) : false; if (o.from === 'copy' && INST[id].ver && INST[id].ver[from]) setVer(id, INST[id].ver[from], p.id); });
     S.set.ov[p.id] = Object.assign(o.from === 'copy' ? Object.assign({}, S.set.ov[from]) : {}, { ownSettingsP: o.own });
     S.profile = p.id; S.page = 'library'; S.panel = null; S.overlay = null; S.lib.filter = 'all';
     toast(`Made the profile ${p.name}`);
   },
-  doshare() { const o = S.overlay; S.overlay = null; toast(`Saved ${o.name.replace(/\s+/g, '-')}-${o.v}.nommpack`, 'Show the file', () => { }); },
-  dorename() { const o = S.overlay; profile(o.id).name = o.name.trim() || profile(o.id).name; S.overlay = null; },
+  doshare() { const o = S.overlay; if (!o.name.trim() || !o.v.trim()) return; S.overlay = null; toast(`Saved ${o.name.replace(/\s+/g, '-')}-${o.v}.nommpack`, 'Show the file', () => { }); },
+  dorename() { const o = S.overlay; if (!o.name.trim()) return; profile(o.id).name = uniqueName(o.name, o.id); S.overlay = null; },
   doconfirm() { S.overlay = null; ACT.noop(); },
   dropfile() { S.overlay = null; S.page = 'library'; S.lib.filter = 'local'; toast('Added TestHud.dll to your Library and turned it on', 'Undo', () => { }); },
   mockdrop() { S.overlay = { kind: 'drop' }; },

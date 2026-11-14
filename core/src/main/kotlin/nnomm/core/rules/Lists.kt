@@ -16,6 +16,17 @@ fun verOf(s: AppState, id: String, p: String = s.profileId) =
 fun packManaged(s: AppState, id: String, p: String = s.profileId) =
     s.profile(p).pack?.mods?.contains(id) == true
 
+/**
+ * [name] made unique among the profiles: "Squad", then "Squad (2)", "Squad (3)". The profile
+ * [except] (the one being renamed) does not count. Case does not matter.
+ */
+fun uniqueProfileName(s: AppState, name: String, except: String? = null): String {
+    val taken = s.profiles.filter { it.id != except }.map { it.name.trim().lowercase() }.toSet()
+    val base = name.trim()
+    if (base.lowercase() !in taken) return base
+    return generateSequence(2) { it + 1 }.map { "$base ($it)" }.first { it.lowercase() !in taken }
+}
+
 /** The profile was made from a pack and the pack still controls it (updates or mod versions). */
 fun followsPack(p: Profile) =
     p.pack?.let { it.followAddress != null || it.mods.isNotEmpty() } == true
