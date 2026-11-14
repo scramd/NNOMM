@@ -1311,6 +1311,7 @@ function vShare() {
   return dlgWrap(`<div class="dlg-h"><h2>Share ${esc(p.name)} as a modpack</h2></div><div class="dlg-b">
     <p>The file lists the ${on.length} mods that are on in this profile, with their versions. Other players import it and get the same set.</p>
     <div class="row"><label class="lbl grow">Pack name<div class="field"><input id="sh-name" data-in="overlay.name" value="${esc(o.name)}"></div></label><label class="lbl" style="width:110px">Version<div class="field"><input id="sh-v" data-in="overlay.v" value="${esc(o.v)}"></div></label></div>
+    <label class="lbl">Made by (optional)<div class="field"><input id="sh-by" data-in="overlay.by" placeholder="Your name, as players see it" value="${esc(o.by || '')}"></div></label>
     ${local.length ? `<div class="note" style="margin:0">${I('file')}<span>${local.map(id => esc(MOD[id].name)).join(' and ')} ${local.length === 1 ? 'is a local file' : 'are local files'}. With this on, NNOMM puts ${local.length === 1 ? 'it' : 'them'} inside the pack file (${size(local.reduce((a, id) => a + MOD[id].size, 0))}). Players get a warning before they import it.</span><span class="row" style="margin-left:auto;gap:7px;white-space:nowrap">${tog(o.local, 'oset', 'data-k="local" data-v="toggle"', 'Include local files')}Include</span></div>` : ''}
     ${on.some(hasProblem) ? `<div class="note warn" style="margin:0">${I('alert')}<span>${plural(on.filter(hasProblem).length, 'mod has', 'mods have')} a problem in this profile. Players who import the pack get the same problem.</span><button class="btn sm" data-act="shareprob">Show</button></div>` : ''}
     <div class="row">${tog(o.cfg, 'oset', 'data-k="cfg" data-v="toggle"', 'Include mod settings')}<span>Include my mod settings, so the pack arrives configured</span></div>
@@ -1529,7 +1530,8 @@ const ACT = {
   addfile() { toast('A file window opens here. You can also drop a file on NNOMM.', 'Show the drop', () => { S.overlay = { kind: 'drop' }; }); },
   libmore(el) { openMenu(el, [{ label: 'Import a modpack', ic: 'box', fn: ACT.import }, { label: 'Share this profile as a modpack', ic: 'share', fn: ACT.share }, '-', { label: 'Look for updates', ic: 'refresh', fn: ACT.lookforupdates }, { label: 'Find the mod that breaks the game', ic: 'split', fn: ACT.trouble }, '-', { label: 'Open the mods folder', ic: 'folder', fn: ACT.noop }]); },
   import() { S.overlay = { kind: 'import', mode: VAL.showProfiles ? 'new' : 'add', keep: {}, local: false }; },
-  share(pid) { pid = typeof pid === 'string' ? pid : S.profile; S.overlay = { kind: 'share', pid, name: profile(pid).name, v: '1.0', cfg: false, local: false, url: '' }; },
+  // A profile shared before starts with what the player entered then.
+  share(pid) { pid = typeof pid === 'string' ? pid : S.profile; const q = profile(pid), l = q.lastShare || {}; S.overlay = { kind: 'share', pid, name: l.name || q.name, v: l.v || '1.0', by: l.by || '', cfg: false, local: false, url: l.url || '' }; },
   packupdate(pid) { S.overlay = { kind: 'packupdate', pid: typeof pid === 'string' ? pid : S.profile }; },
   keeptemp() { profile().temp = false; toast(`${profile().name} is now a normal profile`); },
   trouble() { S.overlay = { kind: 'trouble' }; },
@@ -1616,7 +1618,7 @@ const ACT = {
     S.profile = p.id; S.page = 'library'; S.panel = null; S.overlay = null; S.lib.filter = 'all';
     toast(`Made the profile ${p.name}`);
   },
-  doshare() { const o = S.overlay; if (!o.name.trim() || !o.v.trim()) return; S.overlay = null; toast(`Saved ${o.name.replace(/\s+/g, '-')}-${o.v}.nommpack`, 'Show the file', () => { }); },
+  doshare() { const o = S.overlay; if (!o.name.trim() || !o.v.trim()) return; profile(o.pid).lastShare = { name: o.name, v: o.v, by: o.by, url: o.url }; S.overlay = null; toast(`Saved ${o.name.replace(/\s+/g, '-')}-${o.v}.nommpack`, 'Show the file', () => { }); },
   dorename() { const o = S.overlay; if (!o.name.trim()) return; profile(o.id).name = uniqueName(o.name, o.id); S.overlay = null; },
   doconfirm() { S.overlay = null; ACT.noop(); },
   dropfile() { S.overlay = null; S.page = 'library'; S.lib.filter = 'local'; toast('Added TestHud.dll to your Library and turned it on', 'Undo', () => { }); },

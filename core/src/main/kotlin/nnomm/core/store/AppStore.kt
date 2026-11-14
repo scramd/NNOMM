@@ -1504,6 +1504,20 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         )
     }
 
+    /** Keeps what the player entered for [pack], so that the next share of the profile starts with it. */
+    fun rememberShare(profileId: String, pack: Pack) {
+        change { s ->
+            s.copy(
+                profiles =
+                    s.profiles.map {
+                        if (it.id == profileId)
+                            it.copy(lastShare = ShareInfo(pack.name, pack.version, pack.by, pack.followAddress))
+                        else it
+                    }
+            )
+        }
+    }
+
     /** Adopt explicitly selected pack payloads already materialized by pack IO. They remain off. */
     fun addPreparedLocalMods(mods: List<Pair<CatalogMod, InstalledMod>>) {
         require(mods.all { it.second.source == ModSource.LOCAL && it.first.id == it.second.id })

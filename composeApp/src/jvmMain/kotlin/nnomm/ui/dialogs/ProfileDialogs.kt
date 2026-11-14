@@ -145,9 +145,12 @@ class ShareDialog(private val model: AppModel) : Overlay {
     @Composable
     override fun Content() {
         val state by model.store.state.collectAsState()
-        var name by remember { mutableStateOf(profile.name) }
-        var version by remember { mutableStateOf("1.0") }
-        var address by remember { mutableStateOf("") }
+        // A profile shared before starts with what the player entered then.
+        val last = profile.lastShare
+        var name by remember { mutableStateOf(last?.name ?: profile.name) }
+        var version by remember { mutableStateOf(last?.version ?: "1.0") }
+        var author by remember { mutableStateOf(last?.by.orEmpty()) }
+        var address by remember { mutableStateOf(last?.followAddress.orEmpty()) }
         var local by remember { mutableStateOf(false) }
         var settings by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
@@ -179,6 +182,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                             model.store.shareProfile(
                                 name.trim(),
                                 version.trim(),
+                                author.trim(),
                                 includeLocal = local,
                                 includeSettings = settings,
                                 followAddress = address.takeIf { it.isNotBlank() },
@@ -194,6 +198,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                 )
                             }
                         }
+                        model.store.rememberShare(profile.id, pack)
                         model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.openPath(file.parentFile) })
                         model.closeOverlay()
                     }
@@ -235,6 +240,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                 Column(Modifier.weight(1f)) { Field("Pack name", name, { name = it }) }
                 Column(Modifier.width(110.dp)) { Field("Version", version, { version = it }) }
             }
+            Field("Made by (optional)", author, { author = it }, "Your name, as players see it")
             if (locals.isNotEmpty())
                 Note(
                     "${locals.joinToString(" and ") { state.mod(it).name }} ${if (locals.size == 1) "is a local file" else "are local files"}. With this on, NNOMM puts ${if (locals.size == 1) "it" else "them"} inside the pack file (${if (locals.any { state.mod(it).newestRelease?.sizeKb == null }) "size unknown" else size(locals.sumOf { state.mod(it).newestRelease?.sizeKb ?: 0 })}). Players get a warning before they import it.",

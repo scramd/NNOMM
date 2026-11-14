@@ -118,6 +118,28 @@ val featureShots =
             },
         ),
         MockShot(
+            "feature-share-again",
+            "page=library&overlay=share",
+            initialState = { s ->
+                s.copy(
+                    profiles =
+                        s.profiles.map {
+                            if (it.id == "default")
+                                it.copy(
+                                    lastShare =
+                                        nnomm.core.model.ShareInfo(
+                                            "Squad night",
+                                            "1.2",
+                                            "Mako",
+                                            "https://example.com/squad-night.nommpack",
+                                        )
+                                )
+                            else it
+                        }
+                )
+            },
+        ),
+        MockShot(
             "feature-registry-off",
             "page=settings&cat=browse",
             initialState = {

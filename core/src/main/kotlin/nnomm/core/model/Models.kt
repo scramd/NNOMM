@@ -126,7 +126,22 @@ data class PackInfo(
     val memberVersions: Map<String, String> = emptyMap(),
 )
 
-@Serializable data class Profile(val id: String, val name: String, val pack: PackInfo? = null)
+/** What the player entered the last time they shared a profile, to fill in the next share. */
+@Serializable
+data class ShareInfo(
+    val name: String,
+    val version: String,
+    val by: String = "",
+    val followAddress: String? = null,
+)
+
+@Serializable
+data class Profile(
+    val id: String,
+    val name: String,
+    val pack: PackInfo? = null,
+    val lastShare: ShareInfo? = null,
+)
 
 @Serializable
 data class PackItem(

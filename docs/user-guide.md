@@ -177,8 +177,11 @@ A modpack is a profile saved as a `.nommpack` file. Use it to give your squad th
 Right-click the profile and choose **Share as a modpack** (or use the three dots in the Library). Then:
 
 - give the pack a **name** and a **version** (both are needed: they make the file name),
+- optional: **Made by**, your name. Players see it when they import the pack,
 - choose if the pack includes your **mod settings** (so the pack arrives configured) and your **local files**,
 - optional: an **address for updates**. If you put a newer pack file at that address later, players who imported the pack see that an update is available.
+
+When you share the same profile again, NNOMM fills in the name, version, Made by and address that you used last time. Change the version before you save a newer pack.
 
 Click **Save the modpack file**, then send the file to your friends. **Copy the mod list as text** gives a plain list, for example for a chat message.
 
