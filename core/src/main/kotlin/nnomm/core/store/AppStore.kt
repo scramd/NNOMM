@@ -1657,6 +1657,30 @@ class AppStore(initial: AppState, val io: AppIo, scope: CoroutineScope? = null) 
         background { adoptExistingMods(folder, false) }
     }
 
+    /**
+     * The game folder chosen in Settings. Like at first start, a folder without NuclearOption.exe
+     * is refused, and NNOMM offers to take over the mods that are already in the folder.
+     */
+    fun chooseGameFolder(folder: String) {
+        background {
+            val exe = java.nio.file.Path.of(folder).resolve("NuclearOption.exe")
+            if (!diskAwait { java.nio.file.Files.isRegularFile(exe) }) {
+                toast("This folder has no NuclearOption.exe. Choose the folder of Nuclear Option.")
+                return@background
+            }
+            setSetting("gamePath", JsonPrimitive(folder))
+            val found = io.gameFolder.modsToTakeOver(folder)
+            if (found > 0)
+                toast(
+                    "${plural(found, "mod is", "mods are")} already in this game folder. " +
+                        "Take ${if (found == 1) "it" else "them"} over to see ${if (found == 1) "it" else "them"} in your Library.",
+                    "Take over",
+                    ms = 30000,
+                    undo = { takeOverExistingMods(folder) },
+                )
+        }
+    }
+
     /** Await adoption before dismissing first start; failure leaves confirmation available. */
     suspend fun confirmFirstStart(folder: String) = adoptExistingMods(folder, true)
 

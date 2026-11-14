@@ -143,6 +143,9 @@ interface GameFolder {
 
     suspend fun takeOver(folder: String): List<Pair<CatalogMod, InstalledMod>>
 
+    /** How many mods [folder] holds that NNOMM has never taken over: what [takeOver] would add. */
+    suspend fun modsToTakeOver(folder: String): Int = 0
+
     suspend fun installLoader(folder: String)
 
     suspend fun repairLoader(folder: String)

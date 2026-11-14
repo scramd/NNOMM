@@ -1238,6 +1238,17 @@ class RealGameFolder(
             }
         }
 
+    override suspend fun modsToTakeOver(folder: String): Int =
+        withContext(Dispatchers.IO) {
+            if (!canAutomaticallyTakeOver(folder)) return@withContext 0
+            val game = root(folder)
+            listOf("plugins", "disabledPlugins").sumOf { location ->
+                val dir = safe(game, "BepInEx/$location")
+                if (!dir.exists()) 0
+                else Files.list(dir).use { paths -> paths.filter { !it.name.startsWith(".") }.count().toInt() }
+            }
+        }
+
     fun canAutomaticallyTakeOver(folder: String): Boolean {
         val game = root(folder)
         return adopted(game) == null && record(game).read() == null

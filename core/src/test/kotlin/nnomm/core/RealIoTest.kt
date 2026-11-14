@@ -189,6 +189,8 @@ class RealIoTest {
             }
         var running = false
         val folder = RealGameFolder(home, mods, downloader, running = { running })
+        // Settings > Game > Choose folder offers the take-over with this count.
+        assertEquals(2, folder.modsToTakeOver(game.toString()))
         val found = folder.takeOver(game.toString())
         assertEquals(2, found.size)
         assertEquals("original", on.resolve("mod.dll").readText())
@@ -210,6 +212,8 @@ class RealIoTest {
         assertTrue(unknown.exists())
         assertTrue(off.exists())
         folder.apply(state, "default")
+        // Mods that NNOMM has taken over are not offered again.
+        assertEquals(0, folder.modsToTakeOver(game.toString()))
         val id = found.first { it.second.profiles["default"]!!.on }.first.id
         assertEquals("original", game.resolve("BepInEx/plugins/Existing/mod.dll").readText())
         mods.remove(listOf(id))

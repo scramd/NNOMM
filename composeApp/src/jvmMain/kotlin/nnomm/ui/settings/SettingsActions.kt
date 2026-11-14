@@ -67,7 +67,7 @@ internal fun GameFolderChooser(model: AppModel) {
             val folder = withContext(Dispatchers.IO) {
                 FileKit.openDirectoryPicker(dialogSettings = FileKitDialogSettings(title = "Choose game folder"))
             }
-            folder?.let { model.store.setSetting("gamePath", JsonPrimitive(it.path)) }
+            folder?.let { model.store.chooseGameFolder(it.path) }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             model.store.toast("Could not choose a folder: ${e.message}")

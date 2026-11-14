@@ -269,7 +269,7 @@ Click **Settings** at the bottom of the sidebar (or press Ctrl ,). Use the searc
 
 | Group | Settings |
 | --- | --- |
-| **Game** | Game folder (Find again, Choose folder). Start options. When the game starts: keep NNOMM open, minimise it or close it. Mod loader (Repair). Show the mod log window while the game runs. |
+| **Game** | Game folder (Find again, Choose folder). Choose folder accepts only a folder that contains `NuclearOption.exe`, and offers to take over the mods that are already in it, as at the first start. Start options. When the game starts: keep NNOMM open, minimise it or close it. Mod loader (Repair). Show the mod log window while the game runs. |
 | **Mods and updates** | When NNOMM reads the registry for new mods and updates. Tell me about updates, or update by itself. Offer test versions of mods. How many old versions to keep after an update. Install mods that a mod needs. Mark mods made for an older game version. |
 | **Profiles** | Show profiles in the sidebar. New profiles keep their own mod settings. A new profile starts with all mods off or as a copy. |
 | **Registry** | The addresses NNOMM reads mods from. Add another address; its switch turns it off and on again, and **×** removes it. Hide mods that are only for servers. |
