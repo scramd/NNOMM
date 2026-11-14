@@ -36,6 +36,12 @@ const ICONS = {
   square: '<rect x="4" y="4" width="8" height="8"/>',
   none: '',
   copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M3 10.5h-.5v-8h8V3"/>',
+  pencil: '<path d="M10.5 2.5l3 3-8 8H2.5v-3z"/><path d="M9 4l3 3"/>',
+  down: '<path d="M8 3v10M4 9l4 4 4-4"/>',
+  link: '<path d="M6.5 9.5l3-3"/><path d="M7 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L10.5 8"/><path d="M9 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/>',
+  unlink: '<path d="M7 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L10.5 8"/><path d="M9 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/><path d="M2.5 2.5l11 11"/>',
+  toggleOn: '<path d="M5 4.5h6a3.5 3.5 0 0 1 0 7H5a3.5 3.5 0 0 1 0-7z"/><circle cx="11" cy="8" r="1.8" fill="currentColor" stroke="none"/>',
+  toggleOff: '<path d="M5 4.5h6a3.5 3.5 0 0 1 0 7H5a3.5 3.5 0 0 1 0-7z"/><circle cx="5.3" cy="8" r="1.6"/>',
 };
 const I = (n, c = '') => `<svg class="i ${c}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 

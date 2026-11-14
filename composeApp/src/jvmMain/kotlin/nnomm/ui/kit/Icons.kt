@@ -724,6 +724,48 @@ object NnIcons {
             }
             .build()
     }
+    // Menu icons added after the mock's first set; also in design/mock/src/core.js.
+    val pencil: ImageVector by lazy { strokeIcon("pencil", "M10.5 2.5l3 3-8 8H2.5v-3z", "M9 4l3 3") }
+    val down: ImageVector by lazy { strokeIcon("down", "M8 3v10M4 9l4 4 4-4") }
+    val link: ImageVector by lazy {
+        strokeIcon(
+            "link",
+            "M6.5 9.5l3-3",
+            "M7 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L10.5 8",
+            "M9 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5.5 8",
+        )
+    }
+    val unlink: ImageVector by lazy {
+        strokeIcon(
+            "unlink",
+            "M7 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L10.5 8",
+            "M9 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5.5 8",
+            "M2.5 2.5l11 11",
+        )
+    }
+    val toggleOn: ImageVector by lazy {
+        strokeIcon("toggleOn", "M5 4.5h6a3.5 3.5 0 0 1 0 7H5a3.5 3.5 0 0 1 0-7z", fill = "M9.2 8a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0")
+    }
+    val toggleOff: ImageVector by lazy {
+        strokeIcon("toggleOff", "M5 4.5h6a3.5 3.5 0 0 1 0 7H5a3.5 3.5 0 0 1 0-7z", "M3.7 8a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0")
+    }
+
+    private fun strokeIcon(name: String, vararg paths: String, fill: String? = null): ImageVector =
+        ImageVector.Builder(name, 16.dp, 16.dp, 16f, 16f)
+            .apply {
+                for (d in paths)
+                    addPath(
+                        PathParser().parsePathString(d).toNodes(),
+                        fill = null,
+                        stroke = SolidColor(Color.Black),
+                        strokeLineWidth = 1.5f,
+                        strokeLineCap = StrokeCap.Round,
+                        strokeLineJoin = StrokeJoin.Round,
+                    )
+                if (fill != null)
+                    addPath(PathParser().parsePathString(fill).toNodes(), fill = SolidColor(Color.Black))
+            }
+            .build()
     val square: ImageVector by lazy {
         ImageVector.Builder("square", 16.dp, 16.dp, 16f, 16f)
             .apply {
