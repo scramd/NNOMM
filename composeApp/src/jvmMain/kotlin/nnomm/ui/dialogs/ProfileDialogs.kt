@@ -214,7 +214,7 @@ class ShareDialog(private val model: AppModel) : Overlay {
                                             )
                                         }
                                     }
-                                    model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.platform.openFolder(file.parentFile) })
+                                    model.store.toast("Saved ${file.name}" + recovery?.let { ". Previous file kept as ${it.name}." }.orEmpty(), "Show the file", undo = { model.openPath(file.parentFile) })
                                     model.closeOverlay()
                                 }
                             } catch (e: Exception) {

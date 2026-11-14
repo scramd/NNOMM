@@ -90,9 +90,16 @@ class DesktopPlatform : Platform, AutoCloseable {
         result.await()
     }
 
-    override fun openFolder(folder: File) {
-        scope.launch { Desktop.getDesktop().open(folder) }
-    }
+    private val windows = System.getProperty("os.name").startsWith("Windows")
+
+    override suspend fun openFolder(folder: File) =
+        withContext(Dispatchers.IO) {
+            if (windows && folder.isDirectory) {
+                // NOMM's way, which worked for players. Explorer exits with 1 even when it opens the window.
+                ProcessBuilder("explorer.exe", folder.absolutePath).start()
+                Unit
+            } else Desktop.getDesktop().open(folder)
+        }
 
     override fun openUrl(url: String) {
         scope.launch { Desktop.getDesktop().browse(URI(url)) }

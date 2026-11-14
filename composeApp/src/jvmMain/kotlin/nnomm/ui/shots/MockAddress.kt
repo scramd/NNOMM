@@ -100,7 +100,7 @@ object ShotPlatform : Platform {
         extension: String,
     ): java.io.File? = null
 
-    override fun openFolder(folder: java.io.File) {}
+    override suspend fun openFolder(folder: java.io.File) {}
 
     override fun openUrl(url: String) {}
 

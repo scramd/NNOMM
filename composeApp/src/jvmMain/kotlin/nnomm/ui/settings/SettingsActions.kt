@@ -44,10 +44,10 @@ internal fun performSettingAction(model: AppModel, definition: SettingDefinition
         "Clear" -> model.store.clearUnusedFiles()
         "Move" -> model.chooseStoreFolder()
         "Choose folder" -> model.ui.settings.chooseGameFolder = true
-        "Open" -> state.settings.general["store"]?.content?.takeIf { it.isNotBlank() }?.let { model.platform.openFolder(File(it)) }
+        "Open" -> state.settings.general["store"]?.content?.takeIf { it.isNotBlank() }?.let { model.openPath(File(it)) }
             ?: feedback(model, "The mod store location is unavailable")
         "Look now" -> model.checkAppUpdates()
-        "Open log folder" -> state.game.folder?.let { model.platform.openFolder(File(it, "BepInEx")) }
+        "Open log folder" -> state.game.folder?.let { model.openPath(File(it, "BepInEx")) }
             ?: feedback(model, "The game log folder is unavailable")
         "Copy report" -> model.openOverlay("report")
         "Licences" -> model.openOverlay("licences")

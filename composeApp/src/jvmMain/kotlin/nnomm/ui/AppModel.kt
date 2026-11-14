@@ -24,7 +24,8 @@ interface Platform {
 
     suspend fun chooseFolder(title: String): File? = null
 
-    fun openFolder(folder: File)
+    /** Opens a folder in the file manager, or a file with its program. Throws when that fails. */
+    suspend fun openFolder(folder: File)
 
     fun openUrl(url: String)
 
@@ -240,8 +241,14 @@ class AppModel(
             val exists = withContext(Dispatchers.IO) { path?.exists() == true }
             if (!exists) notify("${path?.name ?: "The file or folder"} was not found.")
             else
-                runCatching { platform.openFolder(path!!) }
-                    .onFailure { notify("Could not open ${path?.name}.") }
+                try {
+                    platform.openFolder(path!!)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    store.io.logger.error("open ${path?.absolutePath}", e)
+                    notify("Could not open ${path?.name}. ${e.message.orEmpty()}".trim())
+                }
         }
     }
 
