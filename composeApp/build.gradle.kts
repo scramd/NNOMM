@@ -21,10 +21,11 @@ val appVersion = providers.gradleProperty("nnommVersion").orNull ?: "0.1.2"
 val appVersionParts =
     Regex("""(\d+)\.(\d+)\.(\d+)(-beta\.\d+)?""").matchEntire(appVersion)
         ?: error("NNOMM version '$appVersion' must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N")
-// Nucleus accepts only numbers for Windows installers and no dash for rpm, and electron-builder
-// needs a semver version. So a test version of 0.2.0 installs as 0.2.0 there; the installer of
+// On Windows, jpackage and Nucleus accept only numbers, and rpm allows no dash; electron-builder
+// needs a semver version. So a test version of 0.2.0 is packaged as 0.2.0 there; the installer of
 // the same version replaces it (electron-builder's MSI allows same-version upgrades). The other
-// formats, the app and the update files keep the full version.
+// formats, the app (BuildKonfig.VERSION, also for the updater) and the update files keep the full
+// version.
 val numericPackageVersion = appVersionParts.groupValues.subList(1, 4).joinToString(".")
 
 
@@ -159,6 +160,7 @@ nucleus.application {
             macOSIconFile = project.file("icons/icon.icns"),
         )
         windows {
+            packageVersion = numericPackageVersion
             msiPackageVersion = numericPackageVersion
             exePackageVersion = numericPackageVersion
             upgradeUuid = "b0eccd25-0931-477e-8ff4-c6693ee69964"

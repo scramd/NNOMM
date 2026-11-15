@@ -62,6 +62,9 @@ fun createUpdater(testVersions: Boolean = false) = NucleusUpdater {
         }
 
     httpClient = NativeHttpClient.create()
+    // The default is the package's jpackage version, which on Windows has only the numbers
+    // (0.2.0 for 0.2.0-beta.1): a test version would never see the next one.
+    currentVersion = BuildKonfig.VERSION
     channel = updaterChannel(testVersions)
 }
 

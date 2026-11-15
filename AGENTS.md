@@ -43,7 +43,7 @@ A screen is done when it matches the mock in pictures at 1360 x 860 and at 760 p
 
 ## Releases
 
-`.github/workflows/release.yaml` makes every release. The tag is the version: `v0.2.0` is a normal release, `v0.2.0-beta.1` a test version (a pre-release on the `beta` update channel, for players with "Get test versions of NNOMM"). The workflow passes the version to Gradle (`nnommVersion`), so the app, the package names and the update files always agree; the `appVersion` default in `composeApp/build.gradle.kts` is only for local builds. It runs the core and UI tests first and publishes only when they pass. Windows installers and the rpm carry only the numbers (a test version of 0.2.0 installs as 0.2.0); the other packages keep the full version.
+`.github/workflows/release.yaml` makes every release. The tag is the version: `v0.2.0` is a normal release, `v0.2.0-beta.1` a test version (a pre-release on the `beta` update channel, for players with "Get test versions of NNOMM"). The workflow passes the version to Gradle (`nnommVersion`), so the app, the package names and the update files always agree; the `appVersion` default in `composeApp/build.gradle.kts` is only for local builds. It runs the core and UI tests first and publishes only when they pass. Windows packages and the rpm carry only the numbers (a test version of 0.2.0 installs as 0.2.0); the other packages keep the full version.
 
 1. Trial: Actions tab > Release > Run workflow, with the version. It builds every package and publishes nothing; the packages are on the run's page. Check them (on Windows: install the MSI over the previous version, start it, look at Settings > About and updates).
 2. Show the owner the version, the release notes and the trial result. Wait for approval.

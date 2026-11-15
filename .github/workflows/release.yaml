@@ -96,6 +96,13 @@ jobs:
           ORG_GRADLE_PROJECT_nnommVersion: ${{ needs.version.outputs.version }}
         run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
 
+      - name: Keep the packaging logs of a failed build
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaging-logs-${{ matrix.runner_os }}
+          path: composeApp/build/compose/logs
+
       - name: List the packages
         shell: bash
         run: |
