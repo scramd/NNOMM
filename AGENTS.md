@@ -17,7 +17,7 @@ Read `design/DESIGN.md` first. The mock in `design/mock/` is the agreed design. 
 ## Limits
 
 - Work on `master`, in small commits that say what changed and why. Push each commit. Commits are authored as `clankagent`.
-- No releases and no tags: `.github/workflows/release.yaml` publishes a release for every pushed tag. Do not add GitHub workflows.
+- A tag `v*` publishes a release (see "Releases"). Push a tag only after the owner approved that exact release: version, notes and the trial build. Workflow changes are allowed; a trial run of the release workflow publishes nothing and needs no approval.
 - No issues, pull requests, comments or posts anywhere, also not to `Combat787/NOMM` or `KopterBuzz/NOMNOM`.
 - Never point the app at a real game installation during development. Use a sandbox folder that contains an empty file `NuclearOption.exe`.
 - Do not give time estimates in reports.
@@ -38,14 +38,22 @@ A screen is done when it matches the mock in pictures at 1360 x 860 and at 760 p
 - Build and tests: `tools/gradlew-locked :core:test :composeApp:jvmJar :composeApp:jvmTest`. Renders of every mock picture: `tools/gradlew-locked :composeApp:renderShots`, then `tools/compare-shots`.
 - Run: `tools/gradlew-locked :composeApp:createDistributable`, then `composeApp/build/compose/binaries/main/app/NNOMM/bin/NNOMM` (`--demo` for the mock's data). Packaging and `:composeApp:run` use the toolchain JDK, whatever `JAVA_HOME` is.
 - On Windows use `gradlew.bat` (`tools/gradlew-locked` is a Linux script). The app is `composeApp\build\compose\binaries\main\app\NNOMM\NNOMM.exe`. Close a running NNOMM before `createDistributable`, or the task cannot replace its files.
-- Windows installer: `gradlew.bat :composeApp:packageMsi -Pcompose.electronBuilder.nodePath=<full path of node.exe>` (it needs Node.js 18 or newer with npm beside `node.exe`). After a version change delete `composeApp/build/compose/binaries/main/msi` and run it with `--rerun-tasks`, or the old package and its old name are kept. Building the installer locally is fine; a release is not (see Limits).
+- Windows installer: `gradlew.bat :composeApp:packageMsi -Pcompose.electronBuilder.nodePath=<full path of node.exe>` (it needs Node.js 18 or newer with npm beside `node.exe`). After a version change delete `composeApp/build/compose/binaries/main/msi` and run it with `--rerun-tasks`, or the old package and its old name are kept. Building the installer locally is fine; a release needs the owner's approval (see Limits).
 - For checks on Windows set `NNOMM_HOME` to a folder outside `%APPDATA%` and use a copy of the game folder. `NNOMM_SANDBOX_LAUNCHER=<path of NuclearOption.exe in the copy>` makes Play start that copy in place of Steam; it works only when `NNOMM_HOME` is below `nnomm-sandbox` in the user folder.
+
+## Releases
+
+`.github/workflows/release.yaml` makes every release. The tag is the version: `v0.2.0` is a normal release, `v0.2.0-beta.1` a test version (a pre-release on the `beta` update channel, for players with "Get test versions of NNOMM"). The workflow passes the version to Gradle (`nnommVersion`), so the app, the package names and the update files always agree; the `appVersion` default in `composeApp/build.gradle.kts` is only for local builds. It runs the core and UI tests first and publishes only when they pass. Windows installers and the rpm carry only the numbers (a test version of 0.2.0 installs as 0.2.0); the other packages keep the full version.
+
+1. Trial: Actions tab > Release > Run workflow, with the version. It builds every package and publishes nothing; the packages are on the run's page. Check them (on Windows: install the MSI over the previous version, start it, look at Settings > About and updates).
+2. Show the owner the version, the release notes and the trial result. Wait for approval.
+3. `git tag v<version> && git push origin v<version>`. Check the release page and the update files (`latest.yml`, `latest-linux.yml` or `beta*.yml`).
 
 ## Syncing with upstream NOMM
 
 NNOMM replaced most of NOMM's code, but it keeps NOMM's history and merges upstream so that the fork is never behind it and the upstream contributors stay credited.
 
-1. `git fetch --no-tags https://github.com/Combat787/NOMM.git master`. Never fetch or push upstream tags: `.github/workflows/release.yaml` publishes a release for every pushed tag.
+1. `git fetch --no-tags https://github.com/Combat787/NOMM.git master`. Never fetch or push upstream tags. They have no `v` and do not start a release, but they would mix NOMM's versions into NNOMM's tags.
 2. Look at the changes since the last synced commit (now `8786356`): `git log <last>..FETCH_HEAD` and `git diff <last> FETCH_HEAD`.
 3. `git merge --no-ff --no-commit FETCH_HEAD`. Resolve for NNOMM: files that NNOMM removed stay removed, NNOMM keeps its own version and change list, and old NOMM code, the Material UI and the Steam helper never come back.
 4. Port each upstream behaviour change by hand into NNOMM's own code, with a test, or record why it does not apply.

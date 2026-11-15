@@ -37,20 +37,18 @@ fun createUpdater(testVersions: Boolean = false) = NucleusUpdater {
 
             override fun getUpdateMetadataUrl(channel: String, platform: Platform): String {
                 val suffix = platformSuffix(platform)
-                val fileName = if (suffix.isEmpty()) "$channel.yml" else "$channel-$suffix.yml"
-                val release = if (channel == "latest") "latest/download" else {
-                    val request = HttpRequest.newBuilder(URI("https://github.com/$owner/$repo/releases.atom"))
-                        .timeout(java.time.Duration.ofSeconds(20)).build()
-                    val response = HttpClient.newHttpClient().use { it.send(request, HttpResponse.BodyHandlers.ofString()) }
-                    check(response.statusCode() == 200) { "Could not read test releases" }
-                    val tag = testReleaseTag(response.body()) ?: error("No test release is available")
-                    "download/$tag"
-                }
-                return "https://github.com/$owner/$repo/releases/$release/$fileName"
+                fun metadata(prefix: String) = if (suffix.isEmpty()) "$prefix.yml" else "$prefix-$suffix.yml"
+                if (channel == "latest") return "https://github.com/$owner/$repo/releases/latest/download/${metadata("latest")}"
+                val request = HttpRequest.newBuilder(URI("https://github.com/$owner/$repo/releases.atom"))
+                    .timeout(java.time.Duration.ofSeconds(20)).build()
+                val response = HttpClient.newHttpClient().use { it.send(request, HttpResponse.BodyHandlers.ofString()) }
+                check(response.statusCode() == 200) { "Could not read test releases" }
+                val release = testReleaseTag(response.body()) ?: error("No release is available")
+                // release.yaml writes beta*.yml for a test version and latest*.yml for a normal one.
+                return "https://github.com/$owner/$repo/releases/download/${release.tag}/${metadata(if (release.beta != null) "beta" else "latest")}"
             }
 
-            override fun getDownloadUrl(fileName: String, version: String): String =
-                "https://github.com/$owner/$repo/releases/download/$version/$fileName"
+            override fun getDownloadUrl(fileName: String, version: String): String = releaseDownloadUrl(fileName, version)
 
             override fun authHeaders(): Map<String, String> = emptyMap()
 
@@ -67,8 +65,32 @@ fun createUpdater(testVersions: Boolean = false) = NucleusUpdater {
     channel = updaterChannel(testVersions)
 }
 
-/** Atom entries are published releases, newest first. Disable external XML resolution. */
-internal fun testReleaseTag(body: String): String? {
+/** The update files name the version without the tag's "v" (release.yaml strips it). */
+internal fun releaseDownloadUrl(fileName: String, version: String): String =
+    "https://github.com/scramd/NNOMM/releases/download/v$version/$fileName"
+
+/** A release tag as release.yaml accepts it: vMAJOR.MINOR.PATCH, or vMAJOR.MINOR.PATCH-beta.N for a test version. */
+internal data class ReleaseTag(val tag: String, val numbers: List<Int>, val beta: Int?) : Comparable<ReleaseTag> {
+    override fun compareTo(other: ReleaseTag): Int {
+        for (i in 0..2) numbers[i].compareTo(other.numbers[i]).let { if (it != 0) return it }
+        // A normal release comes after every test version of the same number.
+        return (beta ?: Int.MAX_VALUE).compareTo(other.beta ?: Int.MAX_VALUE)
+    }
+}
+
+private val releaseTagPattern = Regex("""v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?""")
+
+internal fun parseReleaseTag(tag: String): ReleaseTag? =
+    releaseTagPattern.matchEntire(tag)?.let { m ->
+        ReleaseTag(tag, m.groupValues.subList(1, 4).map { it.toInt() }, m.groupValues[4].takeIf { it.isNotEmpty() }?.toInt())
+    }
+
+/**
+ * The newest release for a player who takes test versions: the highest version among the published
+ * test and normal releases in the feed, so a normal release that is newer than the last test version
+ * also reaches them. Disable external XML resolution.
+ */
+internal fun testReleaseTag(body: String): ReleaseTag? {
     val factory = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
@@ -77,18 +99,16 @@ internal fun testReleaseTag(body: String): String? {
     }
     val entries = factory.newDocumentBuilder().parse(InputSource(StringReader(body)))
         .getElementsByTagNameNS("http://www.w3.org/2005/Atom", "entry")
+    val prefix = "https://github.com/scramd/NNOMM/releases/tag/"
+    val tags = mutableListOf<ReleaseTag>()
     for (i in 0 until entries.length) {
         val entry = entries.item(i) as org.w3c.dom.Element
         val links = entry.getElementsByTagNameNS("http://www.w3.org/2005/Atom", "link")
         for (j in 0 until links.length) {
-            val link = links.item(j) as org.w3c.dom.Element
-            val href = link.getAttribute("href")
-            val prefix = "https://github.com/scramd/NNOMM/releases/tag/"
+            val href = (links.item(j) as org.w3c.dom.Element).getAttribute("href")
             if (!href.startsWith(prefix)) continue
-            val tag = java.net.URLDecoder.decode(href.removePrefix(prefix), Charsets.UTF_8)
-            // release.yaml assigns beta metadata to tags containing -beta (except alpha).
-            if ("-beta" in tag && "-alpha" !in tag && '/' !in tag) return tag
+            parseReleaseTag(java.net.URLDecoder.decode(href.removePrefix(prefix), Charsets.UTF_8))?.let(tags::add)
         }
     }
-    return null
+    return tags.maxOrNull()
 }

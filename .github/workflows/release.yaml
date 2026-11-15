@@ -1,15 +1,75 @@
 name: Release
 
+# A tag vMAJOR.MINOR.PATCH publishes a normal release. A tag vMAJOR.MINOR.PATCH-beta.N publishes a
+# test version: a pre-release that only players with "Get test versions of NNOMM" receive.
+# Started by hand in the Actions tab ("Run workflow"), it is a trial: it tests and builds every
+# package with the given version and publishes nothing. The packages stay on the run's page.
 on:
   push:
-    tags: ['*']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of the trial build, for example 0.2.0 or 0.2.0-beta.1'
+        required: true
+        default: '0.0.0-beta.1'
 
 permissions:
-  contents: write
+  contents: read
+
+# The Nucleus build steps (NucleusFramework/Nucleus/.github/actions/*) are fixed to one commit, so a
+# change in Nucleus cannot change a release without a change here. That commit built NOMM 5.6.0,
+# which uses the same Nucleus version as NNOMM (2.5.18).
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
+      release-type: ${{ steps.version.outputs.release-type }}
+    steps:
+      - name: Read and check the version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = push ]; then VERSION="${TAG#v}"; else VERSION="$INPUT"; fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+            echo "::error::'$VERSION' is not a release version. Use a tag like v0.2.0 or v0.2.0-beta.1."
+            exit 1
+          fi
+          if [[ "$VERSION" == *-beta.* ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "release-type=prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
+            echo "release-type=release" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up the JDK and Gradle
+        uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@67e9920f171a6d569e520d95b53c8e594b44a4d4
+        with:
+          java-version: '25'
+          packaging-tools: 'false'
+
+      - name: Core and UI tests
+        run: ./gradlew :core:test :composeApp:jvmTest --stacktrace --no-daemon
+
   build:
     name: Build (${{ matrix.runner_os }})
+    needs: [version, test]
     strategy:
       fail-fast: false
       matrix:
@@ -24,20 +84,28 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Nucleus & Dependencies
-        uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@main
+        uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@67e9920f171a6d569e520d95b53c8e594b44a4d4
         with:
           java-version: '25'
           packaging-tools: 'true'
           flatpak: 'true'
-          snap: 'true'
 
-      - name: Build Installer
+      # The version reaches Gradle as the project property nnommVersion (composeApp/build.gradle.kts).
+      - name: Build the packages
+        env:
+          ORG_GRADLE_PROJECT_nnommVersion: ${{ needs.version.outputs.version }}
         run: ./gradlew packageReleaseDistributionForCurrentOS --stacktrace --no-daemon
+
+      - name: List the packages
+        shell: bash
+        run: |
+          find composeApp/build/compose/binaries/main-release -maxdepth 2 -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.flatpak' \) -printf '%f  %s bytes\n' | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ matrix.runner_os }}-amd64
+          if-no-files-found: error
           path: |
             composeApp/build/compose/binaries/main-release/*/*.msi
             composeApp/build/compose/binaries/main-release/*/*.exe
@@ -46,12 +114,14 @@ jobs:
             composeApp/build/compose/binaries/main-release/*/*.rpm
             composeApp/build/compose/binaries/main-release/*/*.AppImage
             composeApp/build/compose/binaries/main-release/*/*.flatpak
-            composeApp/build/compose/binaries/main-release/*/*.snap
 
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [version, build]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -61,38 +131,18 @@ jobs:
         with:
           path: artifacts
 
-      - name: Parse Tag & Set Release Environment
-        run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-          VERSION="${TAG_NAME#v}"
-          
-          echo "TAG=${TAG_NAME}" >> $GITHUB_ENV
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          
-          # Mark alpha/beta tags as pre-releases
-          if [[ "$TAG_NAME" == *"-alpha"* ]]; then
-            echo "CHANNEL=alpha" >> $GITHUB_ENV
-            echo "RELEASE_TYPE=prerelease" >> $GITHUB_ENV
-          elif [[ "$TAG_NAME" == *"-beta"* ]]; then
-            echo "CHANNEL=beta" >> $GITHUB_ENV
-            echo "RELEASE_TYPE=prerelease" >> $GITHUB_ENV
-          else
-            echo "CHANNEL=latest" >> $GITHUB_ENV
-            echo "RELEASE_TYPE=release" >> $GITHUB_ENV
-          fi
-
       - name: Generate Auto-Update Metadata
-        uses: NucleusFramework/Nucleus/.github/actions/generate-update-yml@main
+        uses: NucleusFramework/Nucleus/.github/actions/generate-update-yml@67e9920f171a6d569e520d95b53c8e594b44a4d4
         with:
           artifacts-path: artifacts
-          version: ${{ env.VERSION }}
-          channel: ${{ env.CHANNEL }}
+          version: ${{ needs.version.outputs.version }}
+          channel: ${{ needs.version.outputs.channel }}
 
       - name: Publish Release to GitHub
-        uses: NucleusFramework/Nucleus/.github/actions/publish-release@main
+        uses: NucleusFramework/Nucleus/.github/actions/publish-release@67e9920f171a6d569e520d95b53c8e594b44a4d4
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           artifacts-path: artifacts
-          tag: ${{ env.TAG }}
-          release-type: ${{ env.RELEASE_TYPE }}
+          tag: ${{ github.ref_name }}
+          release-type: ${{ needs.version.outputs.release-type }}

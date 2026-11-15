@@ -15,7 +15,17 @@ plugins {
     alias(libs.plugins.buildkonfig)
 }
 
-val appVersion = "0.1.2"
+// The version of local builds. A release build gets the version of its tag from release.yaml
+// (-PnnommVersion=0.2.0 or -PnnommVersion=0.2.0-beta.1), so the tag and the app always agree.
+val appVersion = providers.gradleProperty("nnommVersion").orNull ?: "0.1.2"
+val appVersionParts =
+    Regex("""(\d+)\.(\d+)\.(\d+)(-beta\.\d+)?""").matchEntire(appVersion)
+        ?: error("NNOMM version '$appVersion' must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N")
+// Nucleus accepts only numbers for Windows installers and no dash for rpm, and electron-builder
+// needs a semver version. So a test version of 0.2.0 installs as 0.2.0 there; the installer of
+// the same version replaces it (electron-builder's MSI allows same-version upgrades). The other
+// formats, the app and the update files keep the full version.
+val numericPackageVersion = appVersionParts.groupValues.subList(1, 4).joinToString(".")
 
 
 java {
@@ -149,6 +159,8 @@ nucleus.application {
             macOSIconFile = project.file("icons/icon.icns"),
         )
         windows {
+            msiPackageVersion = numericPackageVersion
+            exePackageVersion = numericPackageVersion
             upgradeUuid = "b0eccd25-0931-477e-8ff4-c6693ee69964"
             menuGroup = "NNOMM"
             shortcut = true
@@ -163,6 +175,7 @@ nucleus.application {
         }
 
         linux {
+            rpmPackageVersion = numericPackageVersion
             shortcut = true
             packageName = "nnomm"
             appCategory = "Utility"

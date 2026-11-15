@@ -81,7 +81,11 @@ gradlew.bat :composeApp:packageMsi -Pcompose.electronBuilder.nodePath=<full path
 
 It needs Node.js 18 or newer with npm beside `node.exe`. After a version change, delete `composeApp/build/compose/binaries/main/msi` and run it with `--rerun-tasks`, or the old package is kept.
 
-Releases: `.github/workflows/release.yaml` builds and publishes a release for **every pushed tag**. Do not push tags unless you want a release.
+## Releases
+
+`.github/workflows/release.yaml` makes the releases. A pushed tag `v0.2.0` publishes a normal release, `v0.2.0-beta.1` a test version (a GitHub pre-release; only players with "Get test versions of NNOMM" get it as an update). The tag is the version: the workflow passes it to Gradle as `-PnnommVersion`, runs the tests, builds on Linux and Windows, and publishes the packages with the update files. Started by hand in the Actions tab (Run workflow), it builds a trial with the version you give and publishes nothing.
+
+A local build with a release version: `tools/gradlew-locked -PnnommVersion=0.2.0-beta.1 :composeApp:packageReleaseDeb`.
 
 ## How the code is organised
 
