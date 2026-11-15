@@ -232,8 +232,6 @@ A `.nommpack` file opens the modpack preview.
 
 Click **Play** in the sidebar (or press Ctrl Enter). NNOMM puts the mods of your profile in the game folder and starts the game through Steam. You must have Steam installed and be signed in to Steam as usual.
 
-> [!NOTE]
-
 The arrow beside Play opens a menu (you can also right-click Play):
 
 - **Play without mods:** starts the game with the mod loader turned off for this start. Your mods stay as they are.
