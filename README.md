@@ -5,7 +5,7 @@
 ![NNOMM's Browse page with the mods of the NOMNOM registry](docs/images/browse.png)
 
 > [!IMPORTANT]
-> **NNOMM is new and has no download yet.** No release of NNOMM exists yet. To use it now, you build it yourself (see [Get NNOMM](#get-nnomm)).
+> **NNOMM is in beta.** The first test version, 0.1.0-beta.1, is on the [Releases page](https://github.com/scramd/NNOMM/releases). See [Get NNOMM](#get-nnomm).
 
 ## What NNOMM does for you
 
@@ -34,9 +34,12 @@
 
 ## Get NNOMM
 
-NNOMM has no release yet. When a release exists, you will find a Windows installer on the [Releases page](https://github.com/scramd/NNOMM/releases). An installed NNOMM can then look for its own updates (**Settings > About and updates > Update NNOMM**).
+Download it from the [Releases page](https://github.com/scramd/NNOMM/releases). On Windows, take `nnomm-<version>-win-x64.msi` (the installer) or the `portable.exe` (no installation). On Linux, take the AppImage, the `.deb`, the `.rpm` or the Flatpak.
 
-Until then, you can build NNOMM yourself on Windows:
+- The downloads are not signed, so Windows can show "Windows protected your PC". Click **More info**, then **Run anyway**.
+- Test versions (beta) are marked "Pre-release" on that page. An installed NNOMM looks for its own updates (**Settings > About and updates > Update NNOMM**). It gets test versions only with **Get test versions of NNOMM** on.
+
+You can also build NNOMM yourself on Windows:
 
 1. Install [Git](https://git-scm.com/download/win) and a Java JDK, version 17 or newer (for example [Temurin](https://adoptium.net/)). The build downloads the Java version that NNOMM needs by itself.
 2. Open a command prompt and run:
