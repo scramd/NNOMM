@@ -9,7 +9,8 @@ This is the first time NNOMM ran on Windows and against real game files. The lis
 - NNOMM starts on Windows, finds the game through Steam, takes over existing mods, and installs, switches, updates and uninstalls real mods from the real registry.
 - **The game loads the mods that NNOMM installs.** Copies of the real game were started several times. The `BepInEx/LogOutput.log` shows the loader that NNOMM installed (BepInEx 5.4.23.4) and the mods that NNOMM placed, for example `Loading [NOAutopilot 6.0.1]`.
 - The first build did not start at all, and one popular mod could not be installed. Nine defects were found by running the app, and two more by the one review of the fixes. All eleven are fixed and checked again in the running app.
-- Not checked: a start through Steam itself (see "What only the owner can do"), the automatic update of an installed build (there is no release yet), and the parts listed under "Not checked".
+- A start through Steam could not be checked in this run. Since 2026-11-13 the owner uses NNOMM every day with the real game, Play through Steam included, so this is done (see "What only the owner can do").
+- Not checked: the automatic update of an installed build (there is no release yet), and the parts listed under "Not checked".
 
 ## How it was checked
 
@@ -166,7 +167,7 @@ One thing is left that needs the real Steam install: **a start through Steam**. 
 4. Close the game. Expected: NNOMM shows Play again within about three seconds, and Steam stops showing "playing" although NNOMM is still open.
 5. Put a start option in Settings, Game, "Start options" (for example `-screen-fullscreen 0`) and press Play again. Expected: the game starts windowed.
 
-Until this is done, the start through Steam is the one unproven step between "Play" and a running modded game. Everything after it is proven with the game copies.
+**Done.** Since 2026-11-13 the owner uses NNOMM every day on Windows with the real game, Play through Steam included. The problems found in that use are fixed (for example `516f112`, `b2e1942`).
 
 ## Not checked, and why
 

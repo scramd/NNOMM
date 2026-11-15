@@ -5,7 +5,7 @@
 ![NNOMM's Browse page with the mods of the NOMNOM registry](docs/images/browse.png)
 
 > [!IMPORTANT]
-> **NNOMM is new and has no download yet.** No release of NNOMM exists yet. To use it now, you build it yourself (see [Get NNOMM](#get-nnomm)). It works on Windows with real mods, but one step is not tested yet: starting the game through Steam. Until that is tested, **keep a copy of your game folder** before you use NNOMM for the first time.
+> **NNOMM is new and has no download yet.** No release of NNOMM exists yet. To use it now, you build it yourself (see [Get NNOMM](#get-nnomm)).
 
 ## What NNOMM does for you
 
