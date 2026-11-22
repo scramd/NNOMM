@@ -23,7 +23,7 @@ The Windows run used another method: run the real app first, change code only wh
 
 - Loader changes recheck each file before its rename; another program can still change it in the instant between the check and rename. See `core/IO.md`.
 
-- On Windows these parts are still unchecked: the automatic update of an installed build (0.1.0-beta.1 is the first release; it needs a second one to update to), an install for all users, display scales other than 100 %, a second Steam library, settings and game on different drives, file drop, and the rare file cases of the check list. See [Windows results](WINDOWS-RESULTS.md).
+- On Windows these parts are still unchecked: the automatic update of an installed build (0.1.2-beta.1 is now a second release to update to from 0.1.0-beta.1; not yet tried), an install for all users, display scales other than 100 %, a second Steam library, settings and game on different drives, file drop, and the rare file cases of the check list. See [Windows results](WINDOWS-RESULTS.md).
 - The rare cases of [Windows checks](WINDOWS-CHECKS.md) (Doorstop file encodings and unusual values, interrupted loader work followed by hand changes) are not run on Windows. They need two rare events together.
 - A hostile 7z file can make the unpacker use much memory before NNOMM's size limit applies. Registry downloads are checked against the registry's hash first.
 - A game version with a letter at its end (for example `0.35.0b`) shows as unknown; NNOMM then compares with the newest game version the registry names.
@@ -35,7 +35,7 @@ The Windows run used another method: run the real app first, change code only wh
 - Loose files taken over from the game folder are not later matched to registry mods.
 - The broken-mod test assumes one cause; two mods that only fail together give an inconclusive result.
 - "Play without mods" and loader Repair edit `doorstop_config.ini` the way Doorstop 4 and Wine read it (first `[General]` section, the file's own encoding and line endings), put back the exact original bytes, retry a failed restore and never block NNOMM or Play because of it. Rules and checks: `core/IO.md`. How real Windows reads unusual files (UTF-8 byte-order mark, UTF-16, locked files) still needs the Windows checks.
-- The first release is 0.1.0-beta.1 (a test version), published 2026-11-15 by `.github/workflows/release.yaml`.
+- The first release is 0.1.0-beta.1 (a test version), published 2026-11-15 by `.github/workflows/release.yaml`. The second is 0.1.2-beta.1 (Replace the file for local mods), published 2026-11-22.
 
 ## Unchecked Linux packaging
 

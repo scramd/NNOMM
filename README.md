@@ -5,7 +5,7 @@
 ![NNOMM's Browse page with the mods of the NOMNOM registry](docs/images/browse.png)
 
 > [!IMPORTANT]
-> **NNOMM is in beta.** The first test version, 0.1.0-beta.1, is on the [Releases page](https://github.com/scramd/NNOMM/releases). See [Get NNOMM](#get-nnomm).
+> **NNOMM is in beta.** The newest test version, 0.1.2-beta.1, is on the [Releases page](https://github.com/scramd/NNOMM/releases). See [Get NNOMM](#get-nnomm).
 
 ## What NNOMM does for you
 
