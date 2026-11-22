@@ -38,6 +38,18 @@ class RightClickMenusTest {
     }
 
     @Test
+    fun onlyALocalModOffersToReplaceItsFile() {
+        mockStore("").use { store ->
+            val model = AppModel(store, ShotPlatform)
+            val s = store.state.value
+            val local = s.installed.keys.first { s.mod(it).localFile != null }
+            val registry = s.installed.keys.first { s.mod(it).localFile == null }
+            assertTrue("Replace the file" in modItems(model, s, local).items().map { it.text })
+            assertTrue("Replace the file" !in modItems(model, s, registry).items().map { it.text })
+        }
+    }
+
+    @Test
     fun selectionMenuActsOnEverySelectedMod() {
         mockStore("").use { store ->
             val model = AppModel(store, ShotPlatform)

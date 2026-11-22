@@ -382,6 +382,12 @@ fun modAction(s: AppState, id: String): ModAction {
             off,
             if (off) "Needs a connection" else null,
         )
+    if (s.installed.getValue(id).fileMissing && s.mod(id).localFile != null)
+        return ModAction(
+            "Replace the file",
+            UiAction("replaceFile", id),
+            tooltip = "The file is missing. Choose it again.",
+        )
     if (s.installed.getValue(id).fileMissing)
         return ModAction(
             "Repair",
@@ -434,7 +440,9 @@ fun problemFixes(s: AppState, id: String, p: Problem): List<FixItem> {
             )
         "missing" ->
             listOf(
-                FixItem("Download it again", UiAction("repairProblem", id)),
+                if (s.mod(id).localFile != null)
+                    FixItem("Choose the file again", UiAction("replaceFile", id))
+                else FixItem("Download it again", UiAction("repairProblem", id)),
                 FixItem("Remove it from the list", UiAction("uninstall", id), true),
             )
         else -> emptyList()

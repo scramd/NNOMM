@@ -197,6 +197,7 @@ function profileItems(id) {
 function modItems(id) {
   const x = MOD[id], on = isOn(id), it = [{ label: 'Open details', hint: 'Enter', fn: () => { S.panel = { kind: 'mod', id, tab: 'about' }; } }, { label: on ? 'Turn off' : 'Turn on', hint: 'Space', fn: () => { INST[id].on[S.profile] = !on; } }];
   if (hasUpdate(id)) it.push({ label: `Update to ${x.v}`, ic: 'up', fn: () => download(id, 'update') }, { label: "See what's new", fn: () => { S.panel = { kind: 'mod', id, tab: 'new' }; } });
+  if (x.local) it.push({ label: 'Replace the file', ic: 'file', fn: ACT.noop });
   it.push('-', { label: 'Open the mod folder', ic: 'folder', fn: ACT.noop }, { label: 'Open its settings file', ic: 'file', fn: ACT.noop }, '-', { label: multi() ? 'Uninstall (all profiles)' : 'Uninstall', ic: 'trash', hint: 'Delete', dz: true, fn: () => removeMods([id]) });
   return it;
 }

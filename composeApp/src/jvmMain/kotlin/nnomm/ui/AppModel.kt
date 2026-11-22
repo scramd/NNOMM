@@ -309,7 +309,7 @@ class AppModel(
     fun replaceLocal(id: String) {
         scope.launch {
             platform
-                .chooseFiles("Replace with a newer file", listOf("dll", "zip", "7z"), false)
+                .chooseFiles("Replace the file", listOf("dll", "zip", "7z"), false)
                 .firstOrNull()
                 ?.let { store.replaceLocal(id, it.absolutePath) }
         }
@@ -409,6 +409,7 @@ class AppModel(
             ActionKind.UPDATE -> action.id?.let(store::update)
             ActionKind.REPAIR,
             ActionKind.REPAIRPROBLEM -> action.id?.let(store::repair)
+            ActionKind.REPLACEFILE -> action.id?.let(::replaceLocal)
             ActionKind.TURNON -> action.id?.let { store.setOn(listOf(it), true) }
             ActionKind.TURNOFF -> action.id?.let { store.setOn(listOf(it), false) }
             ActionKind.PALETTETOGGLE -> action.id?.let(store::paletteToggle)

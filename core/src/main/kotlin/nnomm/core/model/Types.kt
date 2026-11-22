@@ -74,6 +74,7 @@ enum class ActionKind {
     @SerialName("turnOn") TURNON,
     @SerialName("turnOff") TURNOFF,
     @SerialName("repairProblem") REPAIRPROBLEM,
+    @SerialName("replaceFile") REPLACEFILE,
     @SerialName("uninstall") UNINSTALL,
 }
 

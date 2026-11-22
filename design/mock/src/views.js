@@ -251,7 +251,8 @@ function pMod() {
   const needN = x.deps.length + conf.length;
   const row = id => `<button class="row linkbtn" style="text-decoration:none;color:var(--text)" data-act="openmod" data-id="${id}">${icon(MOD[id], 's')}${esc(MOD[id].name)}</button>`;
   const main = d ? modAction(x) : !inst ? `<button class="btn strong lg" data-act="install" data-id="${x.id}" ${S.mock === 'offline' ? 'disabled' : ''}>Install<span style="font-weight:400;opacity:.75">${size(x.size)}</span></button>`
-    : st.problem === 'missing' ? modAction(x) : hasUpdate(x.id) ? `<button class="btn upd lg" data-act="update" data-id="${x.id}">Update to ${x.v}</button>` : '';
+    : st.problem === 'missing' ? modAction(x) : hasUpdate(x.id) ? `<button class="btn upd lg" data-act="update" data-id="${x.id}">Update to ${x.v}</button>`
+    : x.local ? `<button class="btn line lg" data-act="noop">${I('file')}Replace the file</button>` : '';
   let h = `<div class="pn-head"><div class="t">${icon(x, 'l')}<div class="grow"><h2>${esc(x.name)}</h2><div class="muted">${x.local ? 'Local file ' : ''}${esc(x.author)}</div></div><button class="iconbtn" data-act="closepanel" title="Close (Esc)">${I('x')}</button></div>
     <div class="row" style="flex-wrap:wrap">${main}${inst ? `<span class="row" style="gap:7px">${tog(isOn(x.id), 'toggle', `data-id="${x.id}"`, 'On in ' + p.name)}<span>${isOn(x.id) ? 'On' : 'Off'}${multi() ? ' in ' + esc(p.name) : ''}</span></span>` : ''}<span class="grow"></span>${inst ? `<button class="iconbtn" data-act="rowmenu" data-id="${x.id}" title="More">${I('more')}</button>` : ''}</div>
     ${problems(x.id).filter(pr => pr.kind).map(pr => `<button class="badge ${pr.kind}" style="height:26px;align-self:flex-start" data-act="problem" data-id="${x.id}" data-key="${pr.key}" title="Click for ways to fix it">${I('alert')}${esc(pr.text)}${I('chevd')}</button>`).join('')}`;
@@ -259,7 +260,6 @@ function pMod() {
     return h + `<div class="pn-meta"><div><span>Added</span>${ago(x.added)}</div><div><span>Size</span>${size(x.size)}</div><div><span>Version in the file</span>${esc(v)}</div></div></div>
       <div class="pn-body" data-scroll="pn-${x.id}"><p>${esc(x.desc)}</p>
       <div><h3>On this computer</h3>${multi() ? PROFILES.map(q => `<div class="kv"><span>${esc(q.name)}</span><span class="end">${tog(isOn(x.id, q.id), 'toggleIn', `data-id="${x.id}" data-p="${q.id}"`, 'On in ' + q.name)}</span></div>`).join('') : ''}
-        <div class="kv"><button class="linkbtn row" data-act="noop" style="gap:6px">${I('file')}Replace with a newer file</button></div>
         <div class="kv"><button class="linkbtn row" data-act="noop" style="gap:6px">${I('folder')}Open the mod folder</button><span class="end"><button class="linkbtn" data-act="noop">Open its settings file</button></span></div>
         <div class="kv"><button class="linkbtn row" data-act="remove" data-id="${x.id}" style="gap:6px;color:var(--danger)">${I('trash')}Uninstall</button></div></div></div>`;
   }

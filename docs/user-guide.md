@@ -105,7 +105,7 @@ The Library lists every mod on your computer, with its switch for the profile yo
 - **Columns:** name, version, source (Registry, Modpack or Local file), size, release date. Click a column heading to sort.
 - **Quick filters** on top: All, On, Off, Updates, Local files, Problems. Each shows how many mods it has.
 - **Filter by name:** type to find a mod.
-- **Three dots** at the end of a row (or right-click the row): open details, turn on or off, update, see what's new, open the mod folder, open its settings file, uninstall.
+- **Three dots** at the end of a row (or right-click the row): open details, turn on or off, update, see what's new, replace the file (local files only), open the mod folder, open its settings file, uninstall.
 - **The three dots beside Add from a file:** import a modpack, share this profile as a modpack, look for updates, find the mod that breaks the game, open the mods folder.
 - At the bottom, NNOMM shows the version of the mod loader, the game version and how much space your mods use.
 
@@ -224,7 +224,7 @@ For a mod that is not in the registry:
 - click **Add from a file** in the Library, or
 - drag the file onto the NNOMM window.
 
-NNOMM accepts `.dll`, `.zip` and `.7z` files. The mod goes into your Library. If the file is a mod from the registry, NNOMM recognises it and can update it later. Otherwise it is a local file: NNOMM cannot look for its updates, but you can use **Replace with a newer file** in its panel.
+NNOMM accepts `.dll`, `.zip` and `.7z` files. The mod goes into your Library. If the file is a mod from the registry, NNOMM recognises it and can update it later. Otherwise it is a local file: NNOMM cannot look for its updates, but you can use **Replace the file** in its panel or in its menu (the three dots or a right-click).
 
 A `.nommpack` file opens the modpack preview.
 

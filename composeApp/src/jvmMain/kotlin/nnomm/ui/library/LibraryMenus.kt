@@ -108,6 +108,8 @@ internal fun modItems(
         )
         add(MenuEntry.Item("See what's new", icon = NnIcons.list) { model.ui.openMod(id, PanelTab.WhatsNew) })
     }
+    if (s.mod(id).localFile != null)
+        add(MenuEntry.Item("Replace the file", icon = NnIcons.file) { model.replaceLocal(id) })
     add(MenuEntry.Separator)
     add(MenuEntry.Item("Open the mod folder", icon = NnIcons.folder) { model.openModFolder(id) })
     add(MenuEntry.Item("Open its settings file", icon = NnIcons.file) { model.openModSettings(id) })

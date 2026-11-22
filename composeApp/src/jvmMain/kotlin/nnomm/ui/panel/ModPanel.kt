@@ -119,7 +119,7 @@ fun ModPanel(ref: PanelRef) {
                         InstallButton(latest?.sizeKb?.let(::size).orEmpty(), !action.disabled) {
                             model.store.install(mod.id)
                         }
-                    installed.fileMissing ->
+                    installed.fileMissing && mod.localFile == null ->
                         Button("Repair", { model.store.repair(mod.id) }, kind = ButtonKind.Line)
                     hasUpdate(state, mod.id) ->
                         Button(
@@ -128,6 +128,14 @@ fun ModPanel(ref: PanelRef) {
                             kind = ButtonKind.Upd,
                             size = ControlSize.Large,
                             enabled = !action.disabled,
+                        )
+                    mod.localFile != null ->
+                        Button(
+                            "Replace the file",
+                            { model.replaceLocal(mod.id) },
+                            kind = ButtonKind.Line,
+                            size = ControlSize.Large,
+                            icon = NnIcons.file,
                         )
                 }
                 if (installed != null) {
@@ -152,65 +160,12 @@ fun ModPanel(ref: PanelRef) {
                     ) {
                         PanelMenu(
                             entries =
-                                buildList {
-                                    add(
-                                        MenuEntry.Item("Open details", hint = "Enter", icon = NnIcons.info) {
-                                            openPanel(mod.id)
-                                        }
-                                    )
-                                    add(
-                                        MenuEntry.Item(
-                                            if (isOn(state, mod.id)) "Turn off" else "Turn on",
-                                            hint = "Space",
-                                            icon = if (isOn(state, mod.id)) NnIcons.toggleOff else NnIcons.toggleOn,
-                                        ) {
-                                            model.store.toggle(mod.id)
-                                        }
-                                    )
-                                    if (hasUpdate(state, mod.id)) {
-                                        add(
-                                            MenuEntry.Item(
-                                                "Update to ${latest?.version}",
-                                                icon = NnIcons.up,
-                                            ) {
-                                                model.store.update(mod.id)
-                                            }
-                                        )
-                                        add(
-                                            MenuEntry.Item("See what's new", icon = NnIcons.list) {
-                                                openPanel(mod.id, PanelTab.WhatsNew)
-                                            }
-                                        )
-                                    }
-                                    add(MenuEntry.Separator)
-                                    add(
-                                        MenuEntry.Item(
-                                            "Open the mod folder",
-                                            icon = NnIcons.folder,
-                                        ) {
-                                            model.openModFolder(mod.id)
-                                        }
-                                    )
-                                    add(
-                                        MenuEntry.Item(
-                                            "Open its settings file",
-                                            icon = NnIcons.file,
-                                        ) {
-                                            model.openModSettings(mod.id)
-                                        }
-                                    )
-                                    add(MenuEntry.Separator)
-                                    add(
-                                        MenuEntry.Item(
-                                            if (multi) "Uninstall (all profiles)" else "Uninstall",
-                                            hint = "Delete",
-                                            danger = true,
-                                            icon = NnIcons.trash,
-                                        ) {
-                                            model.store.uninstall(listOf(mod.id))
-                                        }
-                                    )
-                                }
+                                nnomm.ui.library.modItems(
+                                    model,
+                                    state,
+                                    mod.id,
+                                    keys = model.ui.page == Page.Library,
+                                )
                         ) { expand ->
                             IconButton(NnIcons.more, "More", expand)
                         }
@@ -435,15 +390,6 @@ fun ModPanel(ref: PanelRef) {
                                                 height = 24.dp,
                                             )
                                         }
-                                    }
-                                else
-                                    Kv {
-                                        Button(
-                                            "Replace with a newer file",
-                                            { model.replaceLocal(mod.id) },
-                                            kind = ButtonKind.Ghost,
-                                            icon = NnIcons.file,
-                                        )
                                     }
                                 Kv {
                                     ActionLink("Open the mod folder", NnIcons.folder) {
